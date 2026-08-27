@@ -226,7 +226,7 @@ describe('street dealing and reset', () => {
     expect(state.seats.map((seat) => seat.lastActedAtBetTo)).toEqual([null, null, null]);
   });
 
-  it('closes an ordinary checked-through river without revealing deep-stacked hands', () => {
+  it('closes and settles an ordinary checked-through river in one automatic call', () => {
     let state = startHand(tournament(config(2)), { fixedDeck: createStandardDeck() }).state;
 
     state = act(state, 0, { type: 'call' });
@@ -242,11 +242,14 @@ describe('street dealing and reset', () => {
     state = act(state, 0, { type: 'check' });
 
     const result = advanceAndProveReplay(state);
-    expect(result.events.map((event) => event.type)).toEqual(['BettingRoundClosed']);
-    expect(result.events.some((event) => event.type === 'HoleCardsRevealed')).toBe(false);
+    expect(result.events[0]?.type).toBe('BettingRoundClosed');
+    expect(result.events.at(-1)?.type).toBe('HandCompleted');
+    const showdownStarted = result.events.find((event) => event.type === 'ShowdownStarted')!;
+    expect(result.events.filter((event) => event.type === 'HoleCardsRevealed')
+      .every((event) => showdownStarted.eventIndex < event.eventIndex)).toBe(true);
     expect(result.state.activeHand).toMatchObject({
-      phase: 'showdown',
-      revealedHoleCardSeats: [],
+      phase: 'hand-complete',
+      revealedHoleCardSeats: [0, 1],
     });
   });
 });

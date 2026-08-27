@@ -1,4 +1,6 @@
 import type { DomainEvent } from './events.js';
+import { buildPotLayers } from './pots.js';
+import { settleFoldWin, settleShowdown } from './settlement.js';
 import {
   reduceDomainEvent,
   type HandState,
@@ -49,9 +51,7 @@ export function isBettingRoundClosed(
 
 export function advanceAutomaticPhases(state: TournamentState): TransitionResult {
   const initialHand = state.activeHand;
-  if (initialHand === null
-    || initialHand.street === null
-    || !(['preflop', 'flop', 'turn', 'river'] as const).includes(initialHand.phase as Street)) {
+  if (initialHand === null) {
     return { state, events: [] };
   }
 
@@ -102,7 +102,25 @@ export function advanceAutomaticPhases(state: TournamentState): TransitionResult
   };
 
   const revealLiveHands = (): void => {
-    for (const seat of current.seats.filter(isLive)) {
+    const layers = buildPotLayers(current.seats.map((seat) => ({
+      seatIndex: seat.seatIndex,
+      committedHand: seat.committedHand,
+      folded: !isLive(seat),
+    })));
+    const eligible = new Set(layers.pots.flatMap((pot) => pot.eligibleSeats));
+    const hand = current.activeHand!;
+    const startSeat = hand.street === 'river'
+      && hand.lastAggressorSeat !== null
+      && eligible.has(hand.lastAggressorSeat)
+      ? hand.lastAggressorSeat
+      : (hand.positions.buttonPosition + 1) % current.config.maxSeats;
+    const revealOrder: number[] = [];
+    for (let offset = 0; offset < current.config.maxSeats; offset += 1) {
+      const seatIndex = (startSeat + offset) % current.config.maxSeats;
+      if (eligible.has(seatIndex)) revealOrder.push(seatIndex);
+    }
+    for (const seatIndex of revealOrder) {
+      const seat = current.seats.find((candidate) => candidate.seatIndex === seatIndex)!;
       if (seat.holeCards === null
         || current.activeHand!.revealedHoleCardSeats.includes(seat.seatIndex)) {
         continue;
@@ -132,41 +150,61 @@ export function advanceAutomaticPhases(state: TournamentState): TransitionResult
     }
   };
 
-  const liveSeats = current.seats.filter(isLive);
-  if (liveSeats.length === 1) {
-    closeCurrentStreet();
-    return { state: current, events };
-  }
-
-  const actionableSeats = liveSeats.filter(isActionable);
-  const allInOpponentExists = liveSeats.some((seat) => seat.status === 'all-in');
-  if (actionableSeats.length === 0) {
-    if (allInOpponentExists) {
-      revealLiveHands();
-    }
-    runOutToShowdown();
-    return { state: current, events };
-  }
-
-  if (actionableSeats.length === 1) {
-    const onlyActionable = actionableSeats[0]!;
-    const toCall = Math.max(0, current.activeHand!.currentBetTo - onlyActionable.committedStreet);
-    if (toCall === 0 && allInOpponentExists) {
-      revealLiveHands();
-      runOutToShowdown();
+  while (true) {
+    const hand = current.activeHand;
+    if (hand === null || hand.phase === 'hand-complete' || hand.phase === 'game-complete') {
       return { state: current, events };
     }
-  }
+    if (hand.phase === 'showdown') {
+      const result = settleShowdown(current);
+      current = result.state;
+      events.push(...result.events);
+      continue;
+    }
+    if (hand.phase === 'settlement') {
+      const result = settleFoldWin(current);
+      current = result.state;
+      events.push(...result.events);
+      continue;
+    }
+    if (hand.street === null
+      || !(['preflop', 'flop', 'turn', 'river'] as const).includes(hand.phase as Street)) {
+      return { state: current, events };
+    }
+    const liveSeats = current.seats.filter(isLive);
+    if (liveSeats.length === 1) {
+      closeCurrentStreet();
+      continue;
+    }
 
-  if (!isBettingRoundClosed(current.activeHand!, current.seats)) {
-    return { state, events: [] };
-  }
+    const actionableSeats = liveSeats.filter(isActionable);
+    const allInOpponentExists = liveSeats.some((seat) => seat.status === 'all-in');
+    if (actionableSeats.length === 0) {
+      if (allInOpponentExists) revealLiveHands();
+      runOutToShowdown();
+      continue;
+    }
 
-  const street = current.activeHand!.street!;
-  const nextStreet = NEXT_STREET[street];
-  closeCurrentStreet();
-  if (nextStreet !== undefined) {
-    dealNextStreet(nextStreet, firstActionableAfterButton(current));
+    if (actionableSeats.length === 1) {
+      const onlyActionable = actionableSeats[0]!;
+      const toCall = Math.max(0, hand.currentBetTo - onlyActionable.committedStreet);
+      if (toCall === 0 && allInOpponentExists) {
+        revealLiveHands();
+        runOutToShowdown();
+        continue;
+      }
+    }
+
+    if (!isBettingRoundClosed(hand, current.seats)) {
+      return events.length === 0 ? { state, events: [] } : { state: current, events };
+    }
+
+    const nextStreet = NEXT_STREET[hand.street];
+    closeCurrentStreet();
+    if (nextStreet !== undefined) {
+      const actor = firstActionableAfterButton(current);
+      dealNextStreet(nextStreet, actor);
+      if (actor !== null) return { state: current, events };
+    }
   }
-  return { state: current, events };
 }

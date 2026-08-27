@@ -53,11 +53,17 @@ describe('fold-to-one settlement boundary', () => {
       replayed = reduceDomainEvent(replayed, event);
     }
 
-    expect(result.events.map((event) => event.type)).toEqual(['BettingRoundClosed']);
+    expect(result.events.map((event) => event.type)).toEqual([
+      'BettingRoundClosed',
+      'UncalledBetReturned',
+      'PotConstructed',
+      'PotAwarded',
+      'HandCompleted',
+    ]);
     expect(result.events.some((event) => event.type === 'HoleCardsRevealed')).toBe(false);
     expect(result.state).toEqual(replayed);
     expect(result.state.activeHand).toMatchObject({
-      phase: 'settlement',
+      phase: 'hand-complete',
       board: [],
       burnedCards: [],
       currentActorSeat: null,

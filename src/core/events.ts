@@ -1,4 +1,5 @@
 import type { TournamentConfig, TournamentParticipantInput } from './config.js';
+import type { HandRank } from './hand-evaluator.js';
 import type { Street } from './state.js';
 import type { Card } from './types.js';
 import type {
@@ -112,6 +113,49 @@ export interface HoleCardsRevealedEvent extends HandEventBase {
   readonly reason: 'all-in' | 'showdown';
 }
 
+export interface UncalledBetReturnedEvent extends HandEventBase {
+  readonly type: 'UncalledBetReturned';
+  readonly seat: number;
+  readonly amount: number;
+}
+
+export interface ShowdownStartedEvent extends HandEventBase {
+  readonly type: 'ShowdownStarted';
+  readonly revealOrder: readonly number[];
+}
+
+export interface PotConstructedEvent extends HandEventBase {
+  readonly type: 'PotConstructed';
+  readonly potId: string;
+  readonly amount: number;
+  readonly cap: number;
+  readonly eligibleSeats: readonly number[];
+}
+
+export interface HandEvaluatedEvent extends HandEventBase {
+  readonly type: 'HandEvaluated';
+  readonly seat: number;
+  readonly rank: HandRank;
+}
+
+export interface PotAwardedEvent extends HandEventBase {
+  readonly type: 'PotAwarded';
+  readonly potId: string;
+  readonly winners: readonly number[];
+  readonly amounts: readonly number[];
+  readonly oddChipRecipients: readonly number[];
+}
+
+export interface PlayerEliminatedEvent extends HandEventBase {
+  readonly type: 'PlayerEliminated';
+  readonly seat: number;
+}
+
+export interface HandCompletedEvent extends HandEventBase {
+  readonly type: 'HandCompleted';
+  readonly finalStacks: readonly { readonly seat: number; readonly stack: number }[];
+}
+
 export type DomainEvent =
   | GameStartedEvent
   | HandStartedEvent
@@ -124,4 +168,11 @@ export type DomainEvent =
   | BettingRoundClosedEvent
   | CardBurnedEvent
   | CommunityCardsDealtEvent
-  | HoleCardsRevealedEvent;
+  | HoleCardsRevealedEvent
+  | UncalledBetReturnedEvent
+  | ShowdownStartedEvent
+  | PotConstructedEvent
+  | HandEvaluatedEvent
+  | PotAwardedEvent
+  | PlayerEliminatedEvent
+  | HandCompletedEvent;

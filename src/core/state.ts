@@ -7,7 +7,9 @@ import {
   type TournamentParticipantInput,
 } from './config.js';
 import type { DomainEvent } from './events.js';
+import { compareHandRanks, evaluateBest, type HandRank } from './hand-evaluator.js';
 import { advancePositions, assignInitialPositions } from './positions.js';
+import { buildPotLayers } from './pots.js';
 import { createSeededRandom } from './random.js';
 import type { Card } from './types.js';
 import {
@@ -55,6 +57,18 @@ export interface PositionState {
   readonly bigBlindSeat: number;
 }
 
+export interface PendingPotState {
+  readonly potId: string;
+  readonly amount: number;
+  readonly cap: number;
+  readonly eligibleSeats: readonly number[];
+}
+
+export interface EvaluatedHandState {
+  readonly seat: number;
+  readonly rank: HandRank;
+}
+
 export interface HandState {
   readonly handId: string;
   readonly phase: Phase;
@@ -70,6 +84,10 @@ export interface HandState {
   readonly lastFullRaiseSize: number;
   readonly lastAggressorSeat: number | null;
   readonly pendingActors: readonly number[];
+  readonly pendingPots?: readonly PendingPotState[];
+  readonly showdownRevealOrder?: readonly number[];
+  readonly showdownRanks?: readonly EvaluatedHandState[];
+  readonly evaluatedHands?: readonly EvaluatedHandState[];
 }
 
 export interface TournamentState {
@@ -153,6 +171,44 @@ function sameCard(left: Card, right: Card): boolean {
   return left.code === right.code && left.rank === right.rank && left.suit === right.suit;
 }
 
+function contributionLayers(state: TournamentState) {
+  return buildPotLayers(state.seats.map((seat) => ({
+    seatIndex: seat.seatIndex,
+    committedHand: seat.committedHand,
+    folded: seat.status === 'folded' || seat.status === 'eliminated',
+  })));
+}
+
+function expectedShowdownRevealOrder(state: TournamentState): number[] {
+  const hand = state.activeHand!;
+  const eligible = new Set(contributionLayers(state).pots.flatMap((pot) => pot.eligibleSeats));
+  const startSeat = hand.street === 'river'
+    && hand.lastAggressorSeat !== null
+    && eligible.has(hand.lastAggressorSeat)
+    ? hand.lastAggressorSeat
+    : (hand.positions.buttonPosition + 1) % state.config.maxSeats;
+  const order: number[] = [];
+  for (let offset = 0; offset < state.config.maxSeats; offset += 1) {
+    const seat = (startSeat + offset) % state.config.maxSeats;
+    if (eligible.has(seat)) order.push(seat);
+  }
+  return order;
+}
+
+function oddChipOrder(
+  winners: readonly number[],
+  buttonPosition: number,
+  maxSeats: number,
+): number[] {
+  const winnerSet = new Set(winners);
+  const order: number[] = [];
+  for (let offset = 1; offset <= maxSeats; offset += 1) {
+    const seat = (buttonPosition + offset) % maxSeats;
+    if (winnerSet.has(seat)) order.push(seat);
+  }
+  return order;
+}
+
 const BOARD_COUNT_BEFORE_STREET: Readonly<Record<Exclude<Street, 'preflop'>, number>> = {
   flop: 0,
   turn: 3,
@@ -217,9 +273,17 @@ export function reduceDomainEvent(
   let next: TournamentState;
   switch (event.type) {
     case 'HandStarted': {
-      const resetSeats = state.seats.map((seat): SeatState => seat.stack === 0
-        ? { ...seat, status: 'eliminated', holeCards: null, committedStreet: 0, committedHand: 0, lastActedAtBetTo: null }
-        : { ...seat, status: 'active', holeCards: null, committedStreet: 0, committedHand: 0, lastActedAtBetTo: null });
+      if (state.seats.some((seat) => seat.stack === 0 && seat.status !== 'eliminated')) {
+        throw new Error('HandStarted requires settlement-owned elimination to be finalized');
+      }
+      const resetSeats = state.seats.map((seat): SeatState => ({
+        ...seat,
+        status: seat.stack === 0 ? seat.status : 'active',
+        holeCards: null,
+        committedStreet: 0,
+        committedHand: 0,
+        lastActedAtBetTo: null,
+      }));
       next = {
         ...state,
         seats: resetSeats,
@@ -240,6 +304,7 @@ export function reduceDomainEvent(
           lastFullRaiseSize: event.bigBlind,
           lastAggressorSeat: null,
           pendingActors: [],
+          pendingPots: [],
         },
       };
       break;
@@ -527,6 +592,13 @@ export function reduceDomainEvent(
       if (state.activeHand.revealedHoleCardSeats.includes(event.seat)) {
         throw new Error('HoleCardsRevealed cannot reveal a seat more than once');
       }
+      const revealOrder = state.activeHand.showdownRevealOrder ?? expectedShowdownRevealOrder(state);
+      const nextReveal = revealOrder.find(
+        (seatIndex) => !state.activeHand!.revealedHoleCardSeats.includes(seatIndex),
+      );
+      if (event.seat !== nextReveal) {
+        throw new Error('HoleCardsRevealed must follow authoritative reveal order');
+      }
       if (event.reason === 'showdown') {
         if (state.activeHand.phase !== 'showdown') {
           throw new Error('showdown hole-card reveal requires showdown phase');
@@ -552,7 +624,278 @@ export function reduceDomainEvent(
         ...state,
         activeHand: {
           ...state.activeHand,
-          revealedHoleCardSeats: [...state.activeHand.revealedHoleCardSeats, event.seat],
+          revealedHoleCardSeats: [...state.activeHand.revealedHoleCardSeats, event.seat]
+            .sort((left, right) => left - right),
+        },
+      };
+      break;
+    }
+    case 'UncalledBetReturned': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('UncalledBetReturned requires the matching active hand');
+      }
+      const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+      const expectedRefund = contributionLayers(state).refunds[0];
+      if (seat === undefined
+        || expectedRefund === undefined
+        || event.seat !== expectedRefund.seatIndex
+        || event.amount !== expectedRefund.amount) {
+        throw new Error('UncalledBetReturned must match the authoritative refund');
+      }
+      next = {
+        ...state,
+        seats: replaceSeat(state.seats, event.seat, (candidate) => ({
+          ...candidate,
+          stack: candidate.stack + event.amount,
+          committedHand: candidate.committedHand - event.amount,
+          committedStreet: Math.max(0, candidate.committedStreet - event.amount),
+        })),
+      };
+      break;
+    }
+    case 'ShowdownStarted': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'showdown'
+        || state.activeHand.board.length !== 5) {
+        throw new Error('ShowdownStarted requires showdown phase');
+      }
+      const expectedOrder = expectedShowdownRevealOrder(state);
+      if (state.activeHand.showdownRevealOrder !== undefined
+        || JSON.stringify(event.revealOrder) !== JSON.stringify(expectedOrder)) {
+        throw new Error('ShowdownStarted reveal order must match showdown authority');
+      }
+      const showdownRanks = event.revealOrder.map((seatIndex) => {
+        const seat = state.seats.find((candidate) => candidate.seatIndex === seatIndex);
+        if (seat?.holeCards === null || seat?.holeCards === undefined) {
+          throw new Error('ShowdownStarted requires hole cards for every eligible seat');
+        }
+        return {
+          seat: seatIndex,
+          rank: evaluateBest([...state.activeHand!.board, ...seat.holeCards]),
+        };
+      });
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          showdownRevealOrder: [...event.revealOrder],
+          showdownRanks,
+          evaluatedHands: [],
+        },
+      };
+      break;
+    }
+    case 'PotConstructed': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || (state.activeHand.phase !== 'showdown' && state.activeHand.phase !== 'settlement')) {
+        throw new Error('PotConstructed requires settlement or showdown phase');
+      }
+      if (state.activeHand.phase === 'showdown'
+        && state.activeHand.showdownRevealOrder === undefined) {
+        throw new Error('PotConstructed requires ShowdownStarted first');
+      }
+      const pendingPots = state.activeHand.pendingPots ?? [];
+      const positiveCommitments = state.seats
+        .map((seat) => seat.committedHand)
+        .filter((amount) => amount > 0);
+      const layerWidth = Math.min(...positiveCommitments);
+      const contributors = state.seats.filter((seat) => seat.committedHand > 0);
+      const previousCap = pendingPots.at(-1)?.cap ?? 0;
+      const expectedEligible = contributors
+        .filter((seat) => seat.status !== 'folded' && seat.status !== 'eliminated')
+        .map((seat) => seat.seatIndex);
+      const expectedAmount = layerWidth * contributors.length;
+      if (!Number.isSafeInteger(event.amount)
+        || event.amount <= 0
+        || !Number.isFinite(layerWidth)
+        || event.amount !== expectedAmount
+        || event.cap !== previousCap + layerWidth
+        || JSON.stringify(event.eligibleSeats) !== JSON.stringify(expectedEligible)
+        || event.potId !== `pot-${pendingPots.length}`
+        || pendingPots.some((pot) => pot.potId === event.potId)) {
+        throw new Error('PotConstructed must match the next authoritative contribution layer');
+      }
+      if (state.activeHand.showdownRevealOrder !== undefined
+        && state.activeHand.showdownRevealOrder.some(
+          (seat) => !state.activeHand!.revealedHoleCardSeats.includes(seat),
+        )) {
+        throw new Error('PotConstructed requires every showdown reveal first');
+      }
+      next = {
+        ...state,
+        seats: state.seats.map((seat) => seat.committedHand === 0 ? seat : ({
+          ...seat,
+          committedHand: seat.committedHand - layerWidth,
+          committedStreet: Math.max(0, seat.committedStreet - layerWidth),
+        })),
+        activeHand: {
+          ...state.activeHand,
+          phase: 'settlement',
+          pendingPots: [...pendingPots, {
+            potId: event.potId,
+            amount: event.amount,
+            cap: event.cap,
+            eligibleSeats: [...event.eligibleSeats],
+          }],
+        },
+      };
+      break;
+    }
+    case 'HandEvaluated': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || (state.activeHand.phase !== 'showdown' && state.activeHand.phase !== 'settlement')) {
+        throw new Error('HandEvaluated requires showdown settlement');
+      }
+      const revealOrder = state.activeHand.showdownRevealOrder;
+      const evaluations = state.activeHand.evaluatedHands ?? [];
+      const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+      if (revealOrder === undefined
+        || !revealOrder.includes(event.seat)
+        || evaluations.some((evaluation) => evaluation.seat === event.seat)
+        || state.seats.some((candidate) => candidate.committedHand !== 0)
+        || seat?.holeCards === null
+        || seat?.holeCards === undefined) {
+        throw new Error('HandEvaluated requires one eligible unevaluated showdown seat');
+      }
+      const expectedRank = state.activeHand.showdownRanks?.find(
+        (evaluation) => evaluation.seat === event.seat,
+      )?.rank;
+      if (expectedRank === undefined) {
+        throw new Error('HandEvaluated requires a precomputed authoritative rank');
+      }
+      if (JSON.stringify(event.rank) !== JSON.stringify(expectedRank)) {
+        throw new Error('HandEvaluated rank must match authoritative cards');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          evaluatedHands: [...evaluations, { seat: event.seat, rank: event.rank }],
+        },
+      };
+      break;
+    }
+    case 'PotAwarded': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'settlement') {
+        throw new Error('PotAwarded requires settlement phase');
+      }
+      const pendingPots = state.activeHand.pendingPots ?? [];
+      const pot = pendingPots.find((candidate) => candidate.potId === event.potId);
+      const uniqueWinners = new Set(event.winners);
+      let expectedWinners: number[] = [];
+      if (pot !== undefined && state.activeHand.showdownRevealOrder !== undefined) {
+        const ranks = new Map((state.activeHand.evaluatedHands ?? [])
+          .map((evaluation) => [evaluation.seat, evaluation.rank] as const));
+        if (pot.eligibleSeats.every((seat) => ranks.has(seat))) {
+          for (const seat of pot.eligibleSeats) {
+            if (expectedWinners.length === 0) {
+              expectedWinners = [seat];
+              continue;
+            }
+            const comparison = compareHandRanks(ranks.get(seat)!, ranks.get(expectedWinners[0]!)!);
+            if (comparison > 0) expectedWinners = [seat];
+            else if (comparison === 0) expectedWinners.push(seat);
+          }
+        }
+      } else if (pot !== undefined) {
+        expectedWinners = state.seats
+          .filter((seat) => seat.status !== 'folded' && seat.status !== 'eliminated')
+          .map((seat) => seat.seatIndex);
+      }
+      const allShowdownSeatsEvaluated = state.activeHand.showdownRevealOrder === undefined
+        || state.activeHand.showdownRevealOrder.every((seat) => (state.activeHand!.evaluatedHands ?? [])
+          .some((evaluation) => evaluation.seat === seat));
+      const share = pot === undefined ? 0 : Math.floor(pot.amount / expectedWinners.length);
+      const remainder = pot === undefined ? 0 : pot.amount % expectedWinners.length;
+      const expectedOddRecipients = oddChipOrder(
+        expectedWinners,
+        state.activeHand.positions.buttonPosition,
+        state.config.maxSeats,
+      ).slice(0, remainder);
+      const extraSeats = new Set(expectedOddRecipients);
+      const expectedAmounts = expectedWinners.map((seat) => share + (extraSeats.has(seat) ? 1 : 0));
+      if (pot === undefined
+        || !allShowdownSeatsEvaluated
+        || (state.activeHand.showdownRevealOrder === undefined && expectedWinners.length !== 1)
+        || event.winners.length === 0
+        || event.winners.length !== event.amounts.length
+        || uniqueWinners.size !== event.winners.length
+        || event.winners.some((seat) => !pot.eligibleSeats.includes(seat))
+        || event.amounts.some((amount) => !Number.isSafeInteger(amount) || amount <= 0)
+        || event.amounts.reduce((sum, amount) => sum + amount, 0) !== pot.amount
+        || event.oddChipRecipients.some((seat) => !uniqueWinners.has(seat))
+        || JSON.stringify(event.winners) !== JSON.stringify(expectedWinners)
+        || JSON.stringify(event.amounts) !== JSON.stringify(expectedAmounts)
+        || JSON.stringify(event.oddChipRecipients) !== JSON.stringify(expectedOddRecipients)) {
+        throw new Error('PotAwarded must exactly consume an authoritative pending pot');
+      }
+      let seats = state.seats;
+      event.winners.forEach((winner, index) => {
+        seats = replaceSeat(seats, winner, (seat) => ({
+          ...seat,
+          stack: seat.stack + event.amounts[index]!,
+        }));
+      });
+      next = {
+        ...state,
+        seats,
+        activeHand: {
+          ...state.activeHand,
+          pendingPots: pendingPots.filter((candidate) => candidate.potId !== event.potId),
+        },
+      };
+      break;
+    }
+    case 'PlayerEliminated': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('PlayerEliminated requires the matching active hand');
+      }
+      const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+      const nextBustedSeat = state.seats.find(
+        (candidate) => candidate.stack === 0 && candidate.status !== 'eliminated',
+      )?.seatIndex;
+      if (seat === undefined
+        || event.seat !== nextBustedSeat
+        || seat.stack !== 0
+        || seat.status === 'eliminated'
+        || state.seats.some((candidate) => candidate.committedHand !== 0)
+        || (state.activeHand.pendingPots?.length ?? 0) !== 0) {
+        throw new Error('PlayerEliminated requires fully settled chips and a newly busted seat');
+      }
+      next = {
+        ...state,
+        seats: replaceSeat(state.seats, event.seat, (candidate) => ({
+          ...candidate,
+          status: 'eliminated',
+        })),
+      };
+      break;
+    }
+    case 'HandCompleted': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'settlement') {
+        throw new Error('HandCompleted requires settlement phase');
+      }
+      const finalStacks = state.seats.map((seat) => ({ seat: seat.seatIndex, stack: seat.stack }));
+      if (state.seats.some((seat) => seat.committedHand !== 0)
+        || (state.activeHand.pendingPots?.length ?? 0) !== 0
+        || state.seats.some((seat) => seat.stack === 0 && seat.status !== 'eliminated')
+        || JSON.stringify(event.finalStacks) !== JSON.stringify(finalStacks)) {
+        throw new Error('HandCompleted requires exact finalized stacks, elimination, and no pending chips');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          phase: 'hand-complete',
+          currentActorSeat: null,
+          pendingActors: [],
         },
       };
       break;
@@ -599,6 +942,9 @@ export function startHand(
 ): TransitionResult {
   if (state.activeHand !== null && state.activeHand.phase !== 'hand-complete') {
     throw new Error('cannot start a hand while another hand is active');
+  }
+  if (state.seats.some((seat) => seat.stack === 0 && seat.status !== 'eliminated')) {
+    throw new Error('cannot start a hand before settlement-owned elimination is finalized');
   }
 
   const survivorSeats = state.seats

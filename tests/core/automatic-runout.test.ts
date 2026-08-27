@@ -128,7 +128,7 @@ describe('automatic all-in runout', () => {
     const result = advanceAndProveReplay(state);
 
     expect(result.state.activeHand).toMatchObject({
-      phase: 'showdown',
+      phase: 'hand-complete',
       board: createStandardDeck().slice(5, 8).concat(createStandardDeck()[9]!, createStandardDeck()[11]!),
       burnedCards: [createStandardDeck()[4], createStandardDeck()[8], createStandardDeck()[10]],
       dealCursor: 12,
@@ -149,7 +149,7 @@ describe('automatic all-in runout', () => {
     expect(state.seats.map((seat) => seat.status)).toEqual(['active', 'all-in']);
 
     const result = advanceAndProveReplay(state);
-    expect(result.state.activeHand?.phase).toBe('showdown');
+    expect(result.state.activeHand?.phase).toBe('hand-complete');
     expectRevealsBeforeRunout(result.events, [0, 1]);
   });
 
@@ -174,7 +174,7 @@ describe('automatic all-in runout', () => {
 
     state = act(state, 0, { type: 'call' });
     const result = advanceAndProveReplay(state);
-    expect(result.state.activeHand?.phase).toBe('showdown');
+    expect(result.state.activeHand?.phase).toBe('hand-complete');
     expectRevealsBeforeRunout(result.events, [0, 1]);
   });
 });
@@ -187,7 +187,7 @@ describe('river all-in boundary', () => {
     state = act(state, 1, { type: 'call' });
 
     const result = advanceAndProveReplay(state);
-    expect(result.events.map((event) => event.type)).toEqual([
+    expect(result.events.slice(0, 3).map((event) => event.type)).toEqual([
       'HoleCardsRevealed',
       'HoleCardsRevealed',
       'BettingRoundClosed',
@@ -195,7 +195,7 @@ describe('river all-in boundary', () => {
     expect(result.events.slice(0, 2).every((event) => event.type === 'HoleCardsRevealed'
       && event.eventIndex < result.events[2]!.eventIndex)).toBe(true);
     expect(result.state.activeHand).toMatchObject({
-      phase: 'showdown',
+      phase: 'hand-complete',
       lastAggressorSeat: 0,
       revealedHoleCardSeats: [0, 1],
     });
@@ -258,7 +258,7 @@ describe('hole-card reveal reducer boundaries', () => {
     ).state;
     const state = advanceAutomaticPhases(before).state;
 
-    expect(state.activeHand).toMatchObject({ phase: 'showdown', revealedHoleCardSeats: [0, 1] });
+    expect(state.activeHand).toMatchObject({ phase: 'hand-complete', revealedHoleCardSeats: [0, 1] });
     expect(() => reduceDomainEvent(state, revealEvent(state, 0, 'showdown')))
       .toThrow(/duplicate|already|reveal/i);
   });

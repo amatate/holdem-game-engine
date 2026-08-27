@@ -12,8 +12,10 @@ export type {
   LegalActionSet,
 } from './core/legal-actions.js';
 export * from './core/positions.js';
+export * from './core/pots.js';
 export * from './core/random.js';
 export { applyIntent } from './core/reducer.js';
+export { orderOddChipWinners, settleFoldWin, settleShowdown } from './core/settlement.js';
 export * from './core/state.js';
 export * from './core/types.js';
 export * from './core/versions.js';
