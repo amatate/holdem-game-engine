@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "scripts"]
+}

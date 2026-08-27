@@ -1,0 +1,22 @@
+{
+  "name": "holdem-game-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "play": "tsx src/cli/index.ts",
+    "simulate": "tsx scripts/simulate.ts",
+    "test:stress": "tsx scripts/stress.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.21",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}
