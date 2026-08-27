@@ -39,6 +39,182 @@ function expectReplay(input: TournamentState, result: ReturnType<typeof settleSh
 afterEach(() => vi.restoreAllMocks());
 
 describe('settlement timing', () => {
+  it('rejects refunds during betting', () => {
+    const normal = startHand(createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'premature-refund',
+    ).state, { fixedDeck: createStandardDeck() }).state;
+    expect(normal.seats.map((seat) => seat.committedHand)).toEqual([0, 1, 2]);
+    expect(() => reduceDomainEvent(normal, {
+      type: 'UncalledBetReturned', schemaVersion: 1, eventIndex: normal.version,
+      handId: normal.activeHand!.handId, seat: 2, amount: 1,
+    })).toThrow(/phase|chronology|settlement|showdown/i);
+  });
+
+  it('rejects a showdown refund before ShowdownStarted and required reveals', () => {
+    const base = createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'showdown-refund-order',
+    ).state;
+    const input: TournamentState = {
+      ...base,
+      seats: base.seats.map((seat, seatIndex) => ({
+        ...seat,
+        stack: [40, 0, 100][seatIndex]!,
+        status: (['active', 'all-in', 'active'] as const)[seatIndex]!,
+        holeCards: [
+          parseCard((['Ah', 'Kh', 'Qh'] as const)[seatIndex]!),
+          parseCard((['Ad', 'Kd', 'Qd'] as const)[seatIndex]!),
+        ],
+        committedStreet: [60, 100, 0][seatIndex]!,
+        committedHand: [60, 100, 0][seatIndex]!,
+      })),
+      activeHand: {
+        handId: 'showdown-refund-order/hand/1', phase: 'showdown', street: 'river',
+        board: ['2c', '3d', '7h', '9s', 'Jc'].map(parseCard),
+        burnedCards: [], deck: [], dealCursor: 0, revealedHoleCardSeats: [],
+        positions: { buttonPosition: 0, smallBlindSeat: 1, bigBlindSeat: 2 },
+        currentActorSeat: null, currentBetTo: 0, lastFullRaiseSize: 2,
+        lastAggressorSeat: null, pendingActors: [],
+      },
+    };
+    const valid = settleShowdown(input);
+    const refund = valid.events.find((event) => event.type === 'UncalledBetReturned')!;
+    const started = valid.events.find((event) => event.type === 'ShowdownStarted')!;
+    const reveals = valid.events.filter((event) => event.type === 'HoleCardsRevealed');
+    expect(() => reduceDomainEvent(input, { ...refund, eventIndex: input.version }))
+      .toThrow(/chronology|showdown|reveal/i);
+    let prefix = reduceDomainEvent(input, started);
+    expect(() => reduceDomainEvent(prefix, { ...refund, eventIndex: prefix.version }))
+      .toThrow(/chronology|showdown|reveal/i);
+    for (const reveal of reveals) prefix = reduceDomainEvent(prefix, reveal);
+    expect(() => reduceDomainEvent(prefix, { ...refund, eventIndex: prefix.version })).not.toThrow();
+  });
+
+  it('rejects pot construction before a required refund', () => {
+    const base = createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'construct-before-refund',
+    ).state;
+    const input: TournamentState = {
+      ...base,
+      seats: base.seats.map((seat, seatIndex) => ({
+        ...seat,
+        stack: [40, 0, 100][seatIndex]!,
+        status: (['active', 'folded', 'folded'] as const)[seatIndex]!,
+        committedStreet: [60, 100, 0][seatIndex]!,
+        committedHand: [60, 100, 0][seatIndex]!,
+      })),
+      activeHand: {
+        handId: 'construct-before-refund/hand/1', phase: 'settlement', street: 'preflop',
+        board: [], burnedCards: [], deck: [], dealCursor: 0, revealedHoleCardSeats: [],
+        positions: { buttonPosition: 0, smallBlindSeat: 1, bigBlindSeat: 2 },
+        currentActorSeat: null, currentBetTo: 100, lastFullRaiseSize: 2,
+        lastAggressorSeat: 1, pendingActors: [],
+      },
+    };
+    const valid = settleFoldWin(input);
+    const firstPot = valid.events.find((event) => event.type === 'PotConstructed')!;
+    expect(() => reduceDomainEvent(input, { ...firstPot, eventIndex: input.version }))
+      .toThrow(/refund|layer|chronology/i);
+  });
+
+  it('rejects construction of a sole-contributor refund layer', () => {
+    const base = createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'sole-refund-layer',
+    ).state;
+    const soleLayer: TournamentState = {
+      ...base,
+      activeHand: {
+        handId: 'sole-refund-layer/hand/1', phase: 'settlement', street: 'river',
+        board: [], burnedCards: [], deck: [], dealCursor: 0, revealedHoleCardSeats: [],
+        positions: { buttonPosition: 0, smallBlindSeat: 1, bigBlindSeat: 2 },
+        currentActorSeat: null, currentBetTo: 0, lastFullRaiseSize: 2,
+        lastAggressorSeat: null, pendingActors: [],
+      },
+      seats: base.seats.map((seat, seatIndex) => ({
+        ...seat,
+        stack: [100, 100, 0][seatIndex]!,
+        status: (['folded', 'folded', 'active'] as const)[seatIndex]!,
+        committedStreet: [0, 0, 100][seatIndex]!,
+        committedHand: [0, 0, 100][seatIndex]!,
+      })),
+    };
+    expect(() => reduceDomainEvent(soleLayer, {
+      type: 'PotConstructed', schemaVersion: 1, eventIndex: soleLayer.version,
+      handId: soleLayer.activeHand!.handId, potId: 'pot-0', amount: 100, cap: 100,
+      eligibleSeats: [2],
+    })).toThrow(/refund|sole|contributor|layer/i);
+  });
+
+  it('rejects awarding a constructed fold pot while contribution layers remain', () => {
+    const base = createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'partial-layer-award',
+    ).state;
+    const input: TournamentState = {
+      ...base,
+      seats: base.seats.map((seat, seatIndex) => ({
+        ...seat,
+        stack: [0, 0, 50][seatIndex]!,
+        status: (['all-in', 'folded', 'folded'] as const)[seatIndex]!,
+        committedStreet: [100, 100, 50][seatIndex]!,
+        committedHand: [100, 100, 50][seatIndex]!,
+      })),
+      activeHand: {
+        handId: 'partial-layer-award/hand/1', phase: 'settlement', street: 'river',
+        board: [], burnedCards: [], deck: [], dealCursor: 0, revealedHoleCardSeats: [],
+        positions: { buttonPosition: 0, smallBlindSeat: 1, bigBlindSeat: 2 },
+        currentActorSeat: null, currentBetTo: 0, lastFullRaiseSize: 2,
+        lastAggressorSeat: null, pendingActors: [],
+      },
+    };
+    const valid = settleFoldWin(input);
+    const firstPot = valid.events.find((event) => event.type === 'PotConstructed')!;
+    const firstAward = valid.events.find((event) => event.type === 'PotAwarded')!;
+    const prefix = reduceDomainEvent(input, firstPot);
+    expect(prefix.seats.map((seat) => seat.committedHand)).toEqual([50, 50, 0]);
+    expect(() => reduceDomainEvent(prefix, { ...firstAward, eventIndex: prefix.version }))
+      .toThrow(/remaining|layer|chronology|commit/i);
+  });
+
+  it('does not restart pot caps after an earlier pot id was consumed', () => {
+    const base = createTournament(
+      config(3),
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'pot-cap-restart',
+    ).state;
+    const input: TournamentState = {
+      ...base,
+      seats: base.seats.map((seat, seatIndex) => ({
+        ...seat,
+        stack: [150, 0, 50][seatIndex]!,
+        status: (['all-in', 'folded', 'folded'] as const)[seatIndex]!,
+        committedStreet: [50, 50, 0][seatIndex]!,
+        committedHand: [50, 50, 0][seatIndex]!,
+      })),
+      activeHand: {
+        handId: 'pot-cap-restart/hand/1', phase: 'settlement', street: 'river',
+        board: [], burnedCards: [], deck: [], dealCursor: 0, revealedHoleCardSeats: [],
+        positions: { buttonPosition: 0, smallBlindSeat: 1, bigBlindSeat: 2 },
+        currentActorSeat: null, currentBetTo: 0, lastFullRaiseSize: 2,
+        lastAggressorSeat: null, pendingActors: [], pendingPots: [], constructedPotCount: 1,
+        lastConstructedCap: 50,
+      },
+    };
+    expect(() => reduceDomainEvent(input, {
+      type: 'PotConstructed', schemaVersion: 1, eventIndex: input.version,
+      handId: input.activeHand!.handId, potId: 'pot-1', amount: 100, cap: 50,
+      eligibleSeats: [0],
+    })).toThrow(/cap|restart|order|layer/i);
+  });
+
   it('keeps zero-stack all-ins eligible through every award, then eliminates once before completion', () => {
     const base = createTournament(
       { ...config(3), initialButtonSeat: 1 },

@@ -194,6 +194,47 @@ describe('showdown ranks and independent pots', () => {
       [0, 0, 0, 0],
     ]);
   });
+
+  it('requires evaluation order to follow showdown reveal order', () => {
+    const input = showdownState({
+      board: ['2c', '3d', '7h', '9s', 'Jc'],
+      holes: [['Jh', 'Jd'], ['As', 'Ad'], ['Ks', 'Kd'], ['Qs', 'Qd']],
+      committed: [25, 50, 100, 100],
+      lastAggressor: 2,
+    });
+    const valid = settleShowdown(input);
+    const evaluations = valid.events.filter((event) => event.type === 'HandEvaluated');
+    expect(evaluations.length).toBeGreaterThan(1);
+
+    let beforeEvaluation = input;
+    for (const event of valid.events) {
+      if (event.type === 'HandEvaluated') break;
+      beforeEvaluation = reduceDomainEvent(beforeEvaluation, event);
+    }
+    expect(() => reduceDomainEvent(beforeEvaluation, {
+      ...evaluations[1]!, eventIndex: beforeEvaluation.version,
+    })).toThrow(/evaluation|order|next/i);
+  });
+
+  it('requires pot awards to consume pending pots in deterministic order', () => {
+    const input = showdownState({
+      board: ['2c', '3d', '7h', '9s', 'Jc'],
+      holes: [['Jh', 'Jd'], ['As', 'Ad'], ['Ks', 'Kd'], ['Qs', 'Qd']],
+      committed: [25, 50, 100, 100],
+      lastAggressor: 2,
+    });
+    const valid = settleShowdown(input);
+    const awards = valid.events.filter((event) => event.type === 'PotAwarded');
+    expect(awards.length).toBeGreaterThan(1);
+    let beforeAward = input;
+    for (const event of valid.events) {
+      if (event.type === 'PotAwarded') break;
+      beforeAward = reduceDomainEvent(beforeAward, event);
+    }
+    expect(() => reduceDomainEvent(beforeAward, {
+      ...awards[1]!, eventIndex: beforeAward.version,
+    })).toThrow(/pot|award|order|next/i);
+  });
 });
 
 describe('showdown reveal ordering and visibility', () => {

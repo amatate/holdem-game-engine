@@ -85,6 +85,8 @@ export interface HandState {
   readonly lastAggressorSeat: number | null;
   readonly pendingActors: readonly number[];
   readonly pendingPots?: readonly PendingPotState[];
+  readonly constructedPotCount?: number;
+  readonly lastConstructedCap?: number;
   readonly showdownRevealOrder?: readonly number[];
   readonly showdownRanks?: readonly EvaluatedHandState[];
   readonly evaluatedHands?: readonly EvaluatedHandState[];
@@ -305,6 +307,8 @@ export function reduceDomainEvent(
           lastAggressorSeat: null,
           pendingActors: [],
           pendingPots: [],
+          constructedPotCount: 0,
+          lastConstructedCap: 0,
         },
       };
       break;
@@ -637,10 +641,19 @@ export function reduceDomainEvent(
       const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
       const expectedRefund = contributionLayers(state).refunds[0];
       if (seat === undefined
+        || (state.activeHand.phase !== 'showdown' && state.activeHand.phase !== 'settlement')
+        || (state.activeHand.pendingPots?.length ?? 0) !== 0
+        || (state.activeHand.constructedPotCount ?? 0) !== 0
+        || (state.activeHand.evaluatedHands?.length ?? 0) !== 0
+        || (state.activeHand.phase === 'showdown'
+          && (state.activeHand.showdownRevealOrder === undefined
+            || state.activeHand.showdownRevealOrder.some(
+              (seatIndex) => !state.activeHand!.revealedHoleCardSeats.includes(seatIndex),
+            )))
         || expectedRefund === undefined
         || event.seat !== expectedRefund.seatIndex
         || event.amount !== expectedRefund.amount) {
-        throw new Error('UncalledBetReturned must match the authoritative refund');
+        throw new Error('UncalledBetReturned violates refund phase or showdown chronology');
       }
       next = {
         ...state,
@@ -697,23 +710,27 @@ export function reduceDomainEvent(
         throw new Error('PotConstructed requires ShowdownStarted first');
       }
       const pendingPots = state.activeHand.pendingPots ?? [];
+      const constructedPotCount = state.activeHand.constructedPotCount ?? 0;
       const positiveCommitments = state.seats
         .map((seat) => seat.committedHand)
         .filter((amount) => amount > 0);
       const layerWidth = Math.min(...positiveCommitments);
       const contributors = state.seats.filter((seat) => seat.committedHand > 0);
-      const previousCap = pendingPots.at(-1)?.cap ?? 0;
+      const previousCap = state.activeHand.lastConstructedCap ?? 0;
       const expectedEligible = contributors
         .filter((seat) => seat.status !== 'folded' && seat.status !== 'eliminated')
         .map((seat) => seat.seatIndex);
       const expectedAmount = layerWidth * contributors.length;
       if (!Number.isSafeInteger(event.amount)
         || event.amount <= 0
+        || contributors.length <= 1
+        || contributionLayers(state).refunds.length !== 0
+        || (state.activeHand.evaluatedHands?.length ?? 0) !== 0
         || !Number.isFinite(layerWidth)
         || event.amount !== expectedAmount
         || event.cap !== previousCap + layerWidth
         || JSON.stringify(event.eligibleSeats) !== JSON.stringify(expectedEligible)
-        || event.potId !== `pot-${pendingPots.length}`
+        || event.potId !== `pot-${constructedPotCount}`
         || pendingPots.some((pot) => pot.potId === event.potId)) {
         throw new Error('PotConstructed must match the next authoritative contribution layer');
       }
@@ -739,6 +756,8 @@ export function reduceDomainEvent(
             cap: event.cap,
             eligibleSeats: [...event.eligibleSeats],
           }],
+          constructedPotCount: constructedPotCount + 1,
+          lastConstructedCap: event.cap,
         },
       };
       break;
@@ -754,11 +773,12 @@ export function reduceDomainEvent(
       const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
       if (revealOrder === undefined
         || !revealOrder.includes(event.seat)
+        || event.seat !== revealOrder[evaluations.length]
         || evaluations.some((evaluation) => evaluation.seat === event.seat)
         || state.seats.some((candidate) => candidate.committedHand !== 0)
         || seat?.holeCards === null
         || seat?.holeCards === undefined) {
-        throw new Error('HandEvaluated requires one eligible unevaluated showdown seat');
+        throw new Error('HandEvaluated violates next evaluation order or eligibility');
       }
       const expectedRank = state.activeHand.showdownRanks?.find(
         (evaluation) => evaluation.seat === event.seat,
@@ -785,7 +805,7 @@ export function reduceDomainEvent(
         throw new Error('PotAwarded requires settlement phase');
       }
       const pendingPots = state.activeHand.pendingPots ?? [];
-      const pot = pendingPots.find((candidate) => candidate.potId === event.potId);
+      const pot = pendingPots[0];
       const uniqueWinners = new Set(event.winners);
       let expectedWinners: number[] = [];
       if (pot !== undefined && state.activeHand.showdownRevealOrder !== undefined) {
@@ -820,6 +840,9 @@ export function reduceDomainEvent(
       const extraSeats = new Set(expectedOddRecipients);
       const expectedAmounts = expectedWinners.map((seat) => share + (extraSeats.has(seat) ? 1 : 0));
       if (pot === undefined
+        || pot.potId !== event.potId
+        || state.seats.some((seat) => seat.committedHand !== 0)
+        || contributionLayers(state).refunds.length !== 0
         || !allShowdownSeatsEvaluated
         || (state.activeHand.showdownRevealOrder === undefined && expectedWinners.length !== 1)
         || event.winners.length === 0
@@ -832,7 +855,7 @@ export function reduceDomainEvent(
         || JSON.stringify(event.winners) !== JSON.stringify(expectedWinners)
         || JSON.stringify(event.amounts) !== JSON.stringify(expectedAmounts)
         || JSON.stringify(event.oddChipRecipients) !== JSON.stringify(expectedOddRecipients)) {
-        throw new Error('PotAwarded must exactly consume an authoritative pending pot');
+        throw new Error('PotAwarded violates pending-pot order, remaining layers, or award authority');
       }
       let seats = state.seats;
       event.winners.forEach((winner, index) => {
