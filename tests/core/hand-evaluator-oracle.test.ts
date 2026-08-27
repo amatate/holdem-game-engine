@@ -67,6 +67,14 @@ function normalizedRankMultiset(codes: readonly CardCode[]): string {
     .join('');
 }
 
+function comparisonDirectionKey(left: readonly CardCode[], right: readonly CardCode[]): string {
+  return `${left.join(' ')} | ${right.join(' ')}`;
+}
+
+function reverseComparison(expected: -1 | 0 | 1): -1 | 0 | 1 {
+  return expected === 0 ? 0 : expected === 1 ? -1 : 1;
+}
+
 describe('hand evaluator oracle parity', () => {
   it('matches the independent oracle across at least 128 semantically distinct seven-card scenarios', () => {
     const scenarioHands = ORACLE_SCENARIOS.map(({ cards }) => cards);
@@ -112,6 +120,19 @@ describe('hand evaluator oracle parity', () => {
     expect(new Set(ORACLE_COMPARISON_CASES.map(({ expected }) => expected))).toEqual(
       new Set([-1, 0, 1]),
     );
+
+    const expectedByDirection = new Map(
+      ORACLE_COMPARISON_CASES.map(({ left, right, expected }) => [
+        comparisonDirectionKey(left, right),
+        expected,
+      ]),
+    );
+    for (const comparison of ORACLE_COMPARISON_CASES) {
+      expect(
+        expectedByDirection.get(comparisonDirectionKey(comparison.right, comparison.left)),
+        `${comparison.id} reverse coverage`,
+      ).toBe(reverseComparison(comparison.expected));
+    }
 
     for (const comparison of ORACLE_COMPARISON_CASES) {
       expect(comparison.left).toHaveLength(7);

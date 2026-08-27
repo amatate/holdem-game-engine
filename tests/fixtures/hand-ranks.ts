@@ -294,7 +294,7 @@ function hand(...cards: CardCode[]): readonly CardCode[] {
   return cards;
 }
 
-export const ORACLE_COMPARISON_CASES = [
+const ORACLE_COMPARISON_BASE_CASES = [
   // Category boundaries.
   { id: 'straight-flush beats quads', left: hand('As', 'Ks', 'Qs', 'Js', 'Ts', '2d', '3c'), right: hand('Ah', 'Ad', 'Ac', 'As', 'Kd', 'Qc', '2s'), expected: 1 },
   { id: 'quads beat full house', left: hand('Ah', 'Ad', 'Ac', 'As', 'Kd', 'Qc', '2s'), right: hand('Kh', 'Kd', 'Kc', '2s', '2d', 'As', 'Qc'), expected: 1 },
@@ -304,7 +304,6 @@ export const ORACLE_COMPARISON_CASES = [
   { id: 'trips beat two pair', left: hand('Qh', 'Qd', 'Qc', '9s', '2d', 'Ac', 'Ks'), right: hand('Jh', 'Jd', '4c', '4s', 'Ad', 'Kc', '2h'), expected: 1 },
   { id: 'two pair beats pair', left: hand('Jh', 'Jd', '4c', '4s', 'Ad', 'Kc', '2h'), right: hand('Th', 'Td', 'As', '7c', '3d', 'Kc', '2s'), expected: 1 },
   { id: 'pair beats high card', left: hand('Th', 'Td', 'As', '7c', '3d', 'Kc', '2s'), right: hand('As', 'Jd', '8c', '5s', '2d', 'Kh', '7c'), expected: 1 },
-  { id: 'high card loses to pair', left: hand('As', 'Jd', '8c', '5s', '2d', 'Kh', '7c'), right: hand('Th', 'Td', 'As', '7c', '3d', 'Kc', '2s'), expected: -1 },
 
   // Made-rank and kicker boundaries for every vector layer.
   { id: 'straight-flush high card', left: hand('9s', '8s', '7s', '6s', '5s', 'Ac', 'Kd'), right: hand('8h', '7h', '6h', '5h', '4h', 'As', 'Kc'), expected: 1 },
@@ -346,3 +345,18 @@ export const ORACLE_COMPARISON_CASES = [
   { id: 'pair tie', left: hand('Ah', 'Ad', 'Ks', 'Qc', '9d', '2c', '3s'), right: hand('As', 'Ac', 'Kh', 'Qd', '9c', '2d', '3s'), expected: 0 },
   { id: 'high-card tie', left: hand('As', 'Kd', 'Qh', 'Jc', '9s', '2d', '3c'), right: hand('Ah', 'Kc', 'Qd', 'Js', '9h', '2d', '3c'), expected: 0 },
 ] as const satisfies readonly OracleComparisonCase[];
+
+function reverseExpected(expected: -1 | 0 | 1): -1 | 0 | 1 {
+  return expected === 0 ? 0 : expected === 1 ? -1 : 1;
+}
+
+export const ORACLE_COMPARISON_CASES: readonly OracleComparisonCase[] =
+  ORACLE_COMPARISON_BASE_CASES.flatMap((comparison) => [
+    comparison,
+    {
+      id: `${comparison.id} [reverse]`,
+      left: comparison.right,
+      right: comparison.left,
+      expected: reverseExpected(comparison.expected),
+    },
+  ]);
