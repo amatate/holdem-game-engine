@@ -114,4 +114,44 @@ describe('position advancement', () => {
       bigBlindSeat: 5,
     });
   });
+
+  it.each([
+    {
+      eliminated: 'former SB',
+      survivors: [0, 1, 2, 4, 5],
+      expected: { buttonPosition: 3, smallBlindSeat: 4, bigBlindSeat: 5 },
+    },
+    {
+      eliminated: 'former BB',
+      survivors: [0, 1, 2, 3, 5],
+      expected: { buttonPosition: 3, smallBlindSeat: null, bigBlindSeat: 5 },
+    },
+    {
+      eliminated: 'both former blinds',
+      survivors: [0, 1, 2, 5],
+      expected: { buttonPosition: 3, smallBlindSeat: null, bigBlindSeat: 5 },
+    },
+  ])('moves a non-adjacent dead button to the former SB seat when $eliminated is eliminated', ({ survivors, expected }) => {
+    const previous: PositionState = {
+      buttonPosition: 1,
+      smallBlindSeat: 3,
+      bigBlindSeat: 4,
+    };
+
+    expect(advancePositions(previous, survivors, 6)).toEqual(expected);
+  });
+
+  it('falls back to one physical button step after a prior hand had no small blind', () => {
+    const priorNoSmallBlind: PositionState = {
+      buttonPosition: 3,
+      smallBlindSeat: null,
+      bigBlindSeat: 5,
+    };
+
+    expect(advancePositions(priorNoSmallBlind, [0, 1, 2, 5], 6)).toEqual({
+      buttonPosition: 4,
+      smallBlindSeat: 5,
+      bigBlindSeat: 0,
+    });
+  });
 });

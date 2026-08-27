@@ -218,16 +218,53 @@ describe('starting a hand', () => {
 
   it('keeps the full multiway bring-in when the big blind can post only one chip', () => {
     const before = withStacks(createState(), [199, 100, 1, 100]);
-    const result = startHand(before, { fixedDeck: createStandardDeck() });
+    const fixedDeck = createStandardDeck();
+    const result = startHand(before, { fixedDeck });
+    const dealt = result.events.find((event) => event.type === 'HoleCardsDealt');
 
     expect(result.state.seats.map((seat) => seat.stack)).toEqual([199, 99, 0, 100]);
     expect(result.state.seats[2]?.status).toBe('all-in');
+    expect(result.state.seats[2]?.holeCards?.map((card) => card.code))
+      .toEqual([fixedDeck[1]!.code, fixedDeck[5]!.code]);
+    expect(dealt?.type === 'HoleCardsDealt' && dealt.orderedDeals
+      .filter((deal) => deal.seat === 2)
+      .map(({ card, round }) => ({ card: card.code, round })))
+      .toEqual([
+        { card: fixedDeck[1]!.code, round: 1 },
+        { card: fixedDeck[5]!.code, round: 2 },
+      ]);
     expect(result.state.activeHand).toMatchObject({
+      dealCursor: 8,
       currentBetTo: 2,
       currentActorSeat: 3,
       pendingActors: [3, 0, 1],
     });
     expect(result.state.seats.every((seat) => seat.stack >= 0)).toBe(true);
+  });
+
+  it('has no pending actor when the funded HU small blind already matches a one-chip all-in BB', () => {
+    const config: TournamentConfig = {
+      ...FOUR_HANDED_CONFIG,
+      maxSeats: 2,
+      startingStack: 100,
+      blindLevels: [{ smallBlind: 1, bigBlind: 2 }],
+    };
+    const before = withStacks(createState(config), [100, 1]);
+    const result = startHand(before, { fixedDeck: createStandardDeck() });
+
+    expect(result.state.seats.map((seat) => ({
+      stack: seat.stack,
+      committed: seat.committedStreet,
+      status: seat.status,
+    }))).toEqual([
+      { stack: 99, committed: 1, status: 'active' },
+      { stack: 0, committed: 1, status: 'all-in' },
+    ]);
+    expect(result.state.activeHand).toMatchObject({
+      currentBetTo: 1,
+      currentActorSeat: null,
+      pendingActors: [],
+    });
   });
 
   it('limits heads-up debt to the short big blind actual post', () => {

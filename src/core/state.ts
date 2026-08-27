@@ -473,10 +473,16 @@ export function startHand(
   const actionable = new Set(current.seats
     .filter((seat) => seat.status === 'active' && seat.stack > 0)
     .map((seat) => seat.seatIndex));
-  const actor = firstIncludedAfter(positions.bigBlindSeat, actionable, state.config.maxSeats);
   const actualBigBlind = current.seats.find((seat) => seat.seatIndex === positions.bigBlindSeat)!
     .committedStreet;
   const currentBetTo = survivorSeats.length === 2 ? actualBigBlind : blindLevel.bigBlind;
+  let actor = firstIncludedAfter(positions.bigBlindSeat, actionable, state.config.maxSeats);
+  if (survivorSeats.length === 2 && actionable.size === 1) {
+    const onlyFundedSeat = current.seats.find((seat) => actionable.has(seat.seatIndex))!;
+    if (onlyFundedSeat.committedStreet >= currentBetTo) {
+      actor = null;
+    }
+  }
   emit({
     ...eventBase(),
     type: 'BettingRoundStarted',

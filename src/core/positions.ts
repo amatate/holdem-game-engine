@@ -68,7 +68,7 @@ export function advancePositions(
   }
 
   return {
-    buttonPosition: (previous.buttonPosition + 1) % maxSeats,
+    buttonPosition: previous.smallBlindSeat ?? (previous.buttonPosition + 1) % maxSeats,
     smallBlindSeat: survivors.has(previous.bigBlindSeat) ? previous.bigBlindSeat : null,
     bigBlindSeat: firstClockwiseAfter(previous.bigBlindSeat, survivors, maxSeats),
   };
