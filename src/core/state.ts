@@ -344,6 +344,60 @@ export function reduceDomainEvent(
       };
       break;
     }
+    case 'PlayerActed': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('PlayerActed requires the matching active hand');
+      }
+      const actingSeat = state.seats.find((seat) => seat.seatIndex === event.seat);
+      if (actingSeat === undefined || event.paid < 0 || event.paid > actingSeat.stack) {
+        throw new Error('player action cannot make a stack negative');
+      }
+      const updatedSeats = replaceSeat(state.seats, event.seat, (seat) => {
+        const stack = seat.stack - event.paid;
+        return {
+          ...seat,
+          stack,
+          status: event.normalizedKind === 'fold'
+            ? 'folded'
+            : event.allIn ? 'all-in' : seat.status,
+          committedStreet: seat.committedStreet + event.paid,
+          committedHand: seat.committedHand + event.paid,
+          lastActedAtBetTo: event.betToAfter,
+        };
+      });
+      const increased = event.betToAfter > event.betToBefore;
+      let pendingActors: number[];
+      if (increased) {
+        const responders = new Set(updatedSeats
+          .filter((seat) => seat.seatIndex !== event.seat
+            && seat.status === 'active'
+            && seat.stack > 0
+            && seat.committedStreet < event.betToAfter)
+          .map((seat) => seat.seatIndex));
+        pendingActors = clockwiseSeatsFrom(
+          (event.seat + 1) % state.config.maxSeats,
+          responders,
+          state.config.maxSeats,
+        );
+      } else {
+        pendingActors = state.activeHand.pendingActors.filter((seat) => seat !== event.seat);
+      }
+      next = {
+        ...state,
+        seats: updatedSeats,
+        activeHand: {
+          ...state.activeHand,
+          currentActorSeat: pendingActors[0] ?? null,
+          currentBetTo: event.betToAfter,
+          lastFullRaiseSize: increased && event.fullRaise
+            ? event.betToAfter - event.betToBefore
+            : state.activeHand.lastFullRaiseSize,
+          lastAggressorSeat: increased ? event.seat : state.activeHand.lastAggressorSeat,
+          pendingActors,
+        },
+      };
+      break;
+    }
     default:
       return assertNever(event);
   }

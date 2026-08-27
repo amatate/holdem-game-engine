@@ -76,6 +76,18 @@ export interface BettingRoundStartedEvent extends HandEventBase {
   readonly lastFullRaiseSize: number;
 }
 
+export interface PlayerActedEvent extends HandEventBase {
+  readonly type: 'PlayerActed';
+  readonly seat: number;
+  readonly normalizedKind: 'fold' | 'check' | 'call' | 'bet' | 'raise';
+  readonly paid: number;
+  readonly betToBefore: number;
+  readonly betToAfter: number;
+  readonly allIn: boolean;
+  readonly fullRaise: boolean;
+  readonly raiseReopened: boolean;
+}
+
 export type DomainEvent =
   | GameStartedEvent
   | HandStartedEvent
@@ -83,4 +95,5 @@ export type DomainEvent =
   | BlindPostedEvent
   | DeckPreparedEvent
   | HoleCardsDealtEvent
-  | BettingRoundStartedEvent;
+  | BettingRoundStartedEvent
+  | PlayerActedEvent;
