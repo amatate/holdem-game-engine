@@ -17,7 +17,10 @@ import {
   type HandCategory,
 } from '../../src/core/hand-evaluator.js';
 import type { CardCode } from '../../src/core/types.js';
-import { ORACLE_HANDS } from '../fixtures/hand-ranks.js';
+import {
+  ORACLE_COMPARISON_CASES,
+  ORACLE_SCENARIOS,
+} from '../fixtures/hand-ranks.js';
 
 interface OracleSolvedHand {
   readonly name: string;
@@ -57,40 +60,76 @@ function compareWithOracle(left: OracleSolvedHand, right: OracleSolvedHand): -1 
   return winners[0] === left ? 1 : -1;
 }
 
+function normalizedRankMultiset(codes: readonly CardCode[]): string {
+  return codes
+    .map((code) => code[0])
+    .sort()
+    .join('');
+}
+
 describe('hand evaluator oracle parity', () => {
-  it('matches the independent oracle category across at least 128 fixed seven-card hands', () => {
-    expect(ORACLE_HANDS.length).toBeGreaterThanOrEqual(128);
-    expect(new Set(ORACLE_HANDS.map((codes) => codes.join(' '))).size).toBeGreaterThanOrEqual(128);
+  it('matches the independent oracle across at least 128 semantically distinct seven-card scenarios', () => {
+    const scenarioHands = ORACLE_SCENARIOS.map(({ cards }) => cards);
+
+    expect(ORACLE_SCENARIOS.length).toBeGreaterThanOrEqual(128);
+    expect(new Set(scenarioHands.map((codes) => codes.join(' '))).size).toBe(ORACLE_SCENARIOS.length);
+    expect(new Set(scenarioHands.map(normalizedRankMultiset)).size).toBe(ORACLE_SCENARIOS.length);
+    for (const category of Object.values(CATEGORY_BY_ORACLE_NAME)) {
+      expect(ORACLE_SCENARIOS.filter((scenario) => scenario.expectedCategory === category)).toHaveLength(20);
+    }
+    expect(
+      ORACLE_SCENARIOS.some(
+        (scenario) =>
+          scenario.expectedCategory === 'straight' &&
+          ['A', '5', '4', '3', '2'].every((rank) =>
+            scenario.cards.some((code) => code[0] === rank),
+          ),
+      ),
+    ).toBe(true);
 
     const observedCategories = new Set<HandCategory>();
 
-    for (const codes of ORACLE_HANDS) {
+    for (const scenario of ORACLE_SCENARIOS) {
+      const { cards: codes } = scenario;
       expect(codes).toHaveLength(7);
       expect(new Set(codes).size).toBe(7);
 
       const oracle = solveWithOracle(codes);
-      const expectedCategory = CATEGORY_BY_ORACLE_NAME[oracle.name];
+      const oracleCategory = CATEGORY_BY_ORACLE_NAME[oracle.name];
       const actual = evaluateBest(codes.map(parseCard));
 
-      expect(expectedCategory, `unmapped oracle category for ${codes.join(' ')}`).toBeDefined();
-      expect(actual.category, codes.join(' ')).toBe(expectedCategory);
+      expect(oracleCategory, `unmapped oracle category for ${scenario.id}`).toBeDefined();
+      expect(oracleCategory, scenario.id).toBe(scenario.expectedCategory);
+      expect(actual.category, scenario.id).toBe(oracleCategory);
       observedCategories.add(actual.category);
     }
 
     expect(observedCategories).toEqual(new Set(Object.values(CATEGORY_BY_ORACLE_NAME)));
   });
 
-  it('matches oracle ordering and ties for every adjacent fixed-hand pair', () => {
-    for (let index = 1; index < ORACLE_HANDS.length; index += 1) {
-      const leftCodes = ORACLE_HANDS[index - 1]!;
-      const rightCodes = ORACLE_HANDS[index]!;
-      const expected = compareWithOracle(solveWithOracle(leftCodes), solveWithOracle(rightCodes));
+  it('matches explicit oracle ordering and tie cases for every vector layer', () => {
+    expect(new Set(ORACLE_COMPARISON_CASES.map(({ id }) => id)).size).toBe(ORACLE_COMPARISON_CASES.length);
+    expect(new Set(ORACLE_COMPARISON_CASES.map(({ expected }) => expected))).toEqual(
+      new Set([-1, 0, 1]),
+    );
+
+    for (const comparison of ORACLE_COMPARISON_CASES) {
+      expect(comparison.left).toHaveLength(7);
+      expect(comparison.right).toHaveLength(7);
+      expect(new Set(comparison.left).size, `${comparison.id} left`).toBe(7);
+      expect(new Set(comparison.right).size, `${comparison.id} right`).toBe(7);
+
+      const oracleResult = compareWithOracle(
+        solveWithOracle(comparison.left),
+        solveWithOracle(comparison.right),
+      );
       const actual = compareHandRanks(
-        evaluateBest(leftCodes.map(parseCard)),
-        evaluateBest(rightCodes.map(parseCard)),
+        evaluateBest(comparison.left.map(parseCard)),
+        evaluateBest(comparison.right.map(parseCard)),
       );
 
-      expect(actual, `${leftCodes.join(' ')} vs ${rightCodes.join(' ')}`).toBe(expected);
+      expect(oracleResult, `${comparison.id} oracle`).toBe(comparison.expected);
+      expect(actual, comparison.id).toBe(oracleResult);
     }
   });
 
