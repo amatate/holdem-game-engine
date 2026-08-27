@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import * as publicApi from '../../src/index.js';
 import { createStandardDeck } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import { getLegalActions } from '../../src/core/legal-actions.js';
@@ -62,6 +63,13 @@ function assertPureRejection(
 }
 
 describe('legal action derivation and rejection purity', () => {
+  it('keeps internal betting helpers out of the package root API', () => {
+    expect(publicApi).not.toHaveProperty('hasRaiseRights');
+    expect(publicApi).not.toHaveProperty('hasFundedResponder');
+    expect(publicApi).toHaveProperty('getLegalActions');
+    expect(publicApi).toHaveProperty('applyIntent');
+  });
+
   it('exposes fold/call while facing a bet and rejects check without changing authority', () => {
     const state = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
 

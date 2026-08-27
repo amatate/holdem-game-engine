@@ -21,12 +21,32 @@ interface FixtureOptions {
   readonly bigBlind?: number;
 }
 
+function expectConserved(state: TournamentState): void {
+  expect(state.seats.every((seat) => Number.isSafeInteger(seat.stack)
+    && seat.stack >= 0
+    && Number.isSafeInteger(seat.committedHand)
+    && seat.committedHand >= 0)).toBe(true);
+  const total = state.seats.reduce(
+    (sum, seat) => sum + seat.stack + seat.committedHand,
+    0,
+  );
+  expect(Number.isSafeInteger(total)).toBe(true);
+  expect(total).toBe(state.initialChipTotal);
+  expect(state.initialChipTotal).toBe(state.config.startingStack * state.config.maxSeats);
+}
+
 function bettingState(options: FixtureOptions): TournamentState {
   const maxSeats = options.stacks.length;
   const bigBlind = options.bigBlind ?? options.lastFullRaiseSize;
+  const initialChipTotal = options.stacks.reduce(
+    (sum, stack, seatIndex) => sum + stack + options.committed[seatIndex]!,
+    0,
+  );
+  const startingStack = initialChipTotal / maxSeats;
+  expect(Number.isSafeInteger(startingStack)).toBe(true);
   const tableConfig: TournamentConfig = {
     maxSeats,
-    startingStack: 20_000,
+    startingStack,
     handsPerLevel: 10,
     blindLevels: [{ smallBlind: Math.max(1, Math.floor(bigBlind / 2)), bigBlind }],
     initialButtonSeat: 0,
@@ -36,7 +56,7 @@ function bettingState(options: FixtureOptions): TournamentState {
     Array.from({ length: maxSeats }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
     'betting-fixture',
   ).state;
-  return {
+  const state: TournamentState = {
     ...base,
     seats: base.seats.map((seat, seatIndex) => ({
       ...seat,
@@ -63,12 +83,31 @@ function bettingState(options: FixtureOptions): TournamentState {
       pendingActors: options.pending,
     },
   };
+  expectConserved(state);
+  return state;
+}
+
+function acceptedAction(
+  state: TournamentState,
+  seat: number,
+  intent: Parameters<typeof applyIntent>[2],
+): Extract<ReturnType<typeof applyIntent>, { readonly accepted: true }> {
+  expectConserved(state);
+  const snapshot = structuredClone(state);
+  const result = applyIntent(state, seat, intent);
+  expect(result.accepted).toBe(true);
+  if (!result.accepted) {
+    throw new Error(`expected accepted action, received ${result.rejection.code}`);
+  }
+  expect(result.events).toHaveLength(1);
+  expect(result.state).toEqual(reduceDomainEvent(state, result.events[0]!));
+  expect(state).toEqual(snapshot);
+  expectConserved(result.state);
+  return result;
 }
 
 function act(state: TournamentState, seat: number, intent: Parameters<typeof applyIntent>[2]): TournamentState {
-  const result = applyIntent(state, seat, intent);
-  expect(result.accepted).toBe(true);
-  return result.state;
+  return acceptedAction(state, seat, intent).state;
 }
 
 function expectBettingState(
@@ -132,8 +171,7 @@ describe('canonical no-limit raises', () => {
       bigBlind: 100,
     });
     const beforeTotal = before.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0);
-    const beforeSnapshot = structuredClone(before);
-    const result = applyIntent(before, 0, { type: 'raiseTo', amount: 300 });
+    const result = acceptedAction(before, 0, { type: 'raiseTo', amount: 300 });
 
     expect(result.accepted).toBe(true);
     expect(result.events[0]).toMatchObject({
@@ -159,8 +197,6 @@ describe('canonical no-limit raises', () => {
     expect(result.state.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0))
       .toBe(beforeTotal);
     expect(result.state.seats.every((seat) => seat.stack >= 0)).toBe(true);
-    expect(before).toEqual(beforeSnapshot);
-    expect(result.state).toEqual(reduceDomainEvent(before, result.events[0]!));
   });
 
   it('keeps the big blind option pending after every earlier player only calls', () => {
@@ -210,9 +246,9 @@ describe('unacted blind rights and a full reopening raise', () => {
   it('lets the unacted BB raise over a short all-in, then distinguishes call from full-raise reopening', () => {
     const initial = bettingState({
       committed: [0, 4_000, 4_000],
-      stacks: [20_000, 16_000, 20_000],
+      stacks: [15_500, 3_500, 12_000],
       actor: 0,
-      pending: [0, 2],
+      pending: [0, 1, 2],
       currentBetTo: 4_000,
       lastFullRaiseSize: 4_000,
       lastAggressorSeat: 2,
@@ -223,19 +259,11 @@ describe('unacted blind rights and a full reopening raise', () => {
       currentBetTo: 4_000,
       lastFullRaiseSize: 4_000,
       lastAggressorSeat: 2,
-      pendingActors: [2],
+      pendingActors: [1, 2],
       lastActed: [4_000, null, null],
-      actorCanRaise: true,
+      actorCanRaise: false,
     });
-
-    const cAllInFixture: TournamentState = {
-      ...afterA,
-      seats: afterA.seats.map((seat) => seat.seatIndex === 1
-        ? { ...seat, stack: 3_500, committedStreet: 4_000, committedHand: 4_000, status: 'active' as const }
-        : seat),
-      activeHand: { ...afterA.activeHand!, currentActorSeat: 1, pendingActors: [1, 2] },
-    };
-    const afterC = act(cAllInFixture, 1, { type: 'allIn' });
+    const afterC = act(afterA, 1, { type: 'allIn' });
     expectBettingState(afterC, {
       currentBetTo: 7_500,
       lastFullRaiseSize: 4_000,
@@ -244,7 +272,7 @@ describe('unacted blind rights and a full reopening raise', () => {
       lastActed: [4_000, 7_500, null],
       actorCanRaise: true,
     });
-    expect(getLegalActions(afterC, 2).raiseTo?.min).toBe(11_500);
+    expect(getLegalActions(afterC, 2).raiseTo).toEqual({ min: 11_500, max: 16_000 });
 
     const afterBbCall = act(afterC, 2, { type: 'call' });
     expectBettingState(afterBbCall, {

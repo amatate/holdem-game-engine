@@ -4,7 +4,11 @@ import type { TournamentConfig } from '../../src/core/config.js';
 import type { PlayerActedEvent } from '../../src/core/events.js';
 import { getLegalActions } from '../../src/core/legal-actions.js';
 import { applyIntent } from '../../src/core/reducer.js';
-import { createTournament, type TournamentState } from '../../src/core/state.js';
+import {
+  createTournament,
+  reduceDomainEvent,
+  type TournamentState,
+} from '../../src/core/state.js';
 
 interface FixtureOptions {
   readonly committed: readonly number[];
@@ -17,11 +21,31 @@ interface FixtureOptions {
   readonly lastActed?: readonly (number | null)[];
 }
 
+function expectConserved(state: TournamentState): void {
+  expect(state.seats.every((seat) => Number.isSafeInteger(seat.stack)
+    && seat.stack >= 0
+    && Number.isSafeInteger(seat.committedHand)
+    && seat.committedHand >= 0)).toBe(true);
+  const total = state.seats.reduce(
+    (sum, seat) => sum + seat.stack + seat.committedHand,
+    0,
+  );
+  expect(Number.isSafeInteger(total)).toBe(true);
+  expect(total).toBe(state.initialChipTotal);
+  expect(state.initialChipTotal).toBe(state.config.startingStack * state.config.maxSeats);
+}
+
 function fixture(options: FixtureOptions): TournamentState {
   const maxSeats = options.stacks.length;
+  const initialChipTotal = options.stacks.reduce(
+    (sum, stack, seatIndex) => sum + stack + options.committed[seatIndex]!,
+    0,
+  );
+  const startingStack = initialChipTotal / maxSeats;
+  expect(Number.isSafeInteger(startingStack)).toBe(true);
   const tableConfig: TournamentConfig = {
     maxSeats,
-    startingStack: 20_000,
+    startingStack,
     handsPerLevel: 10,
     blindLevels: [{ smallBlind: 50, bigBlind: 100 }],
     initialButtonSeat: 0,
@@ -31,7 +55,7 @@ function fixture(options: FixtureOptions): TournamentState {
     Array.from({ length: maxSeats }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
     'short-all-in-fixture',
   ).state;
-  return {
+  const state: TournamentState = {
     ...base,
     seats: base.seats.map((seat, seatIndex) => ({
       ...seat,
@@ -58,17 +82,35 @@ function fixture(options: FixtureOptions): TournamentState {
       pendingActors: options.pending,
     },
   };
+  expectConserved(state);
+  return state;
+}
+
+function acceptedAction(
+  state: TournamentState,
+  seat: number,
+  intent: Parameters<typeof applyIntent>[2],
+): Extract<ReturnType<typeof applyIntent>, { readonly accepted: true }> {
+  expectConserved(state);
+  const snapshot = structuredClone(state);
+  const result = applyIntent(state, seat, intent);
+  expect(result.accepted).toBe(true);
+  if (!result.accepted) {
+    throw new Error(`expected accepted action, received ${result.rejection.code}`);
+  }
+  expect(result.events).toHaveLength(1);
+  expect(result.state).toEqual(reduceDomainEvent(state, result.events[0]!));
+  expect(state).toEqual(snapshot);
+  expectConserved(result.state);
+  return result;
 }
 
 function apply(state: TournamentState, seat: number, intent: Parameters<typeof applyIntent>[2]): TournamentState {
-  const result = applyIntent(state, seat, intent);
-  expect(result.accepted).toBe(true);
-  return result.state;
+  return acceptedAction(state, seat, intent).state;
 }
 
 function playerActed(state: TournamentState, seat: number, intent: Parameters<typeof applyIntent>[2]): PlayerActedEvent {
-  const result = applyIntent(state, seat, intent);
-  expect(result.accepted).toBe(true);
+  const result = acceptedAction(state, seat, intent);
   const event = result.events[0];
   expect(event?.type).toBe('PlayerActed');
   return event as PlayerActedEvent;
@@ -103,7 +145,7 @@ describe('all-in normalization', () => {
   ] as const)('normalizes opening $mode all-ins as bets and makes max raiseTo equivalent', ({ stack, mode, fullRaise }) => {
     const state = fixture({
       committed: [0, 0, 0],
-      stacks: [stack, 1_000, 1_000],
+      stacks: stack === 20 ? [stack, 999, 1_000] : [stack, 1_000, 1_000],
       actor: 0,
       pending: [0, 1, 2],
       currentBetTo: 0,
@@ -130,7 +172,7 @@ describe('all-in normalization', () => {
   ] as const)('normalizes $mode all-ins and makes max raiseTo equivalent', ({ stack, mode, fullRaise }) => {
     const state = fixture({
       committed: [100, 100, 100],
-      stacks: [stack, 1_000, 1_000],
+      stacks: stack === 50 ? [stack, 999, 1_000] : [stack, 1_000, 1_000],
       actor: 0,
       pending: [0, 1, 2],
       currentBetTo: 100,
@@ -157,7 +199,7 @@ describe('short all-in raise reopening', () => {
   it('does not reopen an already acting bettor after one short raise', () => {
     let state = fixture({
       committed: [0, 0, 0],
-      stacks: [1_000, 150, 1_000],
+      stacks: [1_000, 150, 1_001],
       actor: 0,
       pending: [0, 1, 2],
       currentBetTo: 0,
@@ -207,7 +249,7 @@ describe('short all-in raise reopening', () => {
   it('keeps raise rights for an unacted player after a short opening bet but not for the prior checker', () => {
     let state = fixture({
       committed: [0, 0, 0],
-      stacks: [1_000, 20, 1_000],
+      stacks: [999, 20, 1_000],
       actor: 0,
       pending: [0, 1, 2],
       currentBetTo: 0,
@@ -217,9 +259,30 @@ describe('short all-in raise reopening', () => {
     expectFields(state, 0, 100, null, [1, 2], [0, null, null], false);
     state = apply(state, 1, { type: 'allIn' });
     expectFields(state, 20, 100, 1, [2, 0], [0, 20, null], true);
-    expect(getLegalActions(state, 2).raiseTo).toEqual({ min: 120, max: 1_000 });
+    expect(getLegalActions(state, 2)).toEqual({
+      fold: true,
+      check: false,
+      call: { pay: 20, to: 20, isAllIn: false },
+      raiseTo: { min: 120, max: 1_000 },
+      allIn: { to: 1_000, mode: 'fullRaise' },
+    });
     state = apply(state, 2, { type: 'call' });
     expectFields(state, 20, 100, 1, [0], [0, 20, 20], false);
+    expect(getLegalActions(state, 0)).toEqual({
+      fold: true,
+      check: false,
+      call: { pay: 20, to: 20, isAllIn: false },
+      raiseTo: null,
+      allIn: null,
+    });
+    const rejectedRaise = applyIntent(state, 0, { type: 'raiseTo', amount: 120 });
+    expect(rejectedRaise.accepted).toBe(false);
+    expect(rejectedRaise.state).toBe(state);
+    expect(rejectedRaise.events).toEqual([]);
+    expect(rejectedRaise.state.version).toBe(state.version);
+    if (!rejectedRaise.accepted) {
+      expect(rejectedRaise.rejection.code).toBe('raise-not-reopened');
+    }
   });
 
   it('preserves the original full increment across three short raises and gives an unacted player min 1100', () => {
