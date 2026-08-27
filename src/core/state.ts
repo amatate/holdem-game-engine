@@ -149,6 +149,22 @@ function appendEvent(state: TournamentState, event: DomainEvent): TournamentStat
   };
 }
 
+function sameCard(left: Card, right: Card): boolean {
+  return left.code === right.code && left.rank === right.rank && left.suit === right.suit;
+}
+
+const BOARD_COUNT_BEFORE_STREET: Readonly<Record<Exclude<Street, 'preflop'>, number>> = {
+  flop: 0,
+  turn: 3,
+  river: 4,
+};
+
+const BURN_COUNT_BEFORE_STREET: Readonly<Record<Exclude<Street, 'preflop'>, number>> = {
+  flop: 0,
+  turn: 1,
+  river: 2,
+};
+
 export function reduceDomainEvent(
   state: TournamentState | null,
   event: DomainEvent,
@@ -442,14 +458,19 @@ export function reduceDomainEvent(
       }
       const expectedPhase = `deal-${event.street}` as const;
       const nextCard = state.activeHand.deck[state.activeHand.dealCursor];
-      if (state.activeHand.phase !== expectedPhase || nextCard?.code !== event.card.code) {
-        throw new Error('CardBurned must consume the next card for the matching street');
+      if (state.activeHand.phase !== expectedPhase
+        || state.activeHand.board.length !== BOARD_COUNT_BEFORE_STREET[event.street]
+        || state.activeHand.burnedCards.length !== BURN_COUNT_BEFORE_STREET[event.street]) {
+        throw new Error('CardBurned violates the required street sequence');
+      }
+      if (nextCard === undefined || !sameCard(nextCard, event.card)) {
+        throw new Error('CardBurned must match the next authoritative deck card');
       }
       next = {
         ...state,
         activeHand: {
           ...state.activeHand,
-          burnedCards: [...state.activeHand.burnedCards, { ...event.card }],
+          burnedCards: [...state.activeHand.burnedCards, { ...nextCard }],
           dealCursor: state.activeHand.dealCursor + 1,
         },
       };
@@ -466,16 +487,24 @@ export function reduceDomainEvent(
         state.activeHand.dealCursor + expectedCount,
       );
       if (state.activeHand.phase !== expectedPhase
+        || state.activeHand.board.length !== BOARD_COUNT_BEFORE_STREET[event.street]
+        || state.activeHand.burnedCards.length !== BURN_COUNT_BEFORE_STREET[event.street] + 1) {
+        throw new Error('CommunityCardsDealt violates the required burn/deal sequence');
+      }
+      if (nextCards.length !== expectedCount
         || event.cards.length !== expectedCount
-        || nextCards.some((card, index) => card.code !== event.cards[index]?.code)) {
-        throw new Error('CommunityCardsDealt must consume the next cards for the matching street');
+        || nextCards.some((card, index) => {
+          const eventCard = event.cards[index];
+          return eventCard === undefined || !sameCard(card, eventCard);
+        })) {
+        throw new Error('CommunityCardsDealt must match the next authoritative deck cards');
       }
       next = {
         ...state,
         activeHand: {
           ...state.activeHand,
-          board: [...state.activeHand.board, ...event.cards.map((card) => ({ ...card }))],
-          dealCursor: state.activeHand.dealCursor + event.cards.length,
+          board: [...state.activeHand.board, ...nextCards.map((card) => ({ ...card }))],
+          dealCursor: state.activeHand.dealCursor + nextCards.length,
         },
       };
       break;
@@ -489,16 +518,41 @@ export function reduceDomainEvent(
         || seat?.holeCards === undefined
         || seat.status === 'folded'
         || seat.status === 'eliminated'
-        || seat.holeCards.some((card, index) => card.code !== event.cards[index]?.code)) {
+        || seat.holeCards.some((card, index) => {
+          const eventCard = event.cards[index];
+          return eventCard === undefined || !sameCard(card, eventCard);
+        })) {
         throw new Error('HoleCardsRevealed requires matching live hole cards');
+      }
+      if (state.activeHand.revealedHoleCardSeats.includes(event.seat)) {
+        throw new Error('HoleCardsRevealed cannot reveal a seat more than once');
+      }
+      if (event.reason === 'showdown') {
+        if (state.activeHand.phase !== 'showdown') {
+          throw new Error('showdown hole-card reveal requires showdown phase');
+        }
+      } else {
+        const liveSeats = state.seats.filter((candidate) => candidate.status !== 'folded'
+          && candidate.status !== 'eliminated');
+        const actionableSeats = liveSeats.filter((candidate) => candidate.status === 'active'
+          && candidate.stack > 0);
+        const noFutureDecision = actionableSeats.length === 0
+          || (actionableSeats.length === 1
+            && Math.max(
+              0,
+              state.activeHand.currentBetTo - actionableSeats[0]!.committedStreet,
+            ) === 0);
+        if (liveSeats.length < 2
+          || !liveSeats.some((candidate) => candidate.status === 'all-in')
+          || !noFutureDecision) {
+          throw new Error('all-in hole-card reveal requires multiple live seats and no future decision');
+        }
       }
       next = {
         ...state,
         activeHand: {
           ...state.activeHand,
-          revealedHoleCardSeats: state.activeHand.revealedHoleCardSeats.includes(event.seat)
-            ? state.activeHand.revealedHoleCardSeats
-            : [...state.activeHand.revealedHoleCardSeats, event.seat],
+          revealedHoleCardSeats: [...state.activeHand.revealedHoleCardSeats, event.seat],
         },
       };
       break;

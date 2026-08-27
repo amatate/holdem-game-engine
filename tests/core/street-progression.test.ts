@@ -70,6 +70,37 @@ function advanceAndProveReplay(state: TournamentState): ReturnType<typeof advanc
   return result;
 }
 
+function closedFourHandedPreflop(): TournamentState {
+  let state = startHand(tournament(config(4)), { fixedDeck: createStandardDeck() }).state;
+  state = act(state, 3, { type: 'call' });
+  state = act(state, 0, { type: 'call' });
+  state = act(state, 1, { type: 'call' });
+  return act(state, 2, { type: 'check' });
+}
+
+function readyToDealFlop(): TournamentState {
+  const state = closedFourHandedPreflop();
+  return reduceDomainEvent(state, {
+    type: 'BettingRoundClosed',
+    schemaVersion: 1,
+    eventIndex: state.version,
+    handId: state.activeHand!.handId,
+    street: 'preflop',
+  });
+}
+
+function flopBurned(): TournamentState {
+  const state = readyToDealFlop();
+  return reduceDomainEvent(state, {
+    type: 'CardBurned',
+    schemaVersion: 1,
+    eventIndex: state.version,
+    handId: state.activeHand!.handId,
+    street: 'flop',
+    card: state.activeHand!.deck[state.activeHand!.dealCursor]!,
+  });
+}
+
 describe('betting-round closure', () => {
   it('keeps the unraised big-blind option open even after every commitment is equal', () => {
     let state = startHand(tournament(config(4)), { fixedDeck: createStandardDeck() }).state;
@@ -193,5 +224,115 @@ describe('street dealing and reset', () => {
       currentBetTo: 0,
     });
     expect(state.seats.map((seat) => seat.lastActedAtBetTo)).toEqual([null, null, null]);
+  });
+
+  it('closes an ordinary checked-through river without revealing deep-stacked hands', () => {
+    let state = startHand(tournament(config(2)), { fixedDeck: createStandardDeck() }).state;
+
+    state = act(state, 0, { type: 'call' });
+    state = act(state, 1, { type: 'check' });
+    state = advanceAndProveReplay(state).state;
+    state = act(state, 1, { type: 'check' });
+    state = act(state, 0, { type: 'check' });
+    state = advanceAndProveReplay(state).state;
+    state = act(state, 1, { type: 'check' });
+    state = act(state, 0, { type: 'check' });
+    state = advanceAndProveReplay(state).state;
+    state = act(state, 1, { type: 'check' });
+    state = act(state, 0, { type: 'check' });
+
+    const result = advanceAndProveReplay(state);
+    expect(result.events.map((event) => event.type)).toEqual(['BettingRoundClosed']);
+    expect(result.events.some((event) => event.type === 'HoleCardsRevealed')).toBe(false);
+    expect(result.state.activeHand).toMatchObject({
+      phase: 'showdown',
+      revealedHoleCardSeats: [],
+    });
+  });
+});
+
+describe('authoritative burn and board event sequence', () => {
+  it('rejects community cards before the required flop burn', () => {
+    const state = readyToDealFlop();
+    const cursor = state.activeHand!.dealCursor;
+
+    expect(() => reduceDomainEvent(state, {
+      type: 'CommunityCardsDealt',
+      schemaVersion: 1,
+      eventIndex: state.version,
+      handId: state.activeHand!.handId,
+      street: 'flop',
+      cards: state.activeHand!.deck.slice(cursor, cursor + 3),
+    })).toThrow(/burn|sequence/i);
+  });
+
+  it('rejects a second burn on the same street', () => {
+    const state = flopBurned();
+
+    expect(() => reduceDomainEvent(state, {
+      type: 'CardBurned',
+      schemaVersion: 1,
+      eventIndex: state.version,
+      handId: state.activeHand!.handId,
+      street: 'flop',
+      card: state.activeHand!.deck[state.activeHand!.dealCursor]!,
+    })).toThrow(/burn|sequence/i);
+  });
+
+  it('rejects a second community deal on the same street', () => {
+    const burned = flopBurned();
+    const cursor = burned.activeHand!.dealCursor;
+    const dealt = reduceDomainEvent(burned, {
+      type: 'CommunityCardsDealt',
+      schemaVersion: 1,
+      eventIndex: burned.version,
+      handId: burned.activeHand!.handId,
+      street: 'flop',
+      cards: burned.activeHand!.deck.slice(cursor, cursor + 3),
+    });
+    const nextCursor = dealt.activeHand!.dealCursor;
+
+    expect(() => reduceDomainEvent(dealt, {
+      type: 'CommunityCardsDealt',
+      schemaVersion: 1,
+      eventIndex: dealt.version,
+      handId: dealt.activeHand!.handId,
+      street: 'flop',
+      cards: dealt.activeHand!.deck.slice(nextCursor, nextCursor + 3),
+    })).toThrow(/community|sequence/i);
+  });
+
+  it('rejects a burn payload whose rank or suit disagrees with the authoritative deck card', () => {
+    const state = readyToDealFlop();
+    const canonical = state.activeHand!.deck[state.activeHand!.dealCursor]!;
+
+    expect(() => reduceDomainEvent(state, {
+      type: 'CardBurned',
+      schemaVersion: 1,
+      eventIndex: state.version,
+      handId: state.activeHand!.handId,
+      street: 'flop',
+      card: { ...canonical, rank: canonical.rank === 14 ? 13 : 14 },
+    })).toThrow(/card|deck|identity/i);
+  });
+
+  it('rejects community payload metadata inconsistent with the authoritative deck', () => {
+    const state = flopBurned();
+    const cursor = state.activeHand!.dealCursor;
+    const cards = state.activeHand!.deck.slice(cursor, cursor + 3);
+    const canonical = cards[0]!;
+
+    expect(() => reduceDomainEvent(state, {
+      type: 'CommunityCardsDealt',
+      schemaVersion: 1,
+      eventIndex: state.version,
+      handId: state.activeHand!.handId,
+      street: 'flop',
+      cards: [
+        { ...canonical, suit: canonical.suit === 'c' ? 'd' : 'c' },
+        cards[1]!,
+        cards[2]!,
+      ],
+    })).toThrow(/card|deck|identity/i);
   });
 });

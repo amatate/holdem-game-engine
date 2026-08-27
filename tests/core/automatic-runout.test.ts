@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createStandardDeck } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import { advanceAutomaticPhases } from '../../src/core/dealing.js';
+import type { DomainEvent } from '../../src/core/events.js';
 import { getLegalActions } from '../../src/core/legal-actions.js';
 import { applyIntent } from '../../src/core/reducer.js';
 import {
@@ -79,6 +80,43 @@ function expectRevealsBeforeRunout(
   expect(reveals.every((event) => event.eventIndex < firstBoardEvent!.eventIndex)).toBe(true);
 }
 
+function revealEvent(
+  state: TournamentState,
+  seatIndex: number,
+  reason: 'all-in' | 'showdown',
+): DomainEvent {
+  const seat = state.seats[seatIndex]!;
+  return {
+    type: 'HoleCardsRevealed',
+    schemaVersion: 1,
+    eventIndex: state.version,
+    handId: state.activeHand!.handId,
+    seat: seatIndex,
+    cards: [seat.holeCards![0], seat.holeCards![1]],
+    reason,
+  };
+}
+
+function riverShortAllInDecision(): TournamentState {
+  let state = startHand(
+    withStacks(tournament(headsUpConfig(10, 2, 4)), [9, 11]),
+    { fixedDeck: createStandardDeck() },
+  ).state;
+
+  state = act(state, 0, { type: 'call' });
+  state = act(state, 1, { type: 'check' });
+  state = advanceAndProveReplay(state).state;
+  state = act(state, 1, { type: 'check' });
+  state = act(state, 0, { type: 'raiseTo', amount: 4 });
+  state = act(state, 1, { type: 'call' });
+  state = advanceAndProveReplay(state).state;
+  state = act(state, 1, { type: 'check' });
+  state = act(state, 0, { type: 'check' });
+  state = advanceAndProveReplay(state).state;
+  state = act(state, 1, { type: 'check' });
+  return act(state, 0, { type: 'allIn' });
+}
+
 describe('automatic all-in runout', () => {
   it('reveals all live hands and runs all-all-in players through river without a decision', () => {
     const state = startHand(
@@ -143,26 +181,7 @@ describe('automatic all-in runout', () => {
 
 describe('river all-in boundary', () => {
   it('retains a short opening all-in as final aggressor and reveals before returning showdown', () => {
-    let state = startHand(
-      withStacks(tournament(headsUpConfig(10, 2, 4)), [9, 11]),
-      { fixedDeck: createStandardDeck() },
-    ).state;
-
-    state = act(state, 0, { type: 'call' });
-    state = act(state, 1, { type: 'check' });
-    state = advanceAndProveReplay(state).state;
-
-    state = act(state, 1, { type: 'check' });
-    state = act(state, 0, { type: 'raiseTo', amount: 4 });
-    state = act(state, 1, { type: 'call' });
-    state = advanceAndProveReplay(state).state;
-
-    state = act(state, 1, { type: 'check' });
-    state = act(state, 0, { type: 'check' });
-    state = advanceAndProveReplay(state).state;
-
-    state = act(state, 1, { type: 'check' });
-    state = act(state, 0, { type: 'allIn' });
+    let state = riverShortAllInDecision();
     expect(state.activeHand?.lastAggressorSeat).toBe(0);
     expect(getLegalActions(state, 1).raiseTo).toBeNull();
     state = act(state, 1, { type: 'call' });
@@ -180,5 +199,67 @@ describe('river all-in boundary', () => {
       lastAggressorSeat: 0,
       revealedHoleCardSeats: [0, 1],
     });
+  });
+});
+
+describe('hole-card reveal reducer boundaries', () => {
+  it('rejects an all-in reveal during ordinary preflop betting with no live all-in seat', () => {
+    const state = startHand(
+      tournament(headsUpConfig(100, 1, 2)),
+      { fixedDeck: createStandardDeck() },
+    ).state;
+
+    expect(() => reduceDomainEvent(state, revealEvent(state, 0, 'all-in')))
+      .toThrow(/all-in|reveal/i);
+  });
+
+  it('rejects a showdown reveal before showdown phase', () => {
+    const state = startHand(
+      tournament(headsUpConfig(100, 1, 2)),
+      { fixedDeck: createStandardDeck() },
+    ).state;
+
+    expect(() => reduceDomainEvent(state, revealEvent(state, 0, 'showdown')))
+      .toThrow(/showdown|reveal/i);
+  });
+
+  it('rejects revealing a fold winner', () => {
+    const tableConfig: TournamentConfig = {
+      maxSeats: 3,
+      startingStack: 100,
+      handsPerLevel: 8,
+      blindLevels: [{ smallBlind: 1, bigBlind: 2 }],
+      initialButtonSeat: 0,
+    };
+    let state = startHand(createTournament(
+      tableConfig,
+      Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
+      'fold-winner-reveal',
+    ).state, { fixedDeck: createStandardDeck() }).state;
+    state = act(state, 0, { type: 'fold' });
+    state = act(state, 1, { type: 'fold' });
+
+    expect(() => reduceDomainEvent(state, revealEvent(state, 2, 'all-in')))
+      .toThrow(/live|all-in|reveal/i);
+  });
+
+  it('rejects an all-in reveal on river while a funded opponent still owes a call', () => {
+    const state = riverShortAllInDecision();
+
+    expect(state.activeHand).toMatchObject({ phase: 'river', currentActorSeat: 1, currentBetTo: 1 });
+    expect(() => reduceDomainEvent(state, revealEvent(state, 0, 'all-in')))
+      .toThrow(/decision|reveal/i);
+  });
+
+  it('rejects a duplicate reveal after the legitimate one-funded-plus-all-in runout', () => {
+    const before = startHand(
+      withStacks(tournament(headsUpConfig(100, 1, 2)), [199, 1]),
+      { fixedDeck: createStandardDeck() },
+    ).state;
+    const state = advanceAutomaticPhases(before).state;
+
+    expect(state.activeHand).toMatchObject({ phase: 'showdown', revealedHoleCardSeats: [0, 1] });
+    expect(() => reduceDomainEvent(state, revealEvent(state, 0, 'showdown')))
+      .toThrow(/duplicate|already|reveal/i);
   });
 });
