@@ -329,8 +329,16 @@ export function reduceDomainEvent(
       const pendingActors = event.actor === null
         ? []
         : clockwiseSeatsFrom(event.actor, actionable, state.config.maxSeats);
+      const seats = event.street === 'preflop'
+        ? state.seats
+        : state.seats.map((seat): SeatState => ({
+          ...seat,
+          committedStreet: 0,
+          lastActedAtBetTo: null,
+        }));
       next = {
         ...state,
+        seats,
         activeHand: {
           ...state.activeHand,
           phase: event.street,
@@ -338,7 +346,9 @@ export function reduceDomainEvent(
           currentActorSeat: event.actor,
           currentBetTo: event.currentBetTo,
           lastFullRaiseSize: event.lastFullRaiseSize,
-          lastAggressorSeat: state.activeHand.positions.bigBlindSeat,
+          lastAggressorSeat: event.street === 'preflop'
+            ? state.activeHand.positions.bigBlindSeat
+            : null,
           pendingActors,
         },
       };
@@ -394,6 +404,101 @@ export function reduceDomainEvent(
             : state.activeHand.lastFullRaiseSize,
           lastAggressorSeat: increased ? event.seat : state.activeHand.lastAggressorSeat,
           pendingActors,
+        },
+      };
+      break;
+    }
+    case 'BettingRoundClosed': {
+      if (state.activeHand === null
+        || state.activeHand.handId !== event.handId
+        || state.activeHand.street !== event.street) {
+        throw new Error('BettingRoundClosed requires the matching active street');
+      }
+      const liveCount = state.seats.filter((seat) => seat.status !== 'folded'
+        && seat.status !== 'eliminated').length;
+      const nextPhase: Phase = liveCount === 1
+        ? 'settlement'
+        : event.street === 'preflop'
+          ? 'deal-flop'
+          : event.street === 'flop'
+            ? 'deal-turn'
+            : event.street === 'turn'
+              ? 'deal-river'
+              : 'showdown';
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          phase: nextPhase,
+          currentActorSeat: null,
+          pendingActors: [],
+        },
+      };
+      break;
+    }
+    case 'CardBurned': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('CardBurned requires the matching active hand');
+      }
+      const expectedPhase = `deal-${event.street}` as const;
+      const nextCard = state.activeHand.deck[state.activeHand.dealCursor];
+      if (state.activeHand.phase !== expectedPhase || nextCard?.code !== event.card.code) {
+        throw new Error('CardBurned must consume the next card for the matching street');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          burnedCards: [...state.activeHand.burnedCards, { ...event.card }],
+          dealCursor: state.activeHand.dealCursor + 1,
+        },
+      };
+      break;
+    }
+    case 'CommunityCardsDealt': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('CommunityCardsDealt requires the matching active hand');
+      }
+      const expectedPhase = `deal-${event.street}` as const;
+      const expectedCount = event.street === 'flop' ? 3 : 1;
+      const nextCards = state.activeHand.deck.slice(
+        state.activeHand.dealCursor,
+        state.activeHand.dealCursor + expectedCount,
+      );
+      if (state.activeHand.phase !== expectedPhase
+        || event.cards.length !== expectedCount
+        || nextCards.some((card, index) => card.code !== event.cards[index]?.code)) {
+        throw new Error('CommunityCardsDealt must consume the next cards for the matching street');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          board: [...state.activeHand.board, ...event.cards.map((card) => ({ ...card }))],
+          dealCursor: state.activeHand.dealCursor + event.cards.length,
+        },
+      };
+      break;
+    }
+    case 'HoleCardsRevealed': {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+        throw new Error('HoleCardsRevealed requires the matching active hand');
+      }
+      const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+      if (seat?.holeCards === null
+        || seat?.holeCards === undefined
+        || seat.status === 'folded'
+        || seat.status === 'eliminated'
+        || seat.holeCards.some((card, index) => card.code !== event.cards[index]?.code)) {
+        throw new Error('HoleCardsRevealed requires matching live hole cards');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          revealedHoleCardSeats: state.activeHand.revealedHoleCardSeats.includes(event.seat)
+            ? state.activeHand.revealedHoleCardSeats
+            : [...state.activeHand.revealedHoleCardSeats, event.seat],
         },
       };
       break;

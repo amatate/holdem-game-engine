@@ -1,5 +1,6 @@
 export * from './core/cards.js';
 export * from './core/config.js';
+export { advanceAutomaticPhases, isBettingRoundClosed } from './core/dealing.js';
 export * from './core/events.js';
 export * from './core/hand-evaluator.js';
 export { getLegalActions } from './core/legal-actions.js';

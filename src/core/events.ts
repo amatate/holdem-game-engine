@@ -88,6 +88,30 @@ export interface PlayerActedEvent extends HandEventBase {
   readonly raiseReopened: boolean;
 }
 
+export interface BettingRoundClosedEvent extends HandEventBase {
+  readonly type: 'BettingRoundClosed';
+  readonly street: Street;
+}
+
+export interface CardBurnedEvent extends HandEventBase {
+  readonly type: 'CardBurned';
+  readonly street: Exclude<Street, 'preflop'>;
+  readonly card: Card;
+}
+
+export interface CommunityCardsDealtEvent extends HandEventBase {
+  readonly type: 'CommunityCardsDealt';
+  readonly street: Exclude<Street, 'preflop'>;
+  readonly cards: readonly Card[];
+}
+
+export interface HoleCardsRevealedEvent extends HandEventBase {
+  readonly type: 'HoleCardsRevealed';
+  readonly seat: number;
+  readonly cards: readonly [Card, Card];
+  readonly reason: 'all-in' | 'showdown';
+}
+
 export type DomainEvent =
   | GameStartedEvent
   | HandStartedEvent
@@ -96,4 +120,8 @@ export type DomainEvent =
   | DeckPreparedEvent
   | HoleCardsDealtEvent
   | BettingRoundStartedEvent
-  | PlayerActedEvent;
+  | PlayerActedEvent
+  | BettingRoundClosedEvent
+  | CardBurnedEvent
+  | CommunityCardsDealtEvent
+  | HoleCardsRevealedEvent;

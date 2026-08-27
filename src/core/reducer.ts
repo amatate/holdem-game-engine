@@ -154,3 +154,4 @@ export function applyIntent(
 
 export type { ActionIntent, IntentTransitionResult } from './legal-actions.js';
 export type { DomainEvent } from './events.js';
+export { advanceAutomaticPhases } from './dealing.js';
