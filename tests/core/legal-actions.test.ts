@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import * as publicApi from '../../src/index.js';
+import type { ActionRejectionCode } from '../../src/index.js';
 import { createStandardDeck } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import { getLegalActions } from '../../src/core/legal-actions.js';
 import { applyIntent } from '../../src/core/reducer.js';
 import {
   createTournament,
+  reduceDomainEvent,
   startHand,
   type TournamentState,
 } from '../../src/core/state.js';
+
+const ROOT_REJECTION_CODE: ActionRejectionCode = 'action-not-legal';
 
 function config(
   maxSeats = 4,
@@ -48,6 +52,42 @@ function withStacks(state: TournamentState, stacks: readonly number[]): Tourname
   };
 }
 
+function expectConserved(state: TournamentState): void {
+  expect(state.seats.every((seat) => Number.isSafeInteger(seat.stack)
+    && seat.stack >= 0
+    && Number.isSafeInteger(seat.committedStreet)
+    && seat.committedStreet >= 0
+    && Number.isSafeInteger(seat.committedHand)
+    && seat.committedHand >= 0
+    && seat.committedStreet <= seat.committedHand)).toBe(true);
+  const total = state.seats.reduce(
+    (sum, seat) => sum + seat.stack + seat.committedHand,
+    0,
+  );
+  expect(Number.isSafeInteger(total)).toBe(true);
+  expect(total).toBe(state.initialChipTotal);
+  expect(state.initialChipTotal).toBe(state.config.startingStack * state.config.maxSeats);
+}
+
+function acceptedAction(
+  state: TournamentState,
+  seat: number,
+  intent: Parameters<typeof applyIntent>[2],
+): Extract<ReturnType<typeof applyIntent>, { readonly accepted: true }> {
+  expectConserved(state);
+  const snapshot = structuredClone(state);
+  const result = applyIntent(state, seat, intent);
+  expect(result.accepted).toBe(true);
+  if (!result.accepted) {
+    throw new Error(`expected accepted action, received ${result.rejection.code}`);
+  }
+  expect(result.events).toHaveLength(1);
+  expect(result.state).toEqual(reduceDomainEvent(state, result.events[0]!));
+  expect(state).toEqual(snapshot);
+  expectConserved(result.state);
+  return result;
+}
+
 function assertPureRejection(
   before: TournamentState,
   result: ReturnType<typeof applyIntent>,
@@ -68,11 +108,13 @@ describe('legal action derivation and rejection purity', () => {
     expect(publicApi).not.toHaveProperty('hasFundedResponder');
     expect(publicApi).toHaveProperty('getLegalActions');
     expect(publicApi).toHaveProperty('applyIntent');
+    expect(ROOT_REJECTION_CODE).toBe('action-not-legal');
   });
 
   it('exposes fold/call while facing a bet and rejects check without changing authority', () => {
     const state = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
 
+    expectConserved(state);
     expect(getLegalActions(state, 3)).toEqual({
       fold: true,
       check: false,
@@ -84,15 +126,12 @@ describe('legal action derivation and rejection purity', () => {
   });
 
   it('exposes check at zero debt and rejects both open-fold and call as V1 non-actions', () => {
-    const started = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
-    const state: TournamentState = {
-      ...started,
-      activeHand: {
-        ...started.activeHand!,
-        currentActorSeat: 2,
-        pendingActors: [2],
-      },
-    };
+    let state = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
+    state = acceptedAction(state, 3, { type: 'fold' }).state;
+    state = acceptedAction(state, 0, { type: 'fold' }).state;
+    state = acceptedAction(state, 1, { type: 'call' }).state;
+    expectConserved(state);
+    expect(state.eventLog.filter((event) => event.type === 'PlayerActed')).toHaveLength(3);
 
     expect(getLegalActions(state, 2)).toEqual({
       fold: false,
@@ -105,16 +144,14 @@ describe('legal action derivation and rejection purity', () => {
     assertPureRejection(state, applyIntent(state, 2, { type: 'call' }), 'action-not-legal');
   });
 
-  it('automatically pays only the small blind difference and consumes a short caller stack', () => {
-    const started = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
-    const smallBlindTurn: TournamentState = {
-      ...started,
-      activeHand: { ...started.activeHand!, currentActorSeat: 1, pendingActors: [1, 2] },
-    };
-    const called = applyIntent(smallBlindTurn, 1, { type: 'call' });
+  it('reaches the small blind naturally and automatically pays only the difference', () => {
+    let smallBlindTurn = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
+    smallBlindTurn = acceptedAction(smallBlindTurn, 3, { type: 'fold' }).state;
+    smallBlindTurn = acceptedAction(smallBlindTurn, 0, { type: 'fold' }).state;
+    expectConserved(smallBlindTurn);
+    expect(smallBlindTurn.eventLog.filter((event) => event.type === 'PlayerActed')).toHaveLength(2);
+    const called = acceptedAction(smallBlindTurn, 1, { type: 'call' });
 
-    expect(called.accepted).toBe(true);
-    expect(called.events).toHaveLength(1);
     expect(called.events[0]).toMatchObject({
       type: 'PlayerActed',
       seat: 1,
@@ -127,16 +164,15 @@ describe('legal action derivation and rejection purity', () => {
       raiseReopened: false,
     });
     expect(called.state.seats[1]).toMatchObject({ stack: 98, committedStreet: 2, committedHand: 2 });
+  });
 
-    const short: TournamentState = {
-      ...started,
-      seats: started.seats.map((seat) => seat.seatIndex === 3
-        ? { ...seat, stack: 1, status: 'active' as const }
-        : seat),
-    };
+  it('starts from a conserved short-stack tournament and consumes an insufficient caller stack', () => {
+    const before = withStacks(createState(), [199, 100, 100, 1]);
+    expectConserved(before);
+    const short = startHand(before, { fixedDeck: createStandardDeck() }).state;
+    expectConserved(short);
     expect(getLegalActions(short, 3).call).toEqual({ pay: 1, to: 1, isAllIn: true });
-    const shortCall = applyIntent(short, 3, { type: 'call' });
-    expect(shortCall.accepted).toBe(true);
+    const shortCall = acceptedAction(short, 3, { type: 'call' });
     expect(shortCall.events[0]).toMatchObject({ normalizedKind: 'call', paid: 1, betToAfter: 2, allIn: true });
     expect(shortCall.state.seats[3]).toMatchObject({ stack: 0, committedStreet: 1, status: 'all-in' });
   });
@@ -158,7 +194,7 @@ describe('legal action derivation and rejection purity', () => {
     assertPureRejection(state, applyIntent(state, 3, { type: 'raiseTo', amount }), 'raise-out-of-range');
   });
 
-  it('rejects a non-actor and a seat that cannot act with typed pure failures', () => {
+  it('defensively rejects a non-actor and a fabricated impossible current-actor status', () => {
     const state = startHand(createState(), { fixedDeck: createStandardDeck() }).state;
     assertPureRejection(state, applyIntent(state, 0, { type: 'call' }), 'not-current-actor');
     const cannotAct: TournamentState = {
@@ -176,13 +212,16 @@ describe('short blind action surfaces', () => {
     const before = withStacks(createState(), [199, 100, 1, 100]);
     const state = startHand(before, { fixedDeck: createStandardDeck() }).state;
 
+    expectConserved(state);
     expect(getLegalActions(state, 3).call).toEqual({ pay: 2, to: 2, isAllIn: false });
   });
 
   it('offers only fold or the one-chip call in HU when no funded opponent can respond', () => {
-    const before = withStacks(createState(config(2, 200, 2, 4)), [197, 3]);
+    const before = withStacks(createState(config(2, 100, 2, 4)), [197, 3]);
+    expectConserved(before);
     const state = startHand(before, { fixedDeck: createStandardDeck() }).state;
 
+    expectConserved(state);
     expect(getLegalActions(state, 0)).toEqual({
       fold: true,
       check: false,
@@ -197,6 +236,7 @@ describe('short blind action surfaces', () => {
       fixedDeck: createStandardDeck(),
     }).state;
 
+    expectConserved(state);
     expect(state.activeHand?.currentActorSeat).toBeNull();
     expect(getLegalActions(state, 0)).toEqual({
       fold: false,

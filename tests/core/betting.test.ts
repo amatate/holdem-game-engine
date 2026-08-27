@@ -24,8 +24,11 @@ interface FixtureOptions {
 function expectConserved(state: TournamentState): void {
   expect(state.seats.every((seat) => Number.isSafeInteger(seat.stack)
     && seat.stack >= 0
+    && Number.isSafeInteger(seat.committedStreet)
+    && seat.committedStreet >= 0
     && Number.isSafeInteger(seat.committedHand)
-    && seat.committedHand >= 0)).toBe(true);
+    && seat.committedHand >= 0
+    && seat.committedStreet <= seat.committedHand)).toBe(true);
   const total = state.seats.reduce(
     (sum, seat) => sum + seat.stack + seat.committedHand,
     0,
@@ -245,8 +248,8 @@ describe('canonical no-limit raises', () => {
 describe('unacted blind rights and a full reopening raise', () => {
   it('lets the unacted BB raise over a short all-in, then distinguishes call from full-raise reopening', () => {
     const initial = bettingState({
-      committed: [0, 4_000, 4_000],
-      stacks: [15_500, 3_500, 12_000],
+      committed: [0, 2_000, 4_000],
+      stacks: [15_500, 5_500, 12_000],
       actor: 0,
       pending: [0, 1, 2],
       currentBetTo: 4_000,
@@ -254,6 +257,7 @@ describe('unacted blind rights and a full reopening raise', () => {
       lastAggressorSeat: 2,
       bigBlind: 4_000,
     });
+    expect(initial.seats.map((seat) => seat.committedStreet)).toEqual([0, 2_000, 4_000]);
     const afterA = act(initial, 0, { type: 'call' });
     expectBettingState(afterA, {
       currentBetTo: 4_000,
@@ -263,7 +267,22 @@ describe('unacted blind rights and a full reopening raise', () => {
       lastActed: [4_000, null, null],
       actorCanRaise: false,
     });
-    const afterC = act(afterA, 1, { type: 'allIn' });
+    const cAllIn = acceptedAction(afterA, 1, { type: 'allIn' });
+    expect(cAllIn.events[0]).toEqual({
+      type: 'PlayerActed',
+      schemaVersion: 1,
+      eventIndex: afterA.version,
+      handId: afterA.activeHand?.handId,
+      seat: 1,
+      normalizedKind: 'raise',
+      paid: 5_500,
+      betToBefore: 4_000,
+      betToAfter: 7_500,
+      allIn: true,
+      fullRaise: false,
+      raiseReopened: false,
+    });
+    const afterC = cAllIn.state;
     expectBettingState(afterC, {
       currentBetTo: 7_500,
       lastFullRaiseSize: 4_000,

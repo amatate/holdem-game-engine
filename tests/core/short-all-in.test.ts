@@ -24,8 +24,11 @@ interface FixtureOptions {
 function expectConserved(state: TournamentState): void {
   expect(state.seats.every((seat) => Number.isSafeInteger(seat.stack)
     && seat.stack >= 0
+    && Number.isSafeInteger(seat.committedStreet)
+    && seat.committedStreet >= 0
     && Number.isSafeInteger(seat.committedHand)
-    && seat.committedHand >= 0)).toBe(true);
+    && seat.committedHand >= 0
+    && seat.committedStreet <= seat.committedHand)).toBe(true);
   const total = state.seats.reduce(
     (sum, seat) => sum + seat.stack + seat.committedHand,
     0,

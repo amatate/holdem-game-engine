@@ -6,6 +6,7 @@ export { getLegalActions } from './core/legal-actions.js';
 export type {
   ActionIntent,
   ActionRejection,
+  ActionRejectionCode,
   IntentTransitionResult,
   LegalActionSet,
 } from './core/legal-actions.js';
