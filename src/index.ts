@@ -24,4 +24,5 @@ export * from './core/simulation.js';
 export * from './core/types.js';
 export * from './core/versions.js';
 export * from './agents/observation.js';
+export * from './agents/equity.js';
 export * from './agents/types.js';
