@@ -71,15 +71,110 @@ export type PublicGameEvent =
   }>
   | Readonly<{ type: 'gameCompleted'; winnerSeat: number }>;
 
-function cloneDistinctCardBatch(value: unknown, expectedCount: number): Card[] {
-  try {
-    if (!Array.isArray(value) || value.length !== expectedCount) throw new Error();
-    const cards = value.map((card) => cloneCanonicalCard(card));
-    if (new Set(cards.map((card) => card.code)).size !== cards.length) throw new Error();
-    return cards;
-  } catch {
-    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+const INVALID_PUBLIC_EVENT_MESSAGE = 'Invalid public event data';
+const MAX_SEATS = 6;
+const MAX_ORDERED_DEALS = 12;
+
+class SafePublicProjectionError extends Error {}
+
+function rejectPublic(message = INVALID_PUBLIC_EVENT_MESSAGE): never {
+  throw new SafePublicProjectionError(message);
+}
+
+function rejectCard(): never {
+  return rejectPublic(INVALID_PUBLIC_CARD_MESSAGE);
+}
+
+function requireRecord(value: unknown): Record<PropertyKey, unknown> {
+  if (typeof value !== 'object' || value === null) rejectPublic();
+  return value as Record<PropertyKey, unknown>;
+}
+
+function requireSafeInteger(value: unknown, minimum = 0, maximum = Number.MAX_SAFE_INTEGER): number {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    rejectPublic();
   }
+  return value as number;
+}
+
+function requirePositiveInteger(value: unknown): number {
+  return requireSafeInteger(value, 1);
+}
+
+function requireSeatIndex(value: unknown): number {
+  return requireSafeInteger(value, 0, MAX_SEATS - 1);
+}
+
+function requireBoolean(value: unknown): boolean {
+  if (typeof value !== 'boolean') rejectPublic();
+  return value;
+}
+
+function requireNonemptyString(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) rejectPublic();
+  return value;
+}
+
+function requireStreet(value: unknown): Street {
+  if (value !== 'preflop' && value !== 'flop' && value !== 'turn' && value !== 'river') {
+    rejectPublic();
+  }
+  return value;
+}
+
+function requirePostflopStreet(value: unknown): Exclude<Street, 'preflop'> {
+  if (value !== 'flop' && value !== 'turn' && value !== 'river') rejectPublic();
+  return value;
+}
+
+function cloneDenseArray<T>(
+  value: unknown,
+  minimumLength: number,
+  maximumLength: number,
+  clone: (entry: unknown) => T,
+): T[] {
+  if (!Array.isArray(value)) rejectPublic();
+  const length = value.length;
+  if (!Number.isSafeInteger(length) || length < minimumLength || length > maximumLength) {
+    rejectPublic();
+  }
+  const result: T[] = [];
+  for (let index = 0; index < length; index += 1) {
+    if (!Object.hasOwn(value, index)) rejectPublic();
+    result.push(clone(Reflect.get(value, String(index))));
+  }
+  return result;
+}
+
+function cloneDistinctCardBatch(value: unknown, expectedCount: number): Card[] {
+  if (!Array.isArray(value) || value.length !== expectedCount) rejectCard();
+  const cards: Card[] = [];
+  const codes = new Set<string>();
+  for (let index = 0; index < expectedCount; index += 1) {
+    if (!Object.hasOwn(value, index)) rejectCard();
+    const rawCard = Reflect.get(value, String(index));
+    let card: Card;
+    try {
+      card = cloneCanonicalCard(rawCard);
+    } catch {
+      rejectCard();
+    }
+    if (codes.has(card.code)) rejectCard();
+    codes.add(card.code);
+    cards.push(card);
+  }
+  return cards;
+}
+
+function cloneSeatIndexArray(value: unknown): number[] {
+  const indexes = cloneDenseArray(value, 0, MAX_SEATS, requireSeatIndex);
+  const seen = new Set<number>();
+  for (let index = 0; index < indexes.length; index += 1) {
+    const seatIndex = indexes[index]!;
+    if (seen.has(seatIndex)) rejectPublic();
+    seen.add(seatIndex);
+  }
+  return indexes;
 }
 
 function freezeRecursively<T>(value: T): T {
@@ -92,7 +187,7 @@ function freezeRecursively<T>(value: T): T {
 
 function assertNever(value: never): never {
   void value;
-  throw new Error('Unhandled domain event variant');
+  return rejectPublic('Unhandled domain event variant');
 }
 
 function projectOneEvent(
@@ -100,45 +195,85 @@ function projectOneEvent(
   viewerSeatIndex: number | null,
 ): PublicGameEvent | null {
   switch (event.type) {
-    case 'GameStarted':
+    case 'GameStarted': {
+      const config = requireRecord(event.config);
       return {
         type: 'gameStarted',
-        maxSeats: event.config.maxSeats,
-        startingStack: event.config.startingStack,
+        maxSeats: requireSafeInteger(config.maxSeats, 2, MAX_SEATS),
+        startingStack: requirePositiveInteger(config.startingStack),
       };
-    case 'HandStarted':
+    }
+    case 'HandStarted': {
+      const smallBlind = requirePositiveInteger(event.smallBlind);
+      const bigBlind = requirePositiveInteger(event.bigBlind);
+      if (smallBlind >= bigBlind) rejectPublic();
       return {
         type: 'handStarted',
-        handNumber: event.handNumber,
-        smallBlind: event.smallBlind,
-        bigBlind: event.bigBlind,
+        handNumber: requirePositiveInteger(event.handNumber),
+        smallBlind,
+        bigBlind,
       };
+    }
     case 'PositionsAssigned':
       return {
         type: 'positionsAssigned',
-        buttonPosition: event.buttonPosition,
-        smallBlindSeat: event.smallBlindSeat,
-        bigBlindSeat: event.bigBlindSeat,
+        buttonPosition: requireSeatIndex(event.buttonPosition),
+        smallBlindSeat: event.smallBlindSeat === null
+          ? null
+          : requireSeatIndex(event.smallBlindSeat),
+        bigBlindSeat: requireSeatIndex(event.bigBlindSeat),
       };
-    case 'BlindPosted':
+    case 'BlindPosted': {
+      const kind = event.kind;
+      if (kind !== 'small' && kind !== 'big') rejectPublic();
       return {
         type: 'blindPosted',
-        seatIndex: event.seat,
-        kind: event.kind,
-        amount: event.amount,
-        allIn: event.allIn,
+        seatIndex: requireSeatIndex(event.seat),
+        kind,
+        amount: requirePositiveInteger(event.amount),
+        allIn: requireBoolean(event.allIn),
       };
+    }
     case 'DeckPrepared':
       return null;
     case 'HoleCardsDealt': {
       if (viewerSeatIndex === null) return null;
-      const ownDeals = event.orderedDeals.filter((deal) => deal.seat === viewerSeatIndex);
-      if (ownDeals.length === 0) return null;
-      if (ownDeals.length !== 2 || ownDeals[0]?.round !== 1 || ownDeals[1]?.round !== 2) {
-        throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+      const orderedDeals = event.orderedDeals;
+      const dealCount = Array.isArray(orderedDeals) ? orderedDeals.length : -1;
+      if (!Array.isArray(orderedDeals)
+        || !Number.isSafeInteger(dealCount)
+        || dealCount < 0
+        || dealCount > MAX_ORDERED_DEALS) {
+        rejectCard();
       }
+      let roundOne: unknown;
+      let roundTwo: unknown;
+      let hasRoundOne = false;
+      let hasRoundTwo = false;
+      for (let index = 0; index < dealCount; index += 1) {
+        if (!Object.hasOwn(orderedDeals, index)) rejectCard();
+        const deal = requireRecord(Reflect.get(orderedDeals, String(index)));
+        const seat = deal.seat;
+        const round = deal.round;
+        if (!Number.isSafeInteger(seat) || (seat as number) < 0 || (seat as number) >= MAX_SEATS
+          || (round !== 1 && round !== 2)) {
+          rejectCard();
+        }
+        if (seat !== viewerSeatIndex) continue;
+        if (round === 1) {
+          if (hasRoundOne) rejectCard();
+          roundOne = deal.card;
+          hasRoundOne = true;
+        } else {
+          if (hasRoundTwo) rejectCard();
+          roundTwo = deal.card;
+          hasRoundTwo = true;
+        }
+      }
+      if (!hasRoundOne && !hasRoundTwo) return null;
+      if (!hasRoundOne || !hasRoundTwo) rejectCard();
       const cards = cloneDistinctCardBatch(
-        [ownDeals[0].card, ownDeals[1].card],
+        [roundOne, roundTwo],
         2,
       ) as [Card, Card];
       return {
@@ -149,78 +284,97 @@ function projectOneEvent(
     case 'BettingRoundStarted':
       return {
         type: 'bettingRoundStarted',
-        street: event.street,
-        actor: event.actor,
-        currentBetTo: event.currentBetTo,
+        street: requireStreet(event.street),
+        actor: event.actor === null ? null : requireSeatIndex(event.actor),
+        currentBetTo: requireSafeInteger(event.currentBetTo),
       };
-    case 'PlayerActed':
+    case 'PlayerActed': {
+      const kind = event.normalizedKind;
+      if (kind !== 'fold' && kind !== 'check' && kind !== 'call'
+        && kind !== 'bet' && kind !== 'raise') {
+        rejectPublic();
+      }
       return {
         type: 'playerActed',
-        seatIndex: event.seat,
-        kind: event.normalizedKind,
-        paid: event.paid,
-        betTo: event.betToAfter,
-        allIn: event.allIn,
+        seatIndex: requireSeatIndex(event.seat),
+        kind,
+        paid: requireSafeInteger(event.paid),
+        betTo: requireSafeInteger(event.betToAfter),
+        allIn: requireBoolean(event.allIn),
       };
+    }
     case 'BettingRoundClosed':
-      return { type: 'bettingRoundClosed', street: event.street };
+      return { type: 'bettingRoundClosed', street: requireStreet(event.street) };
     case 'CardBurned':
       return null;
     case 'CommunityCardsDealt': {
-      const expectedCount = event.street === 'flop'
+      const street = requirePostflopStreet(event.street);
+      const expectedCount = street === 'flop'
         ? 3
-        : event.street === 'turn' || event.street === 'river'
-          ? 1
-          : 0;
-      if (expectedCount === 0) throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+        : 1;
       return {
         type: 'communityCardsDealt',
-        street: event.street,
+        street,
         cards: cloneDistinctCardBatch(event.cards, expectedCount),
       };
     }
     case 'HoleCardsRevealed': {
+      const reason = event.reason;
+      if (reason !== 'all-in' && reason !== 'showdown') rejectPublic();
       const cards = cloneDistinctCardBatch(event.cards, 2) as [Card, Card];
       return {
         type: 'holeCardsRevealed',
-        seatIndex: event.seat,
+        seatIndex: requireSeatIndex(event.seat),
         cards,
-        reason: event.reason,
+        reason,
       };
     }
     case 'UncalledBetReturned':
-      return { type: 'uncalledBetReturned', seatIndex: event.seat, amount: event.amount };
+      return {
+        type: 'uncalledBetReturned',
+        seatIndex: requireSeatIndex(event.seat),
+        amount: requirePositiveInteger(event.amount),
+      };
     case 'ShowdownStarted':
-      return { type: 'showdownStarted', revealOrder: [...event.revealOrder] };
+      return { type: 'showdownStarted', revealOrder: cloneSeatIndexArray(event.revealOrder) };
     case 'PotConstructed':
       return {
         type: 'potConstructed',
-        potId: event.potId,
-        amount: event.amount,
-        eligibleSeats: [...event.eligibleSeats],
+        potId: requireNonemptyString(event.potId),
+        amount: requirePositiveInteger(event.amount),
+        eligibleSeats: cloneSeatIndexArray(event.eligibleSeats),
       };
     case 'HandEvaluated':
       return null;
-    case 'PotAwarded':
+    case 'PotAwarded': {
+      const winners = cloneSeatIndexArray(event.winners);
+      const amounts = cloneDenseArray(event.amounts, 0, MAX_SEATS, requirePositiveInteger);
+      if (winners.length !== amounts.length || winners.length === 0) rejectPublic();
       return {
         type: 'potAwarded',
-        potId: event.potId,
-        winners: [...event.winners],
-        amounts: [...event.amounts],
-        oddChipRecipients: [...event.oddChipRecipients],
+        potId: requireNonemptyString(event.potId),
+        winners,
+        amounts,
+        oddChipRecipients: cloneSeatIndexArray(event.oddChipRecipients),
       };
+    }
     case 'PlayerEliminated':
-      return { type: 'playerEliminated', seatIndex: event.seat };
-    case 'HandCompleted':
+      return { type: 'playerEliminated', seatIndex: requireSeatIndex(event.seat) };
+    case 'HandCompleted': {
+      const finalStacks = cloneDenseArray(event.finalStacks, 2, MAX_SEATS, (value) => {
+        const stack = requireRecord(value);
+        return {
+          seatIndex: requireSeatIndex(stack.seat),
+          stack: requireSafeInteger(stack.stack),
+        };
+      });
       return {
         type: 'handCompleted',
-        finalStacks: event.finalStacks.map((seat) => ({
-          seatIndex: seat.seat,
-          stack: seat.stack,
-        })),
+        finalStacks,
       };
+    }
     case 'GameCompleted':
-      return { type: 'gameCompleted', winnerSeat: event.winnerSeat };
+      return { type: 'gameCompleted', winnerSeat: requireSeatIndex(event.winnerSeat) };
     default:
       return assertNever(event);
   }
@@ -230,10 +384,21 @@ export function projectEventsForViewer(
   events: readonly DomainEvent[],
   viewerSeatIndex: number | null,
 ): readonly PublicGameEvent[] {
-  const projected: PublicGameEvent[] = [];
-  for (const event of events) {
-    const publicEvent = projectOneEvent(event, viewerSeatIndex);
-    if (publicEvent !== null) projected.push(publicEvent);
+  try {
+    if (viewerSeatIndex !== null) requireSeatIndex(viewerSeatIndex);
+    if (!Array.isArray(events)) rejectPublic();
+    const eventCount = events.length;
+    if (!Number.isSafeInteger(eventCount) || eventCount < 0) rejectPublic();
+    const projected: PublicGameEvent[] = [];
+    for (let index = 0; index < eventCount; index += 1) {
+      if (!Object.hasOwn(events, index)) rejectPublic();
+      const event = Reflect.get(events, String(index)) as DomainEvent;
+      const publicEvent = projectOneEvent(event, viewerSeatIndex);
+      if (publicEvent !== null) projected.push(publicEvent);
+    }
+    return freezeRecursively(projected);
+  } catch (error) {
+    if (error instanceof SafePublicProjectionError) throw new Error(error.message);
+    throw new Error(INVALID_PUBLIC_EVENT_MESSAGE);
   }
-  return freezeRecursively(projected);
 }

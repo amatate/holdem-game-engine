@@ -20,6 +20,7 @@ const kd = parseCard('Kd');
 const flop = [parseCard('2c'), parseCard('3d'), parseCard('4h')] as const;
 const bestFive = [ah, ad, kc, kd, flop[0]] as const;
 const SAFE_CARD_ERROR = 'Invalid public card data';
+const SAFE_PUBLIC_ERROR = 'Invalid public event data';
 
 function throwingCard(property: 'code' | 'rank' | 'suit') {
   const card: Record<string, unknown> = { code: 'Ah', rank: 14, suit: 'h' };
@@ -40,6 +41,24 @@ function expectSafeCardError(run: () => unknown): void {
   expect(caught).toBeInstanceOf(Error);
   expect((caught as Error).message).toBe(SAFE_CARD_ERROR);
   expect((caught as Error).message).not.toMatch(/SEED-SENTINEL|PUBLIC-CARD/);
+}
+
+function expectSafePublicError(run: () => unknown): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(Error);
+  expect((caught as Error).message).toBe(SAFE_PUBLIC_ERROR);
+  expect((caught as Error).message).not.toMatch(/SEED-SENTINEL|DECK-SENTINEL|PROXY/);
+}
+
+function sparseArray<T>(length: number, entries: readonly (readonly [number, T])[]): T[] {
+  const result = new Array<T>(length);
+  for (const [index, value] of entries) result[index] = value;
+  return result;
 }
 
 const EVENTS_BY_TYPE = {
@@ -431,6 +450,287 @@ describe('public domain-event whitelist', () => {
     for (const event of cases) {
       expectSafeCardError(() => projectEventsForViewer([event], 0));
     }
+  });
+
+  it('rejects sparse own-deal, community, and reveal batches with the fixed card error', () => {
+    const sparseDeals = sparseArray(4, [
+      [0, { seat: 0, card: ah, round: 1 as const }],
+      [2, { seat: 0, card: ad, round: 2 as const }],
+    ]);
+    const sparseCommunity = sparseArray(3, [
+      [0, parseCard('2c')],
+      [2, parseCard('4h')],
+    ]);
+    const sparseReveal = sparseArray(2, [[0, kc]]);
+    const cases: readonly DomainEvent[] = [
+      { ...EVENTS_BY_TYPE.HoleCardsDealt, orderedDeals: sparseDeals },
+      { ...EVENTS_BY_TYPE.CommunityCardsDealt, cards: sparseCommunity },
+      {
+        ...EVENTS_BY_TYPE.HoleCardsRevealed,
+        cards: sparseReveal as unknown as readonly [typeof kc, typeof kd],
+      },
+    ];
+
+    for (const event of cases) {
+      expectSafeCardError(() => projectEventsForViewer([event], 0));
+    }
+  });
+
+  it('ignores overridden card-batch methods and returns fresh canonical cards', () => {
+    const communityCards = [...flop];
+    const revealCards = [kc, kd];
+    const poison = () => { throw new Error('PUBLIC-CARD-METHOD-SEED-SENTINEL'); };
+    for (const cards of [communityCards, revealCards]) {
+      Object.defineProperty(cards, 'map', { value: poison });
+      Object.defineProperty(cards, 'filter', { value: poison });
+      Object.defineProperty(cards, Symbol.iterator, { value: poison });
+    }
+
+    const projected = projectEventsForViewer([
+      { ...EVENTS_BY_TYPE.CommunityCardsDealt, cards: communityCards },
+      {
+        ...EVENTS_BY_TYPE.HoleCardsRevealed,
+        cards: revealCards as unknown as readonly [typeof kc, typeof kd],
+      },
+    ], 0);
+
+    expect(projected).toEqual([
+      { type: 'communityCardsDealt', street: 'flop', cards: flop },
+      { type: 'holeCardsRevealed', seatIndex: 1, cards: [kc, kd], reason: 'showdown' },
+    ]);
+    expect(projected[0]).not.toBe(EVENTS_BY_TYPE.CommunityCardsDealt);
+    expect(Object.isFrozen(communityCards)).toBe(false);
+    expect(Object.isFrozen(communityCards[0])).toBe(false);
+    expect(Object.isFrozen(revealCards)).toBe(false);
+  });
+
+  it('ignores orderedDeals filter and iterator overrides while preserving owner isolation', () => {
+    const orderedDeals = [...EVENTS_BY_TYPE.HoleCardsDealt.orderedDeals];
+    const opponentDeals = [orderedDeals[1]!, orderedDeals[3]!];
+    Object.defineProperty(orderedDeals, 'filter', {
+      value: () => opponentDeals,
+    });
+    Object.defineProperty(orderedDeals, Symbol.iterator, {
+      value: () => { throw new Error('ORDERED-DEALS-ITERATOR-SEED-SENTINEL'); },
+    });
+
+    const event = { ...EVENTS_BY_TYPE.HoleCardsDealt, orderedDeals };
+    const projected = projectEventsForViewer([event], 0);
+
+    expect(projected).toEqual([{ type: 'ownHoleCardsDealt', cards: [ah, ad] }]);
+    expect(JSON.stringify(projected)).not.toMatch(/Kc|Kd|SEED-SENTINEL/);
+    expect(Object.isFrozen(orderedDeals)).toBe(false);
+    expect(Object.isFrozen(opponentDeals[0]!.card)).toBe(false);
+  });
+
+  it('clones the outer event list and every settlement array by dense index', () => {
+    const revealOrder = [...EVENTS_BY_TYPE.ShowdownStarted.revealOrder];
+    const eligibleSeats = [...EVENTS_BY_TYPE.PotConstructed.eligibleSeats];
+    const winners = [...EVENTS_BY_TYPE.PotAwarded.winners];
+    const amounts = [...EVENTS_BY_TYPE.PotAwarded.amounts];
+    const oddChipRecipients = [...EVENTS_BY_TYPE.PotAwarded.oddChipRecipients];
+    const finalStacks = EVENTS_BY_TYPE.HandCompleted.finalStacks.map((seat) => ({ ...seat }));
+    const poisonIterator = () => { throw new Error('SETTLEMENT-ITERATOR-SEED-SENTINEL'); };
+    for (const values of [revealOrder, eligibleSeats, winners, amounts, oddChipRecipients]) {
+      Object.defineProperty(values, Symbol.iterator, { value: poisonIterator });
+    }
+    const secretFinalStack = {
+      seat: 1,
+      stack: 0,
+      runSeed: 'FINAL-STACK-SEED-SENTINEL',
+      holeCards: [kc, kd],
+    };
+    Object.defineProperty(finalStacks, 'map', { value: () => [secretFinalStack] });
+
+    const events = [
+      { ...EVENTS_BY_TYPE.ShowdownStarted, revealOrder },
+      { ...EVENTS_BY_TYPE.PotConstructed, eligibleSeats },
+      { ...EVENTS_BY_TYPE.PotAwarded, winners, amounts, oddChipRecipients },
+      { ...EVENTS_BY_TYPE.HandCompleted, finalStacks },
+    ] as DomainEvent[];
+    Object.defineProperty(events, Symbol.iterator, {
+      value: () => { throw new Error('OUTER-EVENT-ITERATOR-SEED-SENTINEL'); },
+    });
+
+    const projected = projectEventsForViewer(events, 0);
+
+    expect(projected).toEqual([
+      { type: 'showdownStarted', revealOrder: [1, 0] },
+      { type: 'potConstructed', potId: 'pot-0', amount: 13, eligibleSeats: [0, 1] },
+      {
+        type: 'potAwarded',
+        potId: 'pot-0',
+        winners: [0, 1],
+        amounts: [7, 6],
+        oddChipRecipients: [0],
+      },
+      {
+        type: 'handCompleted',
+        finalStacks: [{ seatIndex: 0, stack: 200 }, { seatIndex: 1, stack: 0 }],
+      },
+    ]);
+    expect(JSON.stringify(projected)).not.toMatch(/SEED-SENTINEL|holeCards/);
+    expect(Object.isFrozen(secretFinalStack)).toBe(false);
+    expect(Object.isFrozen(finalStacks[0])).toBe(false);
+    expect(Object.isFrozen(revealOrder)).toBe(false);
+  });
+
+  it('normalizes authority Proxy and container getter failures to one public error', () => {
+    const typeProxy = new Proxy(EVENTS_BY_TYPE.BlindPosted as DomainEvent, {
+      get(target, property, receiver) {
+        if (property === 'type') throw new Error('TYPE-PROXY-SEED-SENTINEL');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const cardsProxy = new Proxy(EVENTS_BY_TYPE.CommunityCardsDealt as DomainEvent, {
+      get(target, property, receiver) {
+        if (property === 'cards') throw new Error('CARDS-PROXY-SEED-SENTINEL');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const eventsProxy = new Proxy([EVENTS_BY_TYPE.BlindPosted] as readonly DomainEvent[], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('EVENTS-LENGTH-PROXY-SEED-SENTINEL');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const cardBatchProxy = new Proxy([...flop], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('CARD-BATCH-PROXY-SEED-SENTINEL');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    expectSafePublicError(() => projectEventsForViewer([typeProxy], 0));
+    expectSafePublicError(() => projectEventsForViewer([cardsProxy], 0));
+    expectSafePublicError(() => projectEventsForViewer(eventsProxy, 0));
+    expectSafePublicError(() => projectEventsForViewer([{
+      ...EVENTS_BY_TYPE.CommunityCardsDealt,
+      cards: cardBatchProxy,
+    }], 0));
+  });
+
+  it('rejects sparse settlement containers with the fixed public error', () => {
+    const cases: readonly DomainEvent[] = [
+      {
+        ...EVENTS_BY_TYPE.ShowdownStarted,
+        revealOrder: sparseArray(2, [[0, 1]]),
+      },
+      {
+        ...EVENTS_BY_TYPE.PotConstructed,
+        eligibleSeats: sparseArray(2, [[1, 1]]),
+      },
+      {
+        ...EVENTS_BY_TYPE.PotAwarded,
+        winners: sparseArray(2, [[0, 0]]),
+      },
+      {
+        ...EVENTS_BY_TYPE.HandCompleted,
+        finalStacks: sparseArray(2, [[0, { seat: 0, stack: 200 }]]),
+      },
+    ];
+
+    for (const event of cases) {
+      expectSafePublicError(() => projectEventsForViewer([event], 0));
+    }
+  });
+
+  it('rejects object-valued and non-safe known public scalar fields without reflecting payloads', () => {
+    const secret = { runSeed: 'PUBLIC-SCALAR-SEED-SENTINEL', holeCards: [kc, kd] };
+    const cases: readonly DomainEvent[] = [
+      {
+        ...EVENTS_BY_TYPE.GameStarted,
+        config: { ...EVENTS_BY_TYPE.GameStarted.config, maxSeats: secret as never },
+      },
+      { ...EVENTS_BY_TYPE.BlindPosted, amount: secret as never },
+      { ...EVENTS_BY_TYPE.PlayerActed, normalizedKind: secret as never },
+      { ...EVENTS_BY_TYPE.BettingRoundStarted, actor: 0.5 },
+      { ...EVENTS_BY_TYPE.HoleCardsRevealed, reason: secret as never },
+      { ...EVENTS_BY_TYPE.PotConstructed, potId: secret as never },
+      {
+        ...EVENTS_BY_TYPE.HandCompleted,
+        finalStacks: [{ seat: 0, stack: secret as never }],
+      },
+    ];
+
+    for (const event of cases) {
+      expectSafePublicError(() => projectEventsForViewer([event], 0));
+    }
+  });
+
+  it('reads a dynamic known enum getter only once before projection', () => {
+    const secret = { runSeed: 'DYNAMIC-ENUM-SEED-SENTINEL', holeCards: [kc, kd] };
+    let kindReads = 0;
+    const dynamicKind = new Proxy(EVENTS_BY_TYPE.BlindPosted as DomainEvent, {
+      get(target, property, receiver) {
+        if (property === 'kind') {
+          kindReads += 1;
+          return kindReads === 1 ? 'small' : secret;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    const projected = projectEventsForViewer([dynamicKind], 0);
+
+    expect(projected).toEqual([
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 1, allIn: false },
+    ]);
+    expect(kindReads).toBe(1);
+    expect(JSON.stringify(projected)).not.toContain('SEED-SENTINEL');
+    expect(Object.isFrozen(secret)).toBe(false);
+  });
+
+  it('snapshots dynamic outer-event and ordered-deal lengths exactly once', () => {
+    let eventLengthReads = 0;
+    const events = new Proxy([EVENTS_BY_TYPE.BlindPosted] as DomainEvent[], {
+      get(target, property, receiver) {
+        if (property === 'length') {
+          eventLengthReads += 1;
+          return eventLengthReads === 1 ? 1 : 0;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    let dealLengthReads = 0;
+    const orderedDeals = new Proxy([...EVENTS_BY_TYPE.HoleCardsDealt.orderedDeals], {
+      get(target, property, receiver) {
+        if (property === 'length') {
+          dealLengthReads += 1;
+          return dealLengthReads === 1 ? 4 : 0;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    expect(projectEventsForViewer(events, 0)).toEqual([
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 1, allIn: false },
+    ]);
+    expect(projectEventsForViewer([{
+      ...EVENTS_BY_TYPE.HoleCardsDealt,
+      orderedDeals,
+    }], 0)).toEqual([{ type: 'ownHoleCardsDealt', cards: [ah, ad] }]);
+    expect(eventLengthReads).toBe(1);
+    expect(dealLengthReads).toBe(1);
+  });
+
+  it('rejects negative outer-event and ordered-deal lengths', () => {
+    const events = new Proxy([EVENTS_BY_TYPE.BlindPosted] as DomainEvent[], {
+      get(target, property, receiver) {
+        return property === 'length' ? -1 : Reflect.get(target, property, receiver);
+      },
+    });
+    const orderedDeals = new Proxy([...EVENTS_BY_TYPE.HoleCardsDealt.orderedDeals], {
+      get(target, property, receiver) {
+        return property === 'length' ? -1 : Reflect.get(target, property, receiver);
+      },
+    });
+
+    expectSafePublicError(() => projectEventsForViewer(events, 0));
+    expectSafeCardError(() => projectEventsForViewer([{
+      ...EVENTS_BY_TYPE.HoleCardsDealt,
+      orderedDeals,
+    }], 0));
   });
 
   it('returns a fresh recursively frozen public graph without freezing authority input', () => {
