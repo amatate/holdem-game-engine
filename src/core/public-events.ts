@@ -1,5 +1,6 @@
 import { cloneCanonicalCard, INVALID_PUBLIC_CARD_MESSAGE } from './cards.js';
 import type { DomainEvent } from './events.js';
+import type { HandCategory } from './hand-evaluator.js';
 import type { Street } from './state.js';
 import type { Card } from './types.js';
 
@@ -56,6 +57,12 @@ export type PublicGameEvent =
     potId: string;
     amount: number;
     eligibleSeats: readonly number[];
+  }>
+  | Readonly<{
+    type: 'handEvaluated';
+    seatIndex: number;
+    category: HandCategory;
+    bestFive: readonly [Card, Card, Card, Card, Card];
   }>
   | Readonly<{
     type: 'potAwarded';
@@ -124,6 +131,21 @@ function requireStreet(value: unknown): Street {
 
 function requirePostflopStreet(value: unknown): Exclude<Street, 'preflop'> {
   if (value !== 'flop' && value !== 'turn' && value !== 'river') rejectPublic();
+  return value;
+}
+
+function requireHandCategory(value: unknown): HandCategory {
+  if (value !== 'high-card'
+    && value !== 'one-pair'
+    && value !== 'two-pair'
+    && value !== 'three-of-a-kind'
+    && value !== 'straight'
+    && value !== 'flush'
+    && value !== 'full-house'
+    && value !== 'four-of-a-kind'
+    && value !== 'straight-flush') {
+    rejectPublic();
+  }
   return value;
 }
 
@@ -344,8 +366,23 @@ function projectOneEvent(
         amount: requirePositiveInteger(event.amount),
         eligibleSeats: cloneSeatIndexArray(event.eligibleSeats),
       };
-    case 'HandEvaluated':
-      return null;
+    case 'HandEvaluated': {
+      const rank = requireRecord(event.rank);
+      const category = requireHandCategory(rank.category);
+      const bestFive = cloneDistinctCardBatch(rank.bestFive, 5) as [
+        Card,
+        Card,
+        Card,
+        Card,
+        Card,
+      ];
+      return {
+        type: 'handEvaluated',
+        seatIndex: requireSeatIndex(event.seat),
+        category,
+        bestFive,
+      };
+    }
     case 'PotAwarded': {
       const winners = cloneSeatIndexArray(event.winners);
       const amounts = cloneDenseArray(event.amounts, 0, MAX_SEATS, requirePositiveInteger);

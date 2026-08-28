@@ -77,4 +77,28 @@ describe('Chinese terminal renderer', () => {
       '座位 3 跟注 98，到 100（全下）。',
     ].join('\n'));
   });
+
+  it.each([
+    ['high-card', '高牌'],
+    ['one-pair', '一对'],
+    ['two-pair', '两对'],
+    ['three-of-a-kind', '三条'],
+    ['straight', '顺子'],
+    ['flush', '同花'],
+    ['full-house', '葫芦'],
+    ['four-of-a-kind', '四条'],
+    ['straight-flush', '同花顺'],
+  ] as const)('renders the %s best hand with its Chinese label and authoritative five cards', (category, label) => {
+    const bestFive = ['Kc', 'Kh', 'Qh', 'Td', '9h'].map(parseCard);
+    const event = {
+      type: 'handEvaluated',
+      seatIndex: 3,
+      category,
+      bestFive,
+    } as unknown as PublicGameEvent;
+
+    expect(renderPublicEvents([event])).toBe(
+      `座位 3 最佳牌型：${label}｜最佳五张：K♣ K♥ Q♥ T♦ 9♥`,
+    );
+  });
 });

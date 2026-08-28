@@ -1,4 +1,5 @@
 import type { PlayerObservationV1 } from '../agents/types.js';
+import type { HandCategory } from '../core/hand-evaluator.js';
 import type { PublicGameEvent } from '../core/public-events.js';
 import type { Card } from '../core/types.js';
 
@@ -23,6 +24,18 @@ const ACTION_LABELS = {
   bet: '下注',
   raise: '加注',
 } as const;
+
+const HAND_CATEGORY_LABELS: Readonly<Record<HandCategory, string>> = {
+  'high-card': '高牌',
+  'one-pair': '一对',
+  'two-pair': '两对',
+  'three-of-a-kind': '三条',
+  straight: '顺子',
+  flush: '同花',
+  'full-house': '葫芦',
+  'four-of-a-kind': '四条',
+  'straight-flush': '同花顺',
+};
 
 function cardText(card: Readonly<Card>): string {
   const suit = { c: '♣', d: '♦', h: '♥', s: '♠' }[card.suit];
@@ -114,6 +127,8 @@ export function renderPublicEvent(event: Readonly<PublicGameEvent>): string | nu
       return `开始摊牌，亮牌顺序：座位 ${event.revealOrder.join('、')}。`;
     case 'potConstructed':
       return `形成底池 ${event.potId}：${event.amount}，可争夺座位 ${event.eligibleSeats.join('、')}。`;
+    case 'handEvaluated':
+      return `座位 ${event.seatIndex} 最佳牌型：${HAND_CATEGORY_LABELS[event.category]}｜最佳五张：${cardsText(event.bestFive)}`;
     case 'potAwarded':
       return `底池 ${event.potId} 发给座位 ${event.winners.join('、')}，筹码 ${event.amounts.join('、')}${event.oddChipRecipients.length === 0 ? '' : `，奇数筹码给座位 ${event.oddChipRecipients.join('、')}`}。`;
     case 'playerEliminated':

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 import { createCharacterAgent } from '../agents/characters.js';
@@ -12,6 +13,7 @@ import {
   type RunTournamentOptions,
 } from '../game/tournament-controller.js';
 import { promptForLegalAction, type PromptIO } from './prompts.js';
+import { createLinePacer } from './pacing.js';
 import { renderPublicEvents, renderTable } from './renderer.js';
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = Object.freeze({
@@ -37,6 +39,7 @@ export interface CliPrompt extends PromptIO {
 
 export interface CliRuntime {
   write(message: string): void;
+  sleep(milliseconds: number): Promise<void>;
   randomUUID(): string;
   createPrompt(): CliPrompt | Promise<CliPrompt>;
   runTournament(options: Readonly<RunTournamentOptions>): Promise<TournamentState>;
@@ -45,6 +48,7 @@ export interface CliRuntime {
 function defaultRuntime(): CliRuntime {
   return {
     write: (message) => { process.stdout.write(message.endsWith('\n') ? message : `${message}\n`); },
+    sleep,
     randomUUID,
     createPrompt: () => {
       const readline = createInterface({ input: process.stdin, output: process.stdout });
@@ -93,7 +97,8 @@ export async function main(
   runtime: Readonly<CliRuntime> = defaultRuntime(),
 ): Promise<TournamentState> {
   const seed = parseSeed(argv, runtime.randomUUID);
-  runtime.write(`本局种子：${seed}`);
+  const paceLine = createLinePacer(runtime.write, runtime.sleep, 1_000);
+  await paceLine(`本局种子：${seed}`);
   const prompt = await runtime.createPrompt();
   try {
     const participants: Participant[] = [
@@ -108,12 +113,12 @@ export async function main(
       runSeed: seed,
       invalidAgentActionMode: 'fallback',
       publicViewerSeatIndex: 0,
-      onPublicEvents: (events) => {
+      onPublicEvents: async (events) => {
         const rendered = renderPublicEvents(events);
-        if (rendered.length > 0) runtime.write(rendered);
+        if (rendered.length > 0) await paceLine(rendered);
       },
-      onDiagnostic: (event) => {
-        runtime.write(`系统：${event.playerId} 的 ${event.attemptedType} 未被接受，改为 ${event.fallbackAction}。`);
+      onDiagnostic: async (event) => {
+        await paceLine(`系统：${event.playerId} 的 ${event.attemptedType} 未被接受，改为 ${event.fallbackAction}。`);
       },
     });
   } finally {

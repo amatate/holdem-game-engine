@@ -232,6 +232,7 @@ const expectedWithoutOwnCards: readonly PublicGameEvent[] = [
   { type: 'uncalledBetReturned', seatIndex: 0, amount: 7 },
   { type: 'showdownStarted', revealOrder: [1, 0] },
   { type: 'potConstructed', potId: 'pot-0', amount: 13, eligibleSeats: [0, 1] },
+  { type: 'handEvaluated', seatIndex: 0, category: 'one-pair', bestFive },
   {
     type: 'potAwarded',
     potId: 'pot-0',
@@ -308,6 +309,66 @@ describe('public domain-event whitelist', () => {
       betTo: 100,
       allIn: true,
     }]);
+  });
+
+  it('projects a safe hand-evaluation summary without reading or exposing its vector', () => {
+    const rank = {
+      category: 'one-pair' as const,
+      bestFive,
+    } as Record<PropertyKey, unknown>;
+    Object.defineProperty(rank, 'vector', {
+      enumerable: true,
+      get: () => { throw new Error('HAND-RANK-VECTOR-SEED-SENTINEL'); },
+    });
+    const event = {
+      ...EVENTS_BY_TYPE.HandEvaluated,
+      rank,
+    } as unknown as DomainEvent;
+
+    const projected = projectEventsForViewer([event], null);
+
+    expect(projected).toEqual([{
+      type: 'handEvaluated',
+      seatIndex: 0,
+      category: 'one-pair',
+      bestFive,
+    }]);
+    expect(JSON.stringify(projected)).not.toMatch(/vector|SEED-SENTINEL/);
+    const evaluation = projected[0];
+    expect(evaluation?.type).toBe('handEvaluated');
+    if (evaluation?.type !== 'handEvaluated') throw new Error('missing projected evaluation');
+    expect(evaluation.bestFive).not.toBe(bestFive);
+    expect(evaluation.bestFive[0]).not.toBe(bestFive[0]);
+  });
+
+  it('fails closed for an unknown hand category', () => {
+    const event = {
+      ...EVENTS_BY_TYPE.HandEvaluated,
+      rank: {
+        ...EVENTS_BY_TYPE.HandEvaluated.rank,
+        category: { privateTrace: 'HAND-CATEGORY-SEED-SENTINEL' },
+      },
+    } as unknown as DomainEvent;
+
+    expectSafePublicError(() => projectEventsForViewer([event], null));
+  });
+
+  it('fails closed unless the best five contains five distinct canonical cards', () => {
+    const cases = [
+      bestFive.slice(0, 4),
+      [bestFive[0], bestFive[0], ...bestFive.slice(2)],
+    ];
+
+    for (const malformedBestFive of cases) {
+      const event = {
+        ...EVENTS_BY_TYPE.HandEvaluated,
+        rank: {
+          ...EVENTS_BY_TYPE.HandEvaluated.rank,
+          bestFive: malformedBestFive,
+        },
+      } as unknown as DomainEvent;
+      expectSafeCardError(() => projectEventsForViewer([event], null));
+    }
   });
 
   it('fails closed for malformed own-card batches', () => {
