@@ -2,7 +2,7 @@ import { createStandardDeck } from './cards.js';
 import { getLegalActions } from './legal-actions.js';
 import { buildPotLayers } from './pots.js';
 import type { Card } from './types.js';
-import type { TournamentState } from './state.js';
+import { reduceDomainEvent, type TournamentState } from './state.js';
 
 export class TournamentInvariantError extends Error {
   public constructor(message: string) {
@@ -114,6 +114,19 @@ function assertActorAuthority(state: TournamentState): void {
     || hand.phase === 'flop'
     || hand.phase === 'turn'
     || hand.phase === 'river';
+  if (bettingPhase) {
+    let derived: TournamentState | null = null;
+    try {
+      for (const event of state.eventLog) derived = reduceDomainEvent(derived, event);
+    } catch (error) {
+      fail(`actor authority cannot be derived from event history: ${String(error)}`);
+    }
+    if (derived?.activeHand?.currentActorSeat !== hand.currentActorSeat
+      || derived?.activeHand?.pendingActors.length !== hand.pendingActors.length
+      || derived.activeHand.pendingActors.some((seat, index) => seat !== hand.pendingActors[index])) {
+      fail('actor and pending decisions must match independently reduced event authority');
+    }
+  }
   if (hand.currentActorSeat === null) {
     if (bettingPhase && hand.pendingActors.length > 0) {
       fail('a funded pending decision requires a current actor');

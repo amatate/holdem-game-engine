@@ -1,6 +1,6 @@
 import { validateTournamentInputs, type TournamentConfig } from './config.js';
 import type { DomainEvent, GameStartedEvent } from './events.js';
-import { assertTournamentInvariants } from './invariants.js';
+import { assertTournamentInvariants, TournamentInvariantError } from './invariants.js';
 import { reduceDomainEvent, type TournamentSeatInput, type TournamentState } from './state.js';
 import {
   EVENT_SCHEMA_VERSION,
@@ -105,8 +105,15 @@ export function replayTournament(envelope: ReplayEnvelopeV1): TournamentState {
 
   let state: TournamentState | null = null;
   for (const event of envelope.events) {
-    state = reduceDomainEvent(state, event);
-    assertTournamentInvariants(state);
+    try {
+      state = reduceDomainEvent(state, event);
+      assertTournamentInvariants(state);
+    } catch (error) {
+      if (error instanceof TournamentInvariantError) throw error;
+      throw new TournamentInvariantError(
+        `replay event violates domain authority: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   if (state === null) {
     throw new ReplayHeaderError('replay contains no reducible state');

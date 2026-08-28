@@ -9,6 +9,7 @@ import {
 } from './config.js';
 import type { DomainEvent } from './events.js';
 import { compareHandRanks, evaluateBest, type HandRank } from './hand-evaluator.js';
+import { getLegalActions } from './legal-actions.js';
 import { advancePositions, assignInitialPositions } from './positions.js';
 import { buildPotLayers } from './pots.js';
 import { createSeededRandom } from './random.js';
@@ -174,6 +175,181 @@ function sameCard(left: Card, right: Card): boolean {
   return left.code === right.code && left.rank === right.rank && left.suit === right.suit;
 }
 
+function currentHandEvents(state: TournamentState, type?: DomainEvent['type']): DomainEvent[] {
+  const handId = state.activeHand?.handId;
+  if (handId === undefined) return [];
+  return state.eventLog.filter((candidate) => 'handId' in candidate
+    && candidate.handId === handId
+    && (type === undefined || candidate.type === type));
+}
+
+function samePositions(left: PositionState, right: PositionState): boolean {
+  return left.buttonPosition === right.buttonPosition
+    && left.smallBlindSeat === right.smallBlindSeat
+    && left.bigBlindSeat === right.bigBlindSeat;
+}
+
+function expectedPositionsForActiveHand(state: TournamentState): PositionState {
+  const survivorSeats = state.seats
+    .filter((seat) => seat.stack > 0 && seat.status !== 'eliminated')
+    .map((seat) => seat.seatIndex);
+  if (state.handNumber === 1) {
+    return assignInitialPositions(
+      state.config.initialButtonSeat,
+      survivorSeats,
+      state.config.maxSeats,
+    );
+  }
+  return advancePositions(state.activeHand!.positions, survivorSeats, state.config.maxSeats);
+}
+
+function firstActionableAfterPosition(state: TournamentState, position: number): number | null {
+  const actionable = new Set(state.seats
+    .filter((seat) => seat.status === 'active' && seat.stack > 0)
+    .map((seat) => seat.seatIndex));
+  return firstIncludedAfter(position, actionable, state.config.maxSeats);
+}
+
+function expectedBettingRoundStart(
+  state: TournamentState,
+  street: Street,
+): { readonly actor: number | null; readonly currentBetTo: number; readonly lastFullRaiseSize: number } {
+  const hand = state.activeHand!;
+  const blind = resolveBlindLevelForHand(
+    state.config,
+    state.initialChipTotal,
+    state.handNumber,
+  ).blindLevel;
+  if (street !== 'preflop') {
+    const live = state.seats.filter((seat) => seat.status !== 'folded'
+      && seat.status !== 'eliminated');
+    const actionable = live.filter((seat) => seat.status === 'active' && seat.stack > 0);
+    const automaticRunout = actionable.length === 0
+      || (actionable.length === 1
+        && live.some((seat) => seat.status === 'all-in')
+        && Math.max(0, hand.currentBetTo - actionable[0]!.committedStreet) === 0);
+    return {
+      actor: automaticRunout
+        ? null
+        : firstActionableAfterPosition(state, hand.positions.buttonPosition),
+      currentBetTo: 0,
+      lastFullRaiseSize: blind.bigBlind,
+    };
+  }
+
+  const survivorSeats = state.seats.filter(
+    (seat) => seat.status !== 'eliminated' && seat.stack + seat.committedHand > 0,
+  );
+  const bigBlind = state.seats.find((seat) => seat.seatIndex === hand.positions.bigBlindSeat);
+  if (bigBlind === undefined) throw new Error('preflop requires an authoritative big blind seat');
+  const currentBetTo = survivorSeats.length === 2 ? bigBlind.committedStreet : blind.bigBlind;
+  let actor = firstActionableAfterPosition(state, hand.positions.bigBlindSeat);
+  const actionable = state.seats.filter((seat) => seat.status === 'active' && seat.stack > 0);
+  if (survivorSeats.length === 2 && actionable.length === 1
+    && actionable[0]!.committedStreet >= currentBetTo) {
+    actor = null;
+  }
+  return { actor, currentBetTo, lastFullRaiseSize: blind.bigBlind };
+}
+
+function samePlayerAction(
+  left: Extract<DomainEvent, { readonly type: 'PlayerActed' }>,
+  right: Extract<DomainEvent, { readonly type: 'PlayerActed' }>,
+): boolean {
+  return left.handId === right.handId
+    && left.seat === right.seat
+    && left.normalizedKind === right.normalizedKind
+    && left.paid === right.paid
+    && left.betToBefore === right.betToBefore
+    && left.betToAfter === right.betToAfter
+    && left.allIn === right.allIn
+    && left.fullRaise === right.fullRaise
+    && left.raiseReopened === right.raiseReopened;
+}
+
+function authoritativePlayerAction(
+  state: TournamentState,
+  event: Extract<DomainEvent, { readonly type: 'PlayerActed' }>,
+): Extract<DomainEvent, { readonly type: 'PlayerActed' }> {
+  const hand = state.activeHand!;
+  const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+  if (seat === undefined || hand.currentActorSeat !== event.seat
+    || seat.status !== 'active' || seat.stack <= 0) {
+    throw new Error('PlayerActed requires the current active funded actor');
+  }
+  const legal = getLegalActions(state, event.seat);
+  const base = {
+    type: 'PlayerActed' as const,
+    schemaVersion: EVENT_SCHEMA_VERSION,
+    eventIndex: state.version,
+    handId: hand.handId,
+    seat: event.seat,
+    betToBefore: hand.currentBetTo,
+  };
+  if (event.normalizedKind === 'fold') {
+    if (!legal.fold) throw new Error('forged or illegal PlayerActed fold');
+    return { ...base, normalizedKind: 'fold', paid: 0, betToAfter: hand.currentBetTo,
+      allIn: false, fullRaise: false, raiseReopened: false };
+  }
+  if (event.normalizedKind === 'check') {
+    if (!legal.check) throw new Error('forged or illegal PlayerActed check');
+    return { ...base, normalizedKind: 'check', paid: 0, betToAfter: hand.currentBetTo,
+      allIn: false, fullRaise: false, raiseReopened: false };
+  }
+  if (event.normalizedKind === 'call') {
+    if (legal.call === null) throw new Error('forged or illegal PlayerActed call');
+    return { ...base, normalizedKind: 'call', paid: legal.call.pay,
+      betToAfter: hand.currentBetTo, allIn: legal.call.isAllIn,
+      fullRaise: false, raiseReopened: false };
+  }
+
+  const target = event.betToAfter;
+  if (!Number.isSafeInteger(target)) {
+    throw new Error('PlayerActed raise target must be a safe integer');
+  }
+  const allInIncrease = legal.allIn !== null
+    && legal.allIn.mode !== 'call'
+    && legal.allIn.to === target;
+  const rangedRaise = legal.raiseTo !== null
+    && target >= legal.raiseTo.min
+    && target <= legal.raiseTo.max;
+  if (!allInIncrease && !rangedRaise) {
+    throw new Error('forged or illegal PlayerActed raise target');
+  }
+  const increment = target - hand.currentBetTo;
+  const fullRaise = increment >= hand.lastFullRaiseSize;
+  const allIn = target === seat.committedStreet + seat.stack;
+  return {
+    ...base,
+    normalizedKind: hand.currentBetTo === 0 ? 'bet' : 'raise',
+    paid: target - seat.committedStreet,
+    betToAfter: target,
+    allIn,
+    fullRaise,
+    raiseReopened: fullRaise,
+  };
+}
+
+function roundMayCloseAutomatically(state: TournamentState): boolean {
+  const hand = state.activeHand!;
+  const live = state.seats.filter((seat) => seat.status !== 'folded'
+    && seat.status !== 'eliminated');
+  if (live.length === 1) return true;
+  const actionable = live.filter((seat) => seat.status === 'active' && seat.stack > 0);
+  if (actionable.length === 0) return true;
+  return actionable.length === 1
+    && live.some((seat) => seat.status === 'all-in')
+    && Math.max(0, hand.currentBetTo - actionable[0]!.committedStreet) === 0;
+}
+
+function bettingRoundIsClosed(state: TournamentState): boolean {
+  const hand = state.activeHand!;
+  const funded = state.seats.filter((seat) => seat.status === 'active' && seat.stack > 0);
+  return hand.currentActorSeat === null
+    && hand.pendingActors.length === 0
+    && funded.every((seat) => seat.committedStreet === hand.currentBetTo);
+}
+
 function contributionLayers(state: TournamentState) {
   return buildPotLayers(state.seats.map((seat) => ({
     seatIndex: seat.seatIndex,
@@ -276,6 +452,15 @@ export function reduceDomainEvent(
   let next: TournamentState;
   switch (event.type) {
     case 'HandStarted': {
+      const priorHandIsComplete = state.activeHand === null
+        ? state.handNumber === 0
+        : state.activeHand.phase === 'hand-complete';
+      const fundedSurvivors = state.seats.filter(
+        (seat) => seat.stack > 0 && seat.status !== 'eliminated',
+      );
+      if (!priorHandIsComplete || fundedSurvivors.length < 2) {
+        throw new Error('HandStarted requires a completed prior hand and two funded survivors');
+      }
       if (state.seats.some((seat) => seat.stack === 0 && seat.status !== 'eliminated')) {
         throw new Error('HandStarted requires settlement-owned elimination to be finalized');
       }
@@ -300,6 +485,8 @@ export function reduceDomainEvent(
         committedHand: 0,
         lastActedAtBetTo: null,
       }));
+      const previousPositions = state.activeHand?.positions
+        ?? { buttonPosition: 0, smallBlindSeat: null, bigBlindSeat: 0 };
       next = {
         ...state,
         seats: resetSeats,
@@ -314,7 +501,7 @@ export function reduceDomainEvent(
           deck: [],
           dealCursor: 0,
           revealedHoleCardSeats: [],
-          positions: { buttonPosition: 0, smallBlindSeat: null, bigBlindSeat: 0 },
+          positions: previousPositions,
           currentActorSeat: null,
           currentBetTo: 0,
           lastFullRaiseSize: event.bigBlind,
@@ -328,8 +515,14 @@ export function reduceDomainEvent(
       break;
     }
     case 'PositionsAssigned': {
-      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'post-blinds'
+        || currentHandEvents(state, 'PositionsAssigned').length !== 0) {
         throw new Error('PositionsAssigned requires the matching active hand');
+      }
+      const expected = expectedPositionsForActiveHand(state);
+      if (!samePositions(event, expected)) {
+        throw new Error('PositionsAssigned must match authoritative physical advancement');
       }
       next = {
         ...state,
@@ -345,8 +538,37 @@ export function reduceDomainEvent(
       break;
     }
     case 'BlindPosted': {
-      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'post-blinds'
+        || currentHandEvents(state, 'PositionsAssigned').length !== 1) {
         throw new Error('BlindPosted requires the matching active hand');
+      }
+      const blind = resolveBlindLevelForHand(
+        state.config,
+        state.initialChipTotal,
+        state.handNumber,
+      ).blindLevel;
+      const expectedPosts = [
+        ...(state.activeHand.positions.smallBlindSeat === null ? [] : [{
+          seat: state.activeHand.positions.smallBlindSeat,
+          kind: 'small' as const,
+          blind: blind.smallBlind,
+        }]),
+        { seat: state.activeHand.positions.bigBlindSeat, kind: 'big' as const, blind: blind.bigBlind },
+      ];
+      const postedCount = currentHandEvents(state, 'BlindPosted').length;
+      const expected = expectedPosts[postedCount];
+      const postingSeat = expected === undefined
+        ? undefined
+        : state.seats.find((seat) => seat.seatIndex === expected.seat);
+      const expectedAmount = postingSeat === undefined || expected === undefined
+        ? -1
+        : Math.min(expected.blind, postingSeat.stack);
+      if (expected === undefined || postingSeat === undefined
+        || event.seat !== expected.seat || event.kind !== expected.kind
+        || event.amount !== expectedAmount || event.amount <= 0
+        || event.allIn !== (event.amount === postingSeat.stack)) {
+        throw new Error('BlindPosted must match the authoritative blind order and amount');
       }
       next = {
         ...state,
@@ -374,15 +596,24 @@ export function reduceDomainEvent(
       break;
     }
     case 'DeckPrepared': {
-      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== 'post-blinds'
+        || currentHandEvents(state, 'DeckPrepared').length !== 0
+        || event.shuffleVersion !== SHUFFLE_ALGORITHM_VERSION) {
         throw new Error('DeckPrepared requires the matching active hand');
       }
+      const expectedBlindCount = state.activeHand.positions.smallBlindSeat === null ? 1 : 2;
+      if (currentHandEvents(state, 'PositionsAssigned').length !== 1
+        || currentHandEvents(state, 'BlindPosted').length !== expectedBlindCount) {
+        throw new Error('DeckPrepared requires the complete authoritative blind sequence');
+      }
+      const deck = validateAndCloneDeck(event.fullOrderedDeck);
       next = {
         ...state,
         activeHand: {
           ...state.activeHand,
           phase: 'deal-hole',
-          deck: event.fullOrderedDeck.map((card) => ({ ...card })),
+          deck,
           dealCursor: 0,
         },
       };
@@ -452,6 +683,29 @@ export function reduceDomainEvent(
       if (state.activeHand === null || state.activeHand.handId !== event.handId) {
         throw new Error('BettingRoundStarted requires the matching active hand');
       }
+      const expectedPhase: Phase = event.street === 'preflop'
+        ? 'deal-hole'
+        : `deal-${event.street}`;
+      const existingRound = currentHandEvents(state, 'BettingRoundStarted').some(
+        (candidate) => candidate.type === 'BettingRoundStarted'
+          && candidate.street === event.street,
+      );
+      const holeDealReady = event.street !== 'preflop'
+        || currentHandEvents(state, 'HoleCardsDealt').length === 1;
+      const communityReady = event.street === 'preflop'
+        || currentHandEvents(state, 'CommunityCardsDealt').filter((candidate) =>
+          candidate.type === 'CommunityCardsDealt'
+          && candidate.street === event.street).length === 1;
+      if (state.activeHand.phase !== expectedPhase || existingRound || !holeDealReady
+        || !communityReady) {
+        throw new Error('BettingRoundStarted violates authoritative street order');
+      }
+      const expected = expectedBettingRoundStart(state, event.street);
+      if (event.actor !== expected.actor
+        || event.currentBetTo !== expected.currentBetTo
+        || event.lastFullRaiseSize !== expected.lastFullRaiseSize) {
+        throw new Error('BettingRoundStarted must match the authoritative actor and betting values');
+      }
       const actionable = new Set(state.seats
         .filter((seat) => seat.status === 'active' && seat.stack > 0)
         .map((seat) => seat.seatIndex));
@@ -484,8 +738,13 @@ export function reduceDomainEvent(
       break;
     }
     case 'PlayerActed': {
-      if (state.activeHand === null || state.activeHand.handId !== event.handId) {
+      if (state.activeHand === null || state.activeHand.handId !== event.handId
+        || state.activeHand.phase !== state.activeHand.street) {
         throw new Error('PlayerActed requires the matching active hand');
+      }
+      const expected = authoritativePlayerAction(state, event);
+      if (!samePlayerAction(event, expected)) {
+        throw new Error('PlayerActed must equal the authoritative normalized legal action');
       }
       const actingSeat = state.seats.find((seat) => seat.seatIndex === event.seat);
       if (actingSeat === undefined || event.paid < 0 || event.paid > actingSeat.stack) {
@@ -542,6 +801,10 @@ export function reduceDomainEvent(
         || state.activeHand.handId !== event.handId
         || state.activeHand.street !== event.street) {
         throw new Error('BettingRoundClosed requires the matching active street');
+      }
+      if (state.activeHand.phase !== event.street
+        || (!bettingRoundIsClosed(state) && !roundMayCloseAutomatically(state))) {
+        throw new Error('BettingRoundClosed requires a closed round or automatic boundary');
       }
       const liveCount = state.seats.filter((seat) => seat.status !== 'folded'
         && seat.status !== 'eliminated').length;
