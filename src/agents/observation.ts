@@ -1,12 +1,20 @@
 import { getLegalActions, type LegalActionSet } from '../core/legal-actions.js';
+import { cloneCanonicalCard, INVALID_PUBLIC_CARD_MESSAGE } from '../core/cards.js';
 import { buildPotLayers } from '../core/pots.js';
 import type { PublicActionEvent } from '../core/public-events.js';
 import type { Street, TournamentState } from '../core/state.js';
 import type { Card } from '../core/types.js';
 import type { PlayerObservationV1, PublicSeatState } from './types.js';
 
-function cloneCard(card: Card): Card {
-  return { code: card.code, rank: card.rank, suit: card.suit };
+function cloneDistinctCards(value: unknown, expectedCount: number): Card[] {
+  try {
+    if (!Array.isArray(value) || value.length !== expectedCount) throw new Error();
+    const cards = value.map((card) => cloneCanonicalCard(card));
+    if (new Set(cards.map((card) => card.code)).size !== cards.length) throw new Error();
+    return cards;
+  } catch {
+    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+  }
 }
 
 function cloneLegalActions(actions: LegalActionSet): LegalActionSet {
@@ -61,10 +69,27 @@ export function projectObservation(
     || hand.currentActorSeat !== actorSeatIndex) {
     throw new Error('observation requires the current actor during a betting street');
   }
+  if (hand.revealedHoleCardSeats.length > 0) {
+    throw new Error('decision observation cannot include revealed hole cards');
+  }
   const hero = state.seats.find((seat) => seat.seatIndex === actorSeatIndex);
   if (hero === undefined || hero.status !== 'active' || hero.stack <= 0
-    || hero.holeCards === null || hero.holeCards.length !== 2) {
+    || hero.holeCards === null) {
     throw new Error('observation requires a funded active actor with exactly two hole cards');
+  }
+
+  const holeCards = cloneDistinctCards(hero.holeCards, 2) as [Card, Card];
+  const expectedBoardCount = hand.street === 'preflop'
+    ? 0
+    : hand.street === 'flop'
+      ? 3
+      : hand.street === 'turn'
+        ? 4
+        : 5;
+  const board = cloneDistinctCards(hand.board, expectedBoardCount);
+  if (new Set([...holeCards, ...board].map((card) => card.code)).size
+      !== holeCards.length + board.length) {
+    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
   }
 
   const authorityLegalActions = getLegalActions(state, actorSeatIndex);
@@ -138,8 +163,8 @@ export function projectObservation(
     decisionIndex,
     actorSeatIndex,
     street: hand.street,
-    holeCards: [cloneCard(hero.holeCards[0]), cloneCard(hero.holeCards[1])],
-    board: hand.board.map(cloneCard),
+    holeCards,
+    board,
     buttonPosition: hand.positions.buttonPosition,
     smallBlindSeat: hand.positions.smallBlindSeat,
     bigBlindSeat: hand.positions.bigBlindSeat,

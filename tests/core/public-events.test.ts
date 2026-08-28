@@ -19,6 +19,28 @@ const kc = parseCard('Kc');
 const kd = parseCard('Kd');
 const flop = [parseCard('2c'), parseCard('3d'), parseCard('4h')] as const;
 const bestFive = [ah, ad, kc, kd, flop[0]] as const;
+const SAFE_CARD_ERROR = 'Invalid public card data';
+
+function throwingCard(property: 'code' | 'rank' | 'suit') {
+  const card: Record<string, unknown> = { code: 'Ah', rank: 14, suit: 'h' };
+  Object.defineProperty(card, property, {
+    enumerable: true,
+    get: () => { throw new Error(`PUBLIC-${property.toUpperCase()}-GETTER-SEED-SENTINEL`); },
+  });
+  return card as unknown as ReturnType<typeof parseCard>;
+}
+
+function expectSafeCardError(run: () => unknown): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(Error);
+  expect((caught as Error).message).toBe(SAFE_CARD_ERROR);
+  expect((caught as Error).message).not.toMatch(/SEED-SENTINEL|PUBLIC-CARD/);
+}
 
 const EVENTS_BY_TYPE = {
   GameStarted: {
@@ -337,6 +359,78 @@ describe('public domain-event whitelist', () => {
       ...EVENTS_BY_TYPE.CommunityCardsDealt,
       cards: [inconsistentRank],
     }], 0)).toThrow('Invalid public card data');
+  });
+
+  it('normalizes every malformed Card value and throwing getter to the same safe error', () => {
+    const invalidValues: readonly unknown[] = [
+      undefined,
+      null,
+      7,
+      'PUBLIC-CARD-STRING-SEED-SENTINEL',
+      throwingCard('code'),
+      throwingCard('rank'),
+      throwingCard('suit'),
+      { ...ah, rank: 13 },
+      { ...ah, suit: 's' },
+    ];
+
+    for (const value of invalidValues) {
+      const event = {
+        ...EVENTS_BY_TYPE.CommunityCardsDealt,
+        cards: [value, parseCard('6c'), parseCard('7d')],
+      } as unknown as DomainEvent;
+      expectSafeCardError(() => projectEventsForViewer([event], 0));
+    }
+  });
+
+  it('does not touch a hidden opponent Card getter while projecting the viewer own deal', () => {
+    const hidden = throwingCard('code');
+    const event = {
+      ...EVENTS_BY_TYPE.HoleCardsDealt,
+      orderedDeals: [
+        { seat: 0, card: ah, round: 1 as const },
+        { seat: 1, card: hidden, round: 1 as const },
+        { seat: 0, card: ad, round: 2 as const },
+        { seat: 1, card: hidden, round: 2 as const },
+      ],
+    };
+
+    expect(projectEventsForViewer([event], 0)).toEqual([
+      { type: 'ownHoleCardsDealt', cards: [ah, ad] },
+    ]);
+    expect(projectEventsForViewer([event], null)).toEqual([]);
+  });
+
+  it('rejects malformed community and reveal batches with the fixed safe error', () => {
+    const cases: readonly DomainEvent[] = [
+      {
+        ...EVENTS_BY_TYPE.CommunityCardsDealt,
+        street: 'flop',
+        cards: [parseCard('2c')],
+      },
+      {
+        ...EVENTS_BY_TYPE.CommunityCardsDealt,
+        street: 'turn',
+        cards: [parseCard('2c'), parseCard('3d'), parseCard('4h')],
+      },
+      {
+        ...EVENTS_BY_TYPE.CommunityCardsDealt,
+        street: 'flop',
+        cards: [parseCard('2c'), parseCard('2c'), parseCard('4h')],
+      },
+      {
+        ...EVENTS_BY_TYPE.HoleCardsRevealed,
+        cards: [ah] as unknown as readonly [typeof ah, typeof ad],
+      },
+      {
+        ...EVENTS_BY_TYPE.HoleCardsRevealed,
+        cards: [ah, ah],
+      },
+    ];
+
+    for (const event of cases) {
+      expectSafeCardError(() => projectEventsForViewer([event], 0));
+    }
   });
 
   it('returns a fresh recursively frozen public graph without freezing authority input', () => {

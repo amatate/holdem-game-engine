@@ -1,4 +1,4 @@
-import { parseCard } from './cards.js';
+import { cloneCanonicalCard, INVALID_PUBLIC_CARD_MESSAGE } from './cards.js';
 import type { DomainEvent } from './events.js';
 import type { Street } from './state.js';
 import type { Card } from './types.js';
@@ -71,19 +71,15 @@ export type PublicGameEvent =
   }>
   | Readonly<{ type: 'gameCompleted'; winnerSeat: number }>;
 
-const INVALID_PUBLIC_CARD_MESSAGE = 'Invalid public card data';
-
-function cloneCard(card: Card): Card {
-  let canonical: Card;
+function cloneDistinctCardBatch(value: unknown, expectedCount: number): Card[] {
   try {
-    canonical = parseCard(card.code);
+    if (!Array.isArray(value) || value.length !== expectedCount) throw new Error();
+    const cards = value.map((card) => cloneCanonicalCard(card));
+    if (new Set(cards.map((card) => card.code)).size !== cards.length) throw new Error();
+    return cards;
   } catch {
     throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
   }
-  if (canonical.rank !== card.rank || canonical.suit !== card.suit) {
-    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
-  }
-  return canonical;
 }
 
 function freezeRecursively<T>(value: T): T {
@@ -141,12 +137,13 @@ function projectOneEvent(
       if (ownDeals.length !== 2 || ownDeals[0]?.round !== 1 || ownDeals[1]?.round !== 2) {
         throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
       }
-      const first = cloneCard(ownDeals[0].card);
-      const second = cloneCard(ownDeals[1].card);
-      if (first.code === second.code) throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+      const cards = cloneDistinctCardBatch(
+        [ownDeals[0].card, ownDeals[1].card],
+        2,
+      ) as [Card, Card];
       return {
         type: 'ownHoleCardsDealt',
-        cards: [first, second],
+        cards,
       };
     }
     case 'BettingRoundStarted':
@@ -169,19 +166,28 @@ function projectOneEvent(
       return { type: 'bettingRoundClosed', street: event.street };
     case 'CardBurned':
       return null;
-    case 'CommunityCardsDealt':
+    case 'CommunityCardsDealt': {
+      const expectedCount = event.street === 'flop'
+        ? 3
+        : event.street === 'turn' || event.street === 'river'
+          ? 1
+          : 0;
+      if (expectedCount === 0) throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
       return {
         type: 'communityCardsDealt',
         street: event.street,
-        cards: event.cards.map(cloneCard),
+        cards: cloneDistinctCardBatch(event.cards, expectedCount),
       };
-    case 'HoleCardsRevealed':
+    }
+    case 'HoleCardsRevealed': {
+      const cards = cloneDistinctCardBatch(event.cards, 2) as [Card, Card];
       return {
         type: 'holeCardsRevealed',
         seatIndex: event.seat,
-        cards: [cloneCard(event.cards[0]), cloneCard(event.cards[1])],
+        cards,
         reason: event.reason,
       };
+    }
     case 'UncalledBetReturned':
       return { type: 'uncalledBetReturned', seatIndex: event.seat, amount: event.amount };
     case 'ShowdownStarted':

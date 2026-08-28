@@ -5,6 +5,7 @@ import { createStandardDeck, parseCard } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import { advanceAutomaticPhases } from '../../src/core/dealing.js';
 import { assertTournamentInvariants } from '../../src/core/invariants.js';
+import { replayTournament } from '../../src/core/replay.js';
 import { applyIntent } from '../../src/core/reducer.js';
 import {
   createTournament,
@@ -12,6 +13,8 @@ import {
   startNextHand,
   type TournamentState,
 } from '../../src/core/state.js';
+
+const SAFE_CARD_ERROR = 'Invalid public card data';
 
 function config(
   maxSeats = 2,
@@ -50,6 +53,98 @@ function accepted(
   expect(result.accepted).toBe(true);
   if (!result.accepted) throw new Error(result.rejection.message);
   return result.state;
+}
+
+function throwingCard(property: 'code' | 'rank' | 'suit') {
+  const card: Record<string, unknown> = { code: 'Ah', rank: 14, suit: 'h' };
+  Object.defineProperty(card, property, {
+    enumerable: true,
+    get: () => { throw new Error(`OBSERVATION-${property.toUpperCase()}-GETTER-SEED-SENTINEL`); },
+  });
+  return card as unknown as ReturnType<typeof parseCard>;
+}
+
+function expectSafeCardError(run: () => unknown): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(Error);
+  expect((caught as Error).message).toBe(SAFE_CARD_ERROR);
+  expect((caught as Error).message).not.toMatch(/SEED-SENTINEL|OBSERVATION-CARD/);
+}
+
+function fixedWinningDeck(winnerSeatIndex: 0 | 1) {
+  const prefix = winnerSeatIndex === 0
+    ? ['Kc', 'Ah', 'Qc', 'Ad', '2c', '3d', '4h', '5s', '6c', '7d', '8c', '9h']
+    : ['Ah', 'Kc', 'Ad', 'Qc', '2c', '3d', '4h', '5s', '6c', '7d', '8c', '9h'];
+  const standard = createStandardDeck();
+  const byCode = new Map(standard.map((card) => [card.code, card] as const));
+  return [
+    ...prefix.map((code) => byCode.get(code as never)!),
+    ...standard.filter((card) => !prefix.includes(card.code)),
+  ];
+}
+
+function completeRaisedCheckdown(
+  tableConfig: TournamentConfig,
+  runSeed: string,
+  raiseTo: number,
+  winnerSeatIndex: 0 | 1,
+): TournamentState {
+  let state = createTournament(
+    tableConfig,
+    [{ playerId: 'player-0', seatIndex: 0 }, { playerId: 'player-1', seatIndex: 1 }],
+    runSeed,
+  ).state;
+  state = startHand(state, { fixedDeck: fixedWinningDeck(winnerSeatIndex) }).state;
+  state = accepted(state, 0, { type: 'raiseTo', amount: raiseTo });
+  state = accepted(state, 1, { type: 'call' });
+
+  for (const street of ['flop', 'turn', 'river'] as const) {
+    state = advanceAutomaticPhases(state).state;
+    expect(state.activeHand?.street).toBe(street);
+    expect(state.activeHand?.currentActorSeat).toBe(1);
+    state = accepted(state, 1, { type: 'check' });
+    state = accepted(state, 0, { type: 'check' });
+  }
+  state = advanceAutomaticPhases(state).state;
+  expect(state.activeHand?.phase).toBe('hand-complete');
+  return state;
+}
+
+function expectExactReplayAndInvariants(state: TournamentState): void {
+  const gameStarted = state.eventLog[0];
+  if (gameStarted?.type !== 'GameStarted') throw new Error('test fixture lacks GameStarted');
+  const replayed = replayTournament({
+    containsPrivateData: true,
+    schemaVersion: 1,
+    rulesVersion: state.rulesVersion,
+    rngVersion: state.rngVersion,
+    shuffleVersion: state.shuffleVersion,
+    strategyVersion: state.strategyVersion,
+    initialConfig: state.config,
+    seats: gameStarted.seats,
+    runSeed: state.runSeed,
+    events: state.eventLog,
+  });
+
+  expect(replayed).toEqual(state);
+  expect(() => assertTournamentInvariants(state)).not.toThrow();
+  expect(state.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0))
+    .toBe(state.initialChipTotal);
+}
+
+function createFlopDecisionState(): TournamentState {
+  let state = createStartedState();
+  state = accepted(state, 0, { type: 'call' });
+  state = accepted(state, 1, { type: 'check' });
+  state = advanceAutomaticPhases(state).state;
+  expect(state.activeHand?.street).toBe('flop');
+  expect(state.activeHand?.currentActorSeat).toBe(1);
+  return state;
 }
 
 function formedSidePotDecision(): TournamentState {
@@ -172,22 +267,21 @@ describe('current-player observation projection', () => {
     expect(extrapolatedObservation.smallBlind).toBe(2);
     expect(extrapolatedObservation.bigBlind).toBe(4);
 
-    const created = createTournament(
-      config(2, 100, 2, 4),
-      [{ playerId: 'player-0', seatIndex: 0 }, { playerId: 'player-1', seatIndex: 1 }],
+    const shortBlindConfig = config(2, 100, 2, 4);
+    const shortBlindCompleted = completeRaisedCheckdown(
+      shortBlindConfig,
       'short-blind-seed',
-    ).state;
-    const rebalanced: TournamentState = {
-      ...created,
-      seats: created.seats.map((seat) => ({
-        ...seat,
-        stack: seat.seatIndex === 0 ? 197 : 3,
-      })),
-    };
-    const shortBlind = startHand(rebalanced, { fixedDeck: createStandardDeck() }).state;
-    const shortObservation = projectObservation(shortBlind, 0);
+      97,
+      1,
+    );
+    expect(shortBlindCompleted.seats.map((seat) => seat.stack)).toEqual([3, 197]);
+    const shortBlind = startNextHand(shortBlindCompleted, {
+      fixedDeck: createStandardDeck(),
+    }).state;
+    expectExactReplayAndInvariants(shortBlind);
+    const shortObservation = projectObservation(shortBlind, 1);
 
-    expect(shortBlind.seats.find((seat) => seat.seatIndex === 1)?.committedHand).toBe(3);
+    expect(shortBlind.seats.find((seat) => seat.seatIndex === 0)?.committedHand).toBe(3);
     expect(shortObservation.smallBlind).toBe(2);
     expect(shortObservation.bigBlind).toBe(4);
     expect(shortObservation.potTotal).toBe(5);
@@ -216,27 +310,20 @@ describe('current-player observation projection', () => {
     expect(Object.isFrozen(layeredAuthority.seats)).toBe(false);
     expect(Object.isFrozen(layeredAuthority.seats[0])).toBe(false);
 
-    const shortCreated = createTournament(
+    const shortActorCompleted = completeRaisedCheckdown(
       config(),
-      [{ playerId: 'player-0', seatIndex: 0 }, { playerId: 'player-1', seatIndex: 1 }],
       'short-contest-cap',
-    ).state;
-    const shortRebalanced: TournamentState = {
-      ...shortCreated,
-      seats: shortCreated.seats.map((seat) => ({
-        ...seat,
-        stack: seat.seatIndex === 0 ? 10 : 190,
-      })),
-    };
-    let shortActor = startHand(shortRebalanced, { fixedDeck: createStandardDeck() }).state;
-    shortActor = accepted(shortActor, 0, { type: 'raiseTo', amount: 5 });
-    shortActor = accepted(shortActor, 1, { type: 'raiseTo', amount: 50 });
-    expect(shortActor.seats.reduce(
-      (sum, seat) => sum + seat.stack + seat.committedHand,
+      90,
       0,
-    )).toBe(shortActor.initialChipTotal);
-    expect(() => assertTournamentInvariants(shortActor)).not.toThrow();
-    const short = projectObservation(shortActor, 0);
+    );
+    expect(shortActorCompleted.seats.map((seat) => seat.stack)).toEqual([190, 10]);
+    let shortActor = startNextHand(shortActorCompleted, {
+      fixedDeck: createStandardDeck(),
+    }).state;
+    shortActor = accepted(shortActor, 1, { type: 'raiseTo', amount: 5 });
+    shortActor = accepted(shortActor, 0, { type: 'raiseTo', amount: 50 });
+    expectExactReplayAndInvariants(shortActor);
+    const short = projectObservation(shortActor, 1);
 
     expect(short.legalActions.call).toEqual({ pay: 5, to: 10, isAllIn: true });
     expect(short.potTotal).toBe(15);
@@ -315,5 +402,93 @@ describe('current-player observation projection', () => {
     };
 
     expect(() => projectObservation(forged, 0)).toThrow(/reveal|decision/i);
+  });
+
+  it.each([
+    ['hero marker', [0]],
+    ['opponent marker', [1]],
+    ['both markers', [0, 1]],
+  ] as const)('rejects marker-only revealed cards: %s', (_name, revealedHoleCardSeats) => {
+    const state = createStartedState();
+    const forged: TournamentState = {
+      ...state,
+      activeHand: { ...state.activeHand!, revealedHoleCardSeats },
+    };
+
+    expect(() => projectObservation(forged, 0)).toThrow(/reveal|decision/i);
+  });
+
+  it('normalizes malformed hero and board Cards to one safe non-reflective error', () => {
+    const state = createFlopDecisionState();
+    const hero = state.seats[1]!;
+    if (hero.holeCards === null) throw new Error('test fixture lacks hero cards');
+    const invalidValues: readonly unknown[] = [
+      undefined,
+      null,
+      7,
+      'OBSERVATION-CARD-STRING-SEED-SENTINEL',
+      throwingCard('code'),
+      throwingCard('rank'),
+      throwingCard('suit'),
+      { ...hero.holeCards[0], rank: 13 },
+      { ...hero.holeCards[0], suit: 's' },
+    ];
+
+    for (const value of invalidValues) {
+      const invalidHero: TournamentState = {
+        ...state,
+        seats: state.seats.map((seat) => seat.seatIndex === 1
+          ? {
+            ...seat,
+            holeCards: [value, hero.holeCards![1]] as unknown as typeof seat.holeCards,
+          }
+          : seat),
+      };
+      const invalidBoard: TournamentState = {
+        ...state,
+        activeHand: {
+          ...state.activeHand!,
+          board: [value, state.activeHand!.board[1], state.activeHand!.board[2]] as never,
+        },
+      };
+      expectSafeCardError(() => projectObservation(invalidHero, 1));
+      expectSafeCardError(() => projectObservation(invalidBoard, 1));
+    }
+  });
+
+  it('does not access an opponent private Card getter while projecting the hero', () => {
+    const state = createFlopDecisionState();
+    const hiddenCards = [throwingCard('code'), throwingCard('rank')] as const;
+    const guarded: TournamentState = {
+      ...state,
+      seats: state.seats.map((seat) => seat.seatIndex === 0
+        ? { ...seat, holeCards: hiddenCards }
+        : seat),
+    };
+
+    const observation = projectObservation(guarded, 1);
+    expect(JSON.stringify(observation)).not.toContain('GETTER-SEED-SENTINEL');
+  });
+
+  it('rejects invalid board growth, duplicate known cards, and hero-board collisions', () => {
+    const state = createFlopDecisionState();
+    const hero = state.seats[1]!;
+    if (hero.holeCards === null) throw new Error('test fixture lacks hero cards');
+    const board = state.activeHand!.board;
+    const invalidStates: TournamentState[] = [
+      { ...state, activeHand: { ...state.activeHand!, board: board.slice(0, 1) } },
+      { ...state, activeHand: { ...state.activeHand!, board: [board[0]!, board[0]!, board[2]!] } },
+      { ...state, activeHand: { ...state.activeHand!, board: [hero.holeCards[0], board[1]!, board[2]!] } },
+      {
+        ...state,
+        seats: state.seats.map((seat) => seat.seatIndex === 1
+          ? { ...seat, holeCards: [hero.holeCards![0], hero.holeCards![0]] }
+          : seat),
+      },
+    ];
+
+    for (const invalid of invalidStates) {
+      expectSafeCardError(() => projectObservation(invalid, 1));
+    }
   });
 });

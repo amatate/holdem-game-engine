@@ -3,6 +3,8 @@ import type { Card, CardCode, RandomSource, Rank, Suit } from './types.js';
 const RANK_CODES = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'] as const;
 const SUITS = ['c', 'd', 'h', 's'] as const satisfies readonly Suit[];
 
+export const INVALID_PUBLIC_CARD_MESSAGE = 'Invalid public card data';
+
 const RANK_BY_CODE: Readonly<Record<(typeof RANK_CODES)[number], Rank>> = {
   '2': 2,
   '3': 3,
@@ -50,6 +52,22 @@ export function parseCard(code: string): Card {
     rank: RANK_BY_CODE[rankCode],
     suit,
   };
+}
+
+export function cloneCanonicalCard(value: unknown): Card {
+  try {
+    if (typeof value !== 'object' || value === null) throw new Error();
+    const candidate = value as Record<string, unknown>;
+    const code = candidate.code;
+    const rank = candidate.rank;
+    const suit = candidate.suit;
+    if (typeof code !== 'string') throw new Error();
+    const canonical = parseCard(code);
+    if (rank !== canonical.rank || suit !== canonical.suit) throw new Error();
+    return canonical;
+  } catch {
+    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+  }
 }
 
 export function shuffleDeck(deck: readonly Card[], rng: RandomSource): Card[] {
