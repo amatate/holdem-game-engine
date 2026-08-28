@@ -246,7 +246,7 @@ describe('public domain-event whitelist', () => {
     expect(JSON.stringify(projected)).not.toMatch(/MASTER-SEED|DECK-SENTINEL|TRACE-SENTINEL|authorityRef/);
   });
 
-  it('fails closed for malformed own-card batches and unknown event variants', () => {
+  it('fails closed for malformed own-card batches', () => {
     const base = EVENTS_BY_TYPE.HoleCardsDealt;
     const oneOwnCard = { ...base, orderedDeals: base.orderedDeals.slice(0, 2) };
     const duplicateRound = {
@@ -264,9 +264,79 @@ describe('public domain-event whitelist', () => {
     expect(() => projectEventsForViewer([duplicateRound], 0)).toThrow(/hole|card|round/i);
     expect(() => projectEventsForViewer([threeOwnCards], 0)).toThrow(/hole|card|deal/i);
     expect(projectEventsForViewer([{ ...base, orderedDeals: base.orderedDeals.filter((deal) => deal.seat === 1) }], 0)).toEqual([]);
-    expect(() => projectEventsForViewer([
-      { type: 'FutureAuthorityEvent', schemaVersion: 1, eventIndex: 2 } as unknown as DomainEvent,
-    ], 0)).toThrow(/unhandled|unknown|event/i);
+  });
+
+  it('uses a fixed non-reflective error for an unknown event variant', () => {
+    const unknown = {
+      type: 'FutureAuthorityEvent',
+      schemaVersion: 1,
+      eventIndex: 2,
+      runSeed: 'UNKNOWN-EVENT-SEED-SENTINEL',
+      fullOrderedDeck: [parseCard('Ah'), parseCard('Ad')],
+      authorityPayload: { privateCard: 'Ks' },
+    } as unknown as DomainEvent;
+
+    let caught: unknown;
+    try {
+      projectEventsForViewer([unknown], 0);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('Unhandled domain event variant');
+    expect((caught as Error).message).not.toMatch(/UNKNOWN-EVENT-SEED-SENTINEL|fullOrderedDeck|Ks/);
+  });
+
+  it('rejects duplicate own cards and noncanonical public cards with one safe error', () => {
+    const invalidCard = {
+      code: 'PUBLIC-CARD-SEED-SENTINEL',
+      rank: 14,
+      suit: 'h',
+    } as unknown as ReturnType<typeof parseCard>;
+    const duplicateOwn = {
+      ...EVENTS_BY_TYPE.HoleCardsDealt,
+      orderedDeals: [
+        { seat: 0, card: ah, round: 1 as const },
+        { seat: 0, card: ah, round: 2 as const },
+      ],
+    };
+    const invalidOwn = {
+      ...EVENTS_BY_TYPE.HoleCardsDealt,
+      orderedDeals: [
+        { seat: 0, card: invalidCard, round: 1 as const },
+        { seat: 0, card: ad, round: 2 as const },
+      ],
+    };
+    const invalidCommunity = {
+      ...EVENTS_BY_TYPE.CommunityCardsDealt,
+      cards: [invalidCard],
+    };
+    const invalidReveal = {
+      ...EVENTS_BY_TYPE.HoleCardsRevealed,
+      cards: [invalidCard, kd] as const,
+    };
+
+    for (const event of [duplicateOwn, invalidOwn, invalidCommunity, invalidReveal]) {
+      let caught: unknown;
+      try {
+        projectEventsForViewer([event], 0);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).message).toBe('Invalid public card data');
+      expect((caught as Error).message).not.toContain('PUBLIC-CARD-SEED-SENTINEL');
+    }
+
+    const inconsistentRank = {
+      ...ah,
+      rank: 13,
+    } as unknown as ReturnType<typeof parseCard>;
+    expect(() => projectEventsForViewer([{
+      ...EVENTS_BY_TYPE.CommunityCardsDealt,
+      cards: [inconsistentRank],
+    }], 0)).toThrow('Invalid public card data');
   });
 
   it('returns a fresh recursively frozen public graph without freezing authority input', () => {

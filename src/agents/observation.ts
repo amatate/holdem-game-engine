@@ -1,7 +1,7 @@
 import { getLegalActions, type LegalActionSet } from '../core/legal-actions.js';
 import { buildPotLayers } from '../core/pots.js';
 import type { PublicActionEvent } from '../core/public-events.js';
-import type { TournamentState } from '../core/state.js';
+import type { Street, TournamentState } from '../core/state.js';
 import type { Card } from '../core/types.js';
 import type { PlayerObservationV1, PublicSeatState } from './types.js';
 
@@ -30,12 +30,18 @@ function hasAnyLegalAction(actions: LegalActionSet): boolean {
     || actions.raiseTo !== null || actions.allIn !== null;
 }
 
-function freezeRecursively<T>(value: T): T {
-  if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value;
+function isBettingStreet(value: unknown): value is Street {
+  return value === 'preflop' || value === 'flop' || value === 'turn' || value === 'river';
+}
+
+function freezeRecursively<T>(value: T, seen = new WeakSet<object>()): T {
+  if (typeof value !== 'object' || value === null) return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
   for (const child of Object.values(value as Record<string, unknown>)) {
-    freezeRecursively(child);
+    freezeRecursively(child, seen);
   }
-  return Object.freeze(value);
+  return Object.isFrozen(value) ? value : Object.freeze(value);
 }
 
 export function deepFreezeObservation(
@@ -50,7 +56,7 @@ export function projectObservation(
 ): Readonly<PlayerObservationV1> {
   const hand = state.activeHand;
   if (hand === null
-    || hand.street === null
+    || !isBettingStreet(hand.street)
     || hand.phase !== hand.street
     || hand.currentActorSeat !== actorSeatIndex) {
     throw new Error('observation requires the current actor during a betting street');
@@ -69,6 +75,9 @@ export function projectObservation(
 
   const currentHandEvents = state.eventLog.filter((event) =>
     'handId' in event && event.handId === hand.handId);
+  if (currentHandEvents.some((event) => event.type === 'HoleCardsRevealed')) {
+    throw new Error('decision observation cannot include revealed hole cards');
+  }
   const handStarted = currentHandEvents.filter((event) => event.type === 'HandStarted');
   if (handStarted.length !== 1 || handStarted[0]?.type !== 'HandStarted') {
     throw new Error('observation requires one authoritative current-hand HandStarted event');
@@ -99,8 +108,6 @@ export function projectObservation(
   }
 
   const seats: PublicSeatState[] = state.seats.map((seat) => {
-    const reveal = currentHandEvents.find((event) =>
-      event.type === 'HoleCardsRevealed' && event.seat === seat.seatIndex);
     return {
       playerId: seat.playerId,
       seatIndex: seat.seatIndex,
@@ -108,9 +115,7 @@ export function projectObservation(
       status: seat.status,
       committedStreet: seat.committedStreet,
       committedHand: seat.committedHand,
-      revealedHoleCards: reveal?.type === 'HoleCardsRevealed'
-        ? [cloneCard(reveal.cards[0]), cloneCard(reveal.cards[1])]
-        : null,
+      revealedHoleCards: null,
     };
   });
 

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PokerAgent } from '../../src/agents/types.js';
-import { projectObservation } from '../../src/agents/observation.js';
+import { deepFreezeObservation, projectObservation } from '../../src/agents/observation.js';
 import { createStandardDeck, parseCard } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import { advanceAutomaticPhases } from '../../src/core/dealing.js';
+import { assertTournamentInvariants } from '../../src/core/invariants.js';
 import { projectEventsForViewer } from '../../src/core/public-events.js';
 import { createSeededRandom } from '../../src/core/random.js';
 import { applyIntent } from '../../src/core/reducer.js';
@@ -72,54 +73,31 @@ function flopWorld(opponentCards: readonly [CardCode, CardCode], burn: CardCode)
   return state;
 }
 
-function authorityGraphForFreezeProof(): TournamentState {
+function conservedDecisionGraphForFreezeProof(): TournamentState {
   const tableConfig = config(4);
   const created = createTournament(
     tableConfig,
     Array.from({ length: 4 }, (_, seatIndex) => ({ playerId: `player-${seatIndex}`, seatIndex })),
     MASTER_SEED_SENTINEL,
   ).state;
-  const started = startHand(created, { fixedDeck: createStandardDeck() }).state;
-  const revealedSeat = started.seats[1]!;
-  if (revealedSeat.holeCards === null) throw new Error('test fixture lacks cards');
-  const reveal = {
-    type: 'HoleCardsRevealed' as const,
-    schemaVersion: 1 as const,
-    eventIndex: started.version,
-    handId: started.activeHand!.handId,
-    seat: 1,
-    cards: [revealedSeat.holeCards[0], revealedSeat.holeCards[1]] as const,
-    reason: 'showdown' as const,
-  };
+  let state = startHand(created, { fixedDeck: createStandardDeck() }).state;
+  state = accepted(state, 3, { type: 'raiseTo', amount: 30 });
+  state = accepted(state, 0, { type: 'call' });
+  state = accepted(state, 1, { type: 'call' });
+  state = accepted(state, 2, { type: 'call' });
+  state = advanceAutomaticPhases(state).state;
+  state = accepted(state, 1, { type: 'raiseTo', amount: 30 });
+  state = accepted(state, 2, { type: 'call' });
 
-  return {
-    ...started,
-    version: started.version + 1,
-    eventLog: [...started.eventLog, reveal],
-    seats: started.seats.map((seat) => {
-      if (seat.seatIndex === 0) {
-        return { ...seat, stack: 50, status: 'active' as const, committedStreet: 50, committedHand: 50 };
-      }
-      if (seat.seatIndex === 1) {
-        return { ...seat, stack: 0, status: 'all-in' as const, committedStreet: 40, committedHand: 40 };
-      }
-      if (seat.seatIndex === 2) {
-        return { ...seat, stack: 0, status: 'folded' as const, committedStreet: 40, committedHand: 40 };
-      }
-      return { ...seat, stack: 100, status: 'active' as const, committedStreet: 30, committedHand: 30 };
-    }),
-    activeHand: {
-      ...started.activeHand!,
-      phase: 'flop',
-      street: 'flop',
-      board: [parseCard('As')],
-      revealedHoleCardSeats: [1],
-      currentActorSeat: 3,
-      currentBetTo: 50,
-      lastFullRaiseSize: 2,
-      pendingActors: [3],
-    },
-  };
+  expect(state.activeHand?.street).toBe('flop');
+  expect(state.activeHand?.currentActorSeat).toBe(3);
+  expect(state.activeHand?.currentBetTo).toBe(30);
+  expect(state.activeHand?.pendingActors).toEqual([3, 0]);
+  expect(state.seats.map((seat) => seat.status)).toEqual(['active', 'active', 'active', 'active']);
+  expect(state.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0))
+    .toBe(state.initialChipTotal);
+  expect(() => assertTournamentInvariants(state)).not.toThrow();
+  return state;
 }
 
 describe('hidden-information isolation', () => {
@@ -220,27 +198,26 @@ describe('hidden-information isolation', () => {
   });
 
   it('deep-freezes every projected branch while preserving an unfrozen, unchanged authority graph', () => {
-    const authority = authorityGraphForFreezeProof();
+    const authority = conservedDecisionGraphForFreezeProof();
     const before = structuredClone(authority);
     const authorityBoardCard = authority.activeHand!.board[0]!;
     const authorityHoleCard = authority.seats[3]!.holeCards![0];
-    const authorityRevealEvent = authority.eventLog.at(-1)!;
+    const authorityLastEvent = authority.eventLog.at(-1)!;
 
     expect(Object.isFrozen(authority)).toBe(false);
     expect(Object.isFrozen(authority.activeHand)).toBe(false);
     expect(Object.isFrozen(authorityBoardCard)).toBe(false);
     expect(Object.isFrozen(authorityHoleCard)).toBe(false);
-    expect(Object.isFrozen(authorityRevealEvent)).toBe(false);
+    expect(Object.isFrozen(authorityLastEvent)).toBe(false);
 
     const observation = projectObservation(authority, 3);
-    const revealed = observation.seats[1]!.revealedHoleCards;
     const sidePot = observation.sidePots[0];
     const action = observation.actionHistory[0];
     const call = observation.legalActions.call;
     const raise = observation.legalActions.raiseTo;
     const allIn = observation.legalActions.allIn;
-    if (revealed === null || sidePot === undefined || action === undefined
-      || call === null || raise === null || allIn === null) {
+    if (sidePot === undefined || action === undefined || call === null
+      || raise === null || allIn === null) {
       throw new Error('freeze fixture is missing a required nested branch');
     }
 
@@ -252,8 +229,6 @@ describe('hidden-information isolation', () => {
       ['hole card', () => { (observation.holeCards[0] as unknown as { rank: number }).rank = 2; }],
       ['seats array', () => { (observation.seats as unknown as unknown[]).push({}); }],
       ['seat', () => { (observation.seats[0] as unknown as { stack: number }).stack = 1; }],
-      ['revealed tuple', () => { (revealed as unknown as unknown[])[0] = parseCard('2s'); }],
-      ['revealed card', () => { (revealed[0] as unknown as { rank: number }).rank = 2; }],
       ['side pots array', () => { (observation.sidePots as unknown as unknown[]).push({}); }],
       ['side pot', () => { (sidePot as unknown as { amount: number }).amount = 1; }],
       ['eligibility', () => { (sidePot.eligibleSeatIndexes as unknown as number[]).push(3); }],
@@ -269,15 +244,17 @@ describe('hidden-information isolation', () => {
     }
 
     expect(authority).toEqual(before);
+    expect(authority.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0))
+      .toBe(authority.initialChipTotal);
     expect(Object.isFrozen(authority)).toBe(false);
     expect(Object.isFrozen(authority.activeHand)).toBe(false);
     expect(Object.isFrozen(authorityBoardCard)).toBe(false);
     expect(Object.isFrozen(authorityHoleCard)).toBe(false);
-    expect(Object.isFrozen(authorityRevealEvent)).toBe(false);
+    expect(Object.isFrozen(authorityLastEvent)).toBe(false);
   });
 
   it('allocates equal but non-aliased nested projections across calls and authority', () => {
-    const authority = authorityGraphForFreezeProof();
+    const authority = conservedDecisionGraphForFreezeProof();
     const first = projectObservation(authority, 3);
     const second = projectObservation(authority, 3);
 
@@ -295,8 +272,8 @@ describe('hidden-information isolation', () => {
     expect(first.seats[0]).not.toBe(second.seats[0]);
     expect(first.seats).not.toBe(authority.seats);
     expect(first.seats[0]).not.toBe(authority.seats[0]);
-    expect(first.seats[1]!.revealedHoleCards).not.toBe(second.seats[1]!.revealedHoleCards);
-    expect(first.seats[1]!.revealedHoleCards).not.toBe(authority.seats[1]!.holeCards);
+    expect(first.seats.every((seat) => seat.revealedHoleCards === null)).toBe(true);
+    expect(second.seats.every((seat) => seat.revealedHoleCards === null)).toBe(true);
     expect(first.sidePots).not.toBe(second.sidePots);
     expect(first.sidePots[0]).not.toBe(second.sidePots[0]);
     expect(first.sidePots[0]!.eligibleSeatIndexes).not.toBe(second.sidePots[0]!.eligibleSeatIndexes);
@@ -306,5 +283,23 @@ describe('hidden-information isolation', () => {
     expect(first.legalActions.call).not.toBe(second.legalActions.call);
     expect(first.legalActions.raiseTo).not.toBe(second.legalActions.raiseTo);
     expect(first.legalActions.allIn).not.toBe(second.legalActions.allIn);
+  });
+
+  it('recursively freezes children even when deepFreezeObservation receives a shallow-frozen root', () => {
+    const authority = conservedDecisionGraphForFreezeProof();
+    const mutableCopy = structuredClone(projectObservation(authority, 3));
+    const shallowFrozen = Object.freeze(mutableCopy);
+
+    expect(Object.isFrozen(shallowFrozen)).toBe(true);
+    expect(Object.isFrozen(shallowFrozen.board)).toBe(false);
+    expect(Object.isFrozen(shallowFrozen.board[0])).toBe(false);
+
+    const deeplyFrozen = deepFreezeObservation(shallowFrozen);
+
+    expect(Object.isFrozen(deeplyFrozen.board)).toBe(true);
+    expect(Object.isFrozen(deeplyFrozen.board[0])).toBe(true);
+    expect(() => {
+      (deeplyFrozen.board[0] as unknown as { rank: number }).rank = 2;
+    }).toThrow(TypeError);
   });
 });

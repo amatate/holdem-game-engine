@@ -1,3 +1,4 @@
+import { parseCard } from './cards.js';
 import type { DomainEvent } from './events.js';
 import type { Street } from './state.js';
 import type { Card } from './types.js';
@@ -70,8 +71,19 @@ export type PublicGameEvent =
   }>
   | Readonly<{ type: 'gameCompleted'; winnerSeat: number }>;
 
+const INVALID_PUBLIC_CARD_MESSAGE = 'Invalid public card data';
+
 function cloneCard(card: Card): Card {
-  return { code: card.code, rank: card.rank, suit: card.suit };
+  let canonical: Card;
+  try {
+    canonical = parseCard(card.code);
+  } catch {
+    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+  }
+  if (canonical.rank !== card.rank || canonical.suit !== card.suit) {
+    throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
+  }
+  return canonical;
 }
 
 function freezeRecursively<T>(value: T): T {
@@ -83,7 +95,8 @@ function freezeRecursively<T>(value: T): T {
 }
 
 function assertNever(value: never): never {
-  throw new Error(`Unhandled domain event variant: ${JSON.stringify(value)}`);
+  void value;
+  throw new Error('Unhandled domain event variant');
 }
 
 function projectOneEvent(
@@ -126,11 +139,14 @@ function projectOneEvent(
       const ownDeals = event.orderedDeals.filter((deal) => deal.seat === viewerSeatIndex);
       if (ownDeals.length === 0) return null;
       if (ownDeals.length !== 2 || ownDeals[0]?.round !== 1 || ownDeals[1]?.round !== 2) {
-        throw new Error('malformed own hole-card deal batch');
+        throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
       }
+      const first = cloneCard(ownDeals[0].card);
+      const second = cloneCard(ownDeals[1].card);
+      if (first.code === second.code) throw new Error(INVALID_PUBLIC_CARD_MESSAGE);
       return {
         type: 'ownHoleCardsDealt',
-        cards: [cloneCard(ownDeals[0].card), cloneCard(ownDeals[1].card)],
+        cards: [first, second],
       };
     }
     case 'BettingRoundStarted':
