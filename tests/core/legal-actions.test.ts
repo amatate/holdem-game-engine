@@ -173,7 +173,13 @@ describe('legal action derivation and rejection purity', () => {
     expectConserved(short);
     expect(getLegalActions(short, 3).call).toEqual({ pay: 1, to: 1, isAllIn: true });
     const shortCall = acceptedAction(short, 3, { type: 'call' });
-    expect(shortCall.events[0]).toMatchObject({ normalizedKind: 'call', paid: 1, betToAfter: 2, allIn: true });
+    expect(shortCall.events[0]).toMatchObject({
+      normalizedKind: 'call',
+      paid: 1,
+      betToAfter: 2,
+      committedToAfter: 1,
+      allIn: true,
+    });
     expect(shortCall.state.seats[3]).toMatchObject({ stack: 0, committedStreet: 1, status: 'all-in' });
   });
 

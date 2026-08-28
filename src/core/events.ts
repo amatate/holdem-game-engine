@@ -82,6 +82,7 @@ export interface PlayerActedEvent extends HandEventBase {
   readonly seat: number;
   readonly normalizedKind: 'fold' | 'check' | 'call' | 'bet' | 'raise';
   readonly paid: number;
+  readonly committedToAfter: number;
   readonly betToBefore: number;
   readonly betToAfter: number;
   readonly allIn: boolean;

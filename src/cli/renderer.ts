@@ -94,8 +94,10 @@ export function renderPublicEvent(event: Readonly<PublicGameEvent>): string | nu
       return `位置：按钮座位 ${event.buttonPosition}，小盲${event.smallBlindSeat === null ? '无' : `座位 ${event.smallBlindSeat}`}，大盲座位 ${event.bigBlindSeat}。`;
     case 'blindPosted':
       return `座位 ${event.seatIndex} 支付${event.kind === 'small' ? '小盲' : '大盲'} ${event.amount}${event.allIn ? '（全下）' : ''}。`;
-    case 'playerActed':
-      return `座位 ${event.seatIndex} ${ACTION_LABELS[event.kind]}${event.paid > 0 ? ` ${event.paid}` : ''}${event.betTo > 0 ? `，到 ${event.betTo}` : ''}${event.allIn ? '（全下）' : ''}。`;
+    case 'playerActed': {
+      const reached = event.kind === 'call' || event.kind === 'bet' || event.kind === 'raise';
+      return `座位 ${event.seatIndex} ${ACTION_LABELS[event.kind]}${event.paid > 0 ? ` ${event.paid}` : ''}${reached && event.betTo > 0 ? `，到 ${event.betTo}` : ''}${event.allIn ? '（全下）' : ''}。`;
+    }
     case 'ownHoleCardsDealt':
       return `你的手牌：${cardsText(event.cards)}。`;
     case 'bettingRoundStarted':

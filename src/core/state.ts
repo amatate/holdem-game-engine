@@ -260,6 +260,7 @@ function samePlayerAction(
     && left.seat === right.seat
     && left.normalizedKind === right.normalizedKind
     && left.paid === right.paid
+    && left.committedToAfter === right.committedToAfter
     && left.betToBefore === right.betToBefore
     && left.betToAfter === right.betToAfter
     && left.allIn === right.allIn
@@ -288,18 +289,20 @@ function authoritativePlayerAction(
   };
   if (event.normalizedKind === 'fold') {
     if (!legal.fold) throw new Error('forged or illegal PlayerActed fold');
-    return { ...base, normalizedKind: 'fold', paid: 0, betToAfter: hand.currentBetTo,
+    return { ...base, normalizedKind: 'fold', paid: 0,
+      committedToAfter: seat.committedStreet, betToAfter: hand.currentBetTo,
       allIn: false, fullRaise: false, raiseReopened: false };
   }
   if (event.normalizedKind === 'check') {
     if (!legal.check) throw new Error('forged or illegal PlayerActed check');
-    return { ...base, normalizedKind: 'check', paid: 0, betToAfter: hand.currentBetTo,
+    return { ...base, normalizedKind: 'check', paid: 0,
+      committedToAfter: seat.committedStreet, betToAfter: hand.currentBetTo,
       allIn: false, fullRaise: false, raiseReopened: false };
   }
   if (event.normalizedKind === 'call') {
     if (legal.call === null) throw new Error('forged or illegal PlayerActed call');
     return { ...base, normalizedKind: 'call', paid: legal.call.pay,
-      betToAfter: hand.currentBetTo, allIn: legal.call.isAllIn,
+      committedToAfter: legal.call.to, betToAfter: hand.currentBetTo, allIn: legal.call.isAllIn,
       fullRaise: false, raiseReopened: false };
   }
 
@@ -323,6 +326,7 @@ function authoritativePlayerAction(
     ...base,
     normalizedKind: hand.currentBetTo === 0 ? 'bet' : 'raise',
     paid: target - seat.committedStreet,
+    committedToAfter: target,
     betToAfter: target,
     allIn,
     fullRaise,
@@ -758,7 +762,7 @@ export function reduceDomainEvent(
           status: event.normalizedKind === 'fold'
             ? 'folded'
             : event.allIn ? 'all-in' : seat.status,
-          committedStreet: seat.committedStreet + event.paid,
+          committedStreet: event.committedToAfter,
           committedHand: seat.committedHand + event.paid,
           lastActedAtBetTo: event.betToAfter,
         };

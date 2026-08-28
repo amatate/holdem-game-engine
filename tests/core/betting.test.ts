@@ -276,6 +276,7 @@ describe('unacted blind rights and a full reopening raise', () => {
       seat: 1,
       normalizedKind: 'raise',
       paid: 5_500,
+      committedToAfter: 7_500,
       betToBefore: 4_000,
       betToAfter: 7_500,
       allIn: true,

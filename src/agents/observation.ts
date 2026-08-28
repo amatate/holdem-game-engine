@@ -172,7 +172,7 @@ function snapshotEventLog(value: unknown, expectedLength: number): EventSnapshot
           seatIndex: requireSeatIndex(event.seat),
           actionKind: kind,
           amount: requireSafeInteger(event.paid),
-          betTo: requireSafeInteger(event.betToAfter),
+          betTo: requireSafeInteger(event.committedToAfter),
           allIn: requireBoolean(event.allIn),
         });
         break;

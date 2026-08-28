@@ -136,6 +136,7 @@ const EVENTS_BY_TYPE = {
     seat: 0,
     normalizedKind: 'call',
     paid: 1,
+    committedToAfter: 2,
     betToBefore: 2,
     betToAfter: 2,
     allIn: false,
@@ -285,6 +286,28 @@ describe('public domain-event whitelist', () => {
       { type: 'playerActed', seatIndex: 0, kind: 'call', paid: 1, betTo: 2, allIn: false },
     ]);
     expect(JSON.stringify(projected)).not.toMatch(/MASTER-SEED|DECK-SENTINEL|TRACE-SENTINEL|authorityRef/);
+  });
+
+  it('projects a short all-in call to the amount the caller actually reached', () => {
+    const shortCall = {
+      ...EVENTS_BY_TYPE.PlayerActed,
+      seat: 3,
+      normalizedKind: 'call',
+      paid: 98,
+      betToBefore: 200,
+      betToAfter: 200,
+      committedToAfter: 100,
+      allIn: true,
+    } as unknown as DomainEvent;
+
+    expect(projectEventsForViewer([shortCall], null)).toEqual([{
+      type: 'playerActed',
+      seatIndex: 3,
+      kind: 'call',
+      paid: 98,
+      betTo: 100,
+      allIn: true,
+    }]);
   });
 
   it('fails closed for malformed own-card batches', () => {

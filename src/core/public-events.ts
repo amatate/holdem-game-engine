@@ -299,7 +299,7 @@ function projectOneEvent(
         seatIndex: requireSeatIndex(event.seat),
         kind,
         paid: requireSafeInteger(event.paid),
-        betTo: requireSafeInteger(event.betToAfter),
+        betTo: requireSafeInteger(event.committedToAfter),
         allIn: requireBoolean(event.allIn),
       };
     }

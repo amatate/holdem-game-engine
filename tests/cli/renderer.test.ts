@@ -65,4 +65,16 @@ describe('Chinese terminal renderer', () => {
       expect(output).toContain(visible);
     }
   });
+
+  it('shows the caller actual total and does not claim a folded seat matched the bet', () => {
+    const output = renderPublicEvents([
+      { type: 'playerActed', seatIndex: 0, kind: 'fold', paid: 0, betTo: 2, allIn: false },
+      { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 98, betTo: 100, allIn: true },
+    ]);
+
+    expect(output).toBe([
+      '座位 0 弃牌。',
+      '座位 3 跟注 98，到 100（全下）。',
+    ].join('\n'));
+  });
 });
