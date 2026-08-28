@@ -26,3 +26,10 @@ export * from './core/versions.js';
 export * from './agents/observation.js';
 export * from './agents/equity.js';
 export * from './agents/types.js';
+export { ParametricHoldemAgent } from './agents/parametric-agent.js';
+export type {
+  EquityProvider,
+  ParametricHoldemAgentOptions,
+} from './agents/parametric-agent.js';
+export { CHARACTERS, createCharacterAgent } from './agents/characters.js';
+export type { CharacterDefinition, CharacterId } from './agents/characters.js';

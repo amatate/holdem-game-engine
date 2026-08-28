@@ -44,6 +44,22 @@ export interface DecisionContext {
   readonly random: RandomSource;
 }
 
+export interface StyleProfile {
+  readonly looseness: number;
+  readonly aggression: number;
+  readonly bluffing: number;
+  readonly stickiness: number;
+  readonly positionAwareness: number;
+  readonly riskAppetite: number;
+  readonly slowPlay: number;
+  readonly variability: number;
+  readonly sizing: Readonly<{
+    readonly preferredPotFraction: 0.5 | 0.75 | 1;
+    readonly variance: number;
+    readonly overbetFrequency: number;
+  }>;
+}
+
 export interface ActionDecision {
   readonly action: ActionIntent;
   readonly privateTrace?: Readonly<{
