@@ -156,6 +156,11 @@ export interface HandCompletedEvent extends HandEventBase {
   readonly finalStacks: readonly { readonly seat: number; readonly stack: number }[];
 }
 
+export interface GameCompletedEvent extends HandEventBase {
+  readonly type: 'GameCompleted';
+  readonly winnerSeat: number;
+}
+
 export type DomainEvent =
   | GameStartedEvent
   | HandStartedEvent
@@ -175,4 +180,5 @@ export type DomainEvent =
   | HandEvaluatedEvent
   | PotAwardedEvent
   | PlayerEliminatedEvent
-  | HandCompletedEvent;
+  | HandCompletedEvent
+  | GameCompletedEvent;

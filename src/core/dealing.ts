@@ -3,6 +3,7 @@ import { buildPotLayers } from './pots.js';
 import { settleFoldWin, settleShowdown } from './settlement.js';
 import {
   reduceDomainEvent,
+  resolveBlindLevelForHand,
   type HandState,
   type SeatState,
   type Street,
@@ -90,7 +91,11 @@ export function advanceAutomaticPhases(state: TournamentState): TransitionResult
     }
     emit({ ...eventBase(), type: 'CommunityCardsDealt', street, cards });
 
-    const bigBlind = current.config.blindLevels[current.logicalBlindLevel]!.bigBlind;
+    const bigBlind = resolveBlindLevelForHand(
+      current.config,
+      current.initialChipTotal,
+      current.handNumber,
+    ).blindLevel.bigBlind;
     emit({
       ...eventBase(),
       type: 'BettingRoundStarted',

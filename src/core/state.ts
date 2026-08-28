@@ -3,6 +3,7 @@ import {
   cloneTournamentConfig,
   validateAndCloneDeck,
   validateTournamentInputs,
+  type BlindLevel,
   type TournamentConfig,
   type TournamentParticipantInput,
 } from './config.js';
@@ -278,6 +279,19 @@ export function reduceDomainEvent(
       if (state.seats.some((seat) => seat.stack === 0 && seat.status !== 'eliminated')) {
         throw new Error('HandStarted requires settlement-owned elimination to be finalized');
       }
+      const expectedHandNumber = state.handNumber + 1;
+      const expectedBlind = resolveBlindLevelForHand(
+        state.config,
+        state.initialChipTotal,
+        expectedHandNumber,
+      );
+      if (event.handNumber !== expectedHandNumber
+        || event.handId !== `${state.runSeed}/hand/${expectedHandNumber}`
+        || event.logicalBlindLevel !== expectedBlind.logicalLevel
+        || event.smallBlind !== expectedBlind.blindLevel.smallBlind
+        || event.bigBlind !== expectedBlind.blindLevel.bigBlind) {
+        throw new Error('HandStarted violates authoritative hand and blind chronology');
+      }
       const resetSeats = state.seats.map((seat): SeatState => ({
         ...seat,
         status: seat.stack === 0 ? seat.status : 'active',
@@ -377,6 +391,36 @@ export function reduceDomainEvent(
     case 'HoleCardsDealt': {
       if (state.activeHand === null || state.activeHand.handId !== event.handId) {
         throw new Error('HoleCardsDealt requires the matching active hand');
+      }
+      const eligibleSeats = new Set(state.seats
+        .filter((seat) => seat.status !== 'eliminated' && seat.stack + seat.committedHand > 0)
+        .map((seat) => seat.seatIndex));
+      const firstDealSeat = firstIncludedAfter(
+        state.activeHand.positions.buttonPosition,
+        eligibleSeats,
+        state.config.maxSeats,
+      );
+      const expectedSeatOrder = firstDealSeat === null
+        ? []
+        : clockwiseSeatsFrom(firstDealSeat, eligibleSeats, state.config.maxSeats);
+      const expectedDeals = ([1, 2] as const).flatMap((round) => expectedSeatOrder.map((seat) => ({
+        seat,
+        round,
+      })));
+      if (state.activeHand.phase !== 'deal-hole'
+        || state.activeHand.dealCursor !== 0
+        || state.activeHand.deck.length !== 52
+        || event.orderedDeals.length !== expectedDeals.length
+        || event.orderedDeals.some((deal, index) => {
+          const expected = expectedDeals[index];
+          const deckCard = state.activeHand!.deck[index];
+          return expected === undefined
+            || deckCard === undefined
+            || deal.seat !== expected.seat
+            || deal.round !== expected.round
+            || !sameCard(deal.card, deckCard);
+        })) {
+        throw new Error('HoleCardsDealt must match the authoritative survivor order and deck prefix');
       }
       const cardsBySeat = new Map<number, Card[]>();
       for (const deal of event.orderedDeals) {
@@ -923,6 +967,29 @@ export function reduceDomainEvent(
       };
       break;
     }
+    case 'GameCompleted': {
+      const survivorSeats = state.seats
+        .filter((seat) => seat.stack > 0 && seat.status !== 'eliminated')
+        .map((seat) => seat.seatIndex);
+      if (state.activeHand === null
+        || state.activeHand.phase !== 'hand-complete'
+        || event.handId !== state.activeHand.handId
+        || survivorSeats.length !== 1
+        || event.winnerSeat !== survivorSeats[0]
+        || state.eventLog.some((logged) => logged.type === 'GameCompleted')) {
+        throw new Error('GameCompleted requires exactly one finalized survivor');
+      }
+      next = {
+        ...state,
+        activeHand: {
+          ...state.activeHand,
+          phase: 'game-complete',
+          currentActorSeat: null,
+          pendingActors: [],
+        },
+      };
+      break;
+    }
     default:
       return assertNever(event);
   }
@@ -978,11 +1045,11 @@ export function startHand(
   }
 
   const handNumber = state.handNumber + 1;
-  const logicalBlindLevel = Math.min(
-    Math.floor((handNumber - 1) / state.config.handsPerLevel),
-    state.config.blindLevels.length - 1,
+  const { logicalLevel: logicalBlindLevel, blindLevel } = resolveBlindLevelForHand(
+    state.config,
+    state.initialChipTotal,
+    handNumber,
   );
-  const blindLevel = state.config.blindLevels[logicalBlindLevel]!;
   const handId = `${state.runSeed}/hand/${handNumber}`;
   let current = state;
   const events: DomainEvent[] = [];
@@ -1075,4 +1142,70 @@ export function startHand(
   });
 
   return { state: current, events };
+}
+
+function saturatingDouble(value: number, times: number, cap: number): number {
+  let current = value;
+  for (let index = 0; index < times; index += 1) {
+    if (current >= cap || current > Math.floor(cap / 2)) {
+      return cap;
+    }
+    current *= 2;
+  }
+  return current;
+}
+
+export function resolveBlindLevelForHand(
+  config: TournamentConfig,
+  initialChipTotal: number,
+  handNumber: number,
+): { readonly logicalLevel: number; readonly blindLevel: BlindLevel } {
+  if (!Number.isSafeInteger(handNumber) || handNumber <= 0) {
+    throw new RangeError('handNumber must be a positive safe integer');
+  }
+  const logicalLevel = Math.floor((handNumber - 1) / config.handsPerLevel);
+  if (logicalLevel < config.blindLevels.length) {
+    return { logicalLevel, blindLevel: config.blindLevels[logicalLevel]! };
+  }
+  const last = config.blindLevels.at(-1)!;
+  const extra = logicalLevel - (config.blindLevels.length - 1);
+  return {
+    logicalLevel,
+    blindLevel: {
+      smallBlind: saturatingDouble(last.smallBlind, extra, initialChipTotal),
+      bigBlind: saturatingDouble(last.bigBlind, extra, initialChipTotal),
+    },
+  };
+}
+
+export function startNextHand(
+  state: TournamentState,
+  options: Readonly<StartHandOptions> = {},
+): TransitionResult {
+  if (state.activeHand?.phase === 'game-complete') {
+    return { state, events: [] };
+  }
+  if (state.activeHand === null || state.activeHand.phase !== 'hand-complete') {
+    throw new Error('the next hand can start only after HandCompleted');
+  }
+  const survivors = state.seats.filter(
+    (seat) => seat.stack > 0 && seat.status !== 'eliminated',
+  );
+  if (survivors.length === 0) {
+    throw new Error('a tournament cannot complete without a survivor');
+  }
+  if (survivors.length > 1) {
+    return startHand(state, options);
+  }
+  const event: DomainEvent = {
+    type: 'GameCompleted',
+    schemaVersion: EVENT_SCHEMA_VERSION,
+    eventIndex: state.version,
+    handId: state.activeHand.handId,
+    winnerSeat: survivors[0]!.seatIndex,
+  };
+  return {
+    state: reduceDomainEvent(state, event),
+    events: [event],
+  };
 }
