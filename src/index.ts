@@ -14,6 +14,7 @@ export type {
 } from './core/legal-actions.js';
 export * from './core/positions.js';
 export * from './core/pots.js';
+export * from './core/public-events.js';
 export * from './core/random.js';
 export * from './core/replay.js';
 export { applyIntent } from './core/reducer.js';
@@ -22,3 +23,5 @@ export * from './core/state.js';
 export * from './core/simulation.js';
 export * from './core/types.js';
 export * from './core/versions.js';
+export * from './agents/observation.js';
+export * from './agents/types.js';
