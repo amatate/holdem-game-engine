@@ -33,3 +33,9 @@ export type {
 } from './agents/parametric-agent.js';
 export { CHARACTERS, createCharacterAgent } from './agents/characters.js';
 export type { CharacterDefinition, CharacterId } from './agents/characters.js';
+export * from './game/participant.js';
+export * from './game/tournament-controller.js';
+export * from './cli/renderer.js';
+export * from './cli/prompts.js';
+export { DEFAULT_TOURNAMENT_CONFIG, main } from './cli/index.js';
+export type { CliPrompt, CliRuntime } from './cli/index.js';
