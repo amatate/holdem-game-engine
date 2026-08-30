@@ -38,5 +38,7 @@ export { createCharacterParticipant, selectNpcRoster } from './game/roster.js';
 export * from './game/tournament-controller.js';
 export * from './cli/renderer.js';
 export * from './cli/prompts.js';
+export { parseCliOptions, promptForPlayerCount } from './cli/options.js';
+export type { ParsedCliOptions } from './cli/options.js';
 export { DEFAULT_TOURNAMENT_CONFIG, main } from './cli/index.js';
 export type { CliPrompt, CliRuntime } from './cli/index.js';
