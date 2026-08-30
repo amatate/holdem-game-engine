@@ -80,8 +80,7 @@ describe('odd-chip order', () => {
     const result = settleShowdown(tiedState([33, 34, 34], [0], 0));
     const awards = result.events.filter((event) => event.type === 'PotAwarded');
     expect(awards).toMatchObject([
-      { potId: 'pot-0', winners: [1, 2], amounts: [50, 49], oddChipRecipients: [1] },
-      { potId: 'pot-1', winners: [1, 2], amounts: [1, 1], oddChipRecipients: [] },
+      { potId: 'pot-0', winners: [1, 2], amounts: [51, 50], oddChipRecipients: [1] },
     ]);
     expect(result.state.seats.slice(1).map((seat) => seat.stack)).toEqual([117, 116]);
   });
@@ -95,10 +94,12 @@ describe('odd-chip order', () => {
     });
   });
 
-  it('restarts odd-chip ordering for main and side pots that both tie', () => {
-    const result = settleShowdown(tiedState([1, 2, 2, 2, 1], [0, 2, 4], 0));
+  it('restarts odd-chip ordering for genuine main and side pots that both tie', () => {
+    const result = settleShowdown(tiedState([1, 2, 2, 2, 1], [0, 2], 0));
     expect(result.events.filter((event) => event.type === 'PotAwarded')).toMatchObject([
-      { potId: 'pot-0', winners: [1, 3], amounts: [3, 2], oddChipRecipients: [1] },
+      {
+        potId: 'pot-0', winners: [1, 3, 4], amounts: [2, 2, 1], oddChipRecipients: [1, 3],
+      },
       { potId: 'pot-1', winners: [1, 3], amounts: [2, 1], oddChipRecipients: [1] },
     ]);
   });

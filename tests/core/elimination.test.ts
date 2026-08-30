@@ -152,7 +152,7 @@ describe('settlement timing', () => {
     })).toThrow(/refund|sole|contributor|layer/i);
   });
 
-  it('rejects awarding a constructed fold pot while contribution layers remain', () => {
+  it('constructs one fold pot when every contribution layer has the same winner', () => {
     const base = createTournament(
       config(3),
       Array.from({ length: 3 }, (_, seatIndex) => ({ playerId: `p${seatIndex}`, seatIndex })),
@@ -176,12 +176,13 @@ describe('settlement timing', () => {
       },
     };
     const valid = settleFoldWin(input);
-    const firstPot = valid.events.find((event) => event.type === 'PotConstructed')!;
-    const firstAward = valid.events.find((event) => event.type === 'PotAwarded')!;
-    const prefix = reduceDomainEvent(input, firstPot);
-    expect(prefix.seats.map((seat) => seat.committedHand)).toEqual([50, 50, 0]);
-    expect(() => reduceDomainEvent(prefix, { ...firstAward, eventIndex: prefix.version }))
-      .toThrow(/remaining|layer|chronology|commit/i);
+    expect(valid.events.filter((event) => event.type === 'PotConstructed')).toMatchObject([
+      { potId: 'pot-0', amount: 250, cap: 100, eligibleSeats: [0] },
+    ]);
+    expect(valid.events.filter((event) => event.type === 'PotAwarded')).toMatchObject([
+      { potId: 'pot-0', winners: [0], amounts: [250] },
+    ]);
+    expect(valid.state.seats.map((seat) => seat.committedHand)).toEqual([0, 0, 0]);
   });
 
   it('does not restart pot caps after an earlier pot id was consumed', () => {

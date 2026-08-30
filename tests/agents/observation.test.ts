@@ -307,7 +307,7 @@ describe('current-player observation projection', () => {
     expect(shortObservation.legalActions.call).toEqual({ pay: 1, to: 3, isAllIn: false });
   });
 
-  it('derives actor-contestable total and only currently formed non-main side-pot layers', () => {
+  it('derives actor-contestable total without inventing side pots from folded contribution caps', () => {
     const normal = projectObservation(createStartedState(), 0);
     expect(normal.potTotal).toBe(3);
     expect(normal.sidePots).toEqual([]);
@@ -317,9 +317,7 @@ describe('current-player observation projection', () => {
     const layered = projectObservation(layeredAuthority, 3);
     expect(layered.legalActions.call).toEqual({ pay: 70, to: 70, isAllIn: true });
     expect(layered.potTotal).toBe(162);
-    expect(layered.sidePots).toEqual([
-      { amount: 84, eligibleSeatIndexes: [0, 3] },
-    ]);
+    expect(layered.sidePots).toEqual([]);
     expect(layeredAuthority).toEqual(layeredBefore);
     expect(layeredAuthority.seats.reduce(
       (sum, seat) => sum + seat.stack + seat.committedHand,

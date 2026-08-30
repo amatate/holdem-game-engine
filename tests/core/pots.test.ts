@@ -14,6 +14,25 @@ function contributions(
 }
 
 describe('buildPotLayers', () => {
+  it('merges contribution caps when the same live seats can contest them', () => {
+    expect(buildPotLayers(contributions([0, 2, 8, 8], [1]))).toEqual({
+      pots: [
+        { amount: 18, cap: 8, eligibleSeats: [2, 3] },
+      ],
+      refunds: [],
+    });
+  });
+
+  it('keeps genuine main and side pots separate when eligibility changes', () => {
+    expect(buildPotLayers(contributions([2, 8, 8]))).toEqual({
+      pots: [
+        { amount: 6, cap: 2, eligibleSeats: [0, 1, 2] },
+        { amount: 12, cap: 8, eligibleSeats: [1, 2] },
+      ],
+      refunds: [],
+    });
+  });
+
   it('builds deterministic main and side pots from pure contribution caps', () => {
     const input = contributions([25, 50, 100, 100]);
     const snapshot = structuredClone(input);

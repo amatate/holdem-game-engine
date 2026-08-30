@@ -77,7 +77,7 @@ export function renderTable(observation: Readonly<PlayerObservationV1>): string 
       : ` | 亮牌 ${cardsText(seat.revealedHoleCards)}`;
     return `${marker} 座位 ${seat.seatIndex} ${seat.playerId}${positionText(seat.seatIndex, observation)}`
       + ` | 筹码 ${seat.stack} | ${STATUS_LABELS[seat.status]}`
-      + ` | 本街投入 ${seat.committedStreet} | 本手投入 ${seat.committedHand}${reveal}`;
+      + ` | 本轮下注 ${seat.committedStreet} | 本手累计投入 ${seat.committedHand}${reveal}`;
   });
 
   return [

@@ -38,13 +38,26 @@ export function buildPotLayers(
     if (contributors.length === 1) {
       refunds.push({ seatIndex: contributors[0]!.seatIndex, amount });
     } else {
-      pots.push({
+      const layer: PotLayer = {
         amount,
         cap,
         eligibleSeats: contributors
           .filter((contribution) => !contribution.folded)
           .map((contribution) => contribution.seatIndex),
-      });
+      };
+      const equivalentIndex = pots.findIndex((pot) => pot.eligibleSeats.length
+        === layer.eligibleSeats.length
+        && pot.eligibleSeats.every((seatIndex, index) => seatIndex === layer.eligibleSeats[index]));
+      if (equivalentIndex === -1) {
+        pots.push(layer);
+      } else {
+        const equivalent = pots[equivalentIndex]!;
+        pots[equivalentIndex] = {
+          amount: equivalent.amount + layer.amount,
+          cap: layer.cap,
+          eligibleSeats: equivalent.eligibleSeats,
+        };
+      }
     }
     previousCap = cap;
   }

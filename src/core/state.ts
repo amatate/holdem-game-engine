@@ -1022,25 +1022,18 @@ export function reduceDomainEvent(
       }
       const pendingPots = state.activeHand.pendingPots ?? [];
       const constructedPotCount = state.activeHand.constructedPotCount ?? 0;
-      const positiveCommitments = state.seats
-        .map((seat) => seat.committedHand)
-        .filter((amount) => amount > 0);
-      const layerWidth = Math.min(...positiveCommitments);
-      const contributors = state.seats.filter((seat) => seat.committedHand > 0);
+      const remainingLayers = contributionLayers(state);
+      const expectedLayer = remainingLayers.pots[0];
+      const layerCap = expectedLayer?.cap ?? 0;
       const previousCap = state.activeHand.lastConstructedCap ?? 0;
-      const expectedEligible = contributors
-        .filter((seat) => seat.status !== 'folded' && seat.status !== 'eliminated')
-        .map((seat) => seat.seatIndex);
-      const expectedAmount = layerWidth * contributors.length;
       if (!Number.isSafeInteger(event.amount)
         || event.amount <= 0
-        || contributors.length <= 1
-        || contributionLayers(state).refunds.length !== 0
+        || expectedLayer === undefined
+        || remainingLayers.refunds.length !== 0
         || (state.activeHand.evaluatedHands?.length ?? 0) !== 0
-        || !Number.isFinite(layerWidth)
-        || event.amount !== expectedAmount
-        || event.cap !== previousCap + layerWidth
-        || JSON.stringify(event.eligibleSeats) !== JSON.stringify(expectedEligible)
+        || event.amount !== expectedLayer.amount
+        || event.cap !== previousCap + layerCap
+        || JSON.stringify(event.eligibleSeats) !== JSON.stringify(expectedLayer.eligibleSeats)
         || event.potId !== `pot-${constructedPotCount}`
         || pendingPots.some((pot) => pot.potId === event.potId)) {
         throw new Error('PotConstructed must match the next authoritative contribution layer');
@@ -1055,8 +1048,8 @@ export function reduceDomainEvent(
         ...state,
         seats: state.seats.map((seat) => seat.committedHand === 0 ? seat : ({
           ...seat,
-          committedHand: seat.committedHand - layerWidth,
-          committedStreet: Math.max(0, seat.committedStreet - layerWidth),
+          committedHand: Math.max(0, seat.committedHand - layerCap),
+          committedStreet: Math.max(0, seat.committedStreet - layerCap),
         })),
         activeHand: {
           ...state.activeHand,

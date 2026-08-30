@@ -49,6 +49,14 @@ describe('Chinese terminal renderer', () => {
     }
   });
 
+  it('uses player-facing names for current-round and whole-hand contributions', () => {
+    const output = renderTable(observation);
+
+    expect(output).toContain('本轮下注 4 | 本手累计投入 8');
+    expect(output).not.toContain('本街投入');
+    expect(output).not.toContain('本手投入');
+  });
+
   it('renders public actions, streets, legal reveals, awards, eliminations, and champion', () => {
     const events: PublicGameEvent[] = [
       { type: 'handStarted', handNumber: 3, smallBlind: 2, bigBlind: 4 },

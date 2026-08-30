@@ -1,7 +1,13 @@
 {
   "name": "holdem-game-engine",
   "version": "0.1.0",
+  "description": "A deterministic TypeScript No-Limit Texas Hold'em engine with a playable terminal tournament.",
   "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amatate/holdem-game-engine.git"
+  },
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
