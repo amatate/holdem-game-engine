@@ -62,7 +62,7 @@ describe('terminal line pacing', () => {
   it('routes the seed, public event batches, and diagnostics through one pacer', async () => {
     const operations: string[] = [];
 
-    await main(['--seed', 'fixed-seed'], {
+    await main(['--players', '4', '--seed', 'fixed-seed'], {
       write: (message) => { operations.push(`write:${message}`); },
       sleep: async (milliseconds) => { operations.push(`wait:${milliseconds}`); },
       randomUUID: () => 'unused-random-seed',
@@ -95,6 +95,8 @@ describe('terminal line pacing', () => {
 
     expect(operations).toEqual([
       'write:本局种子：fixed-seed',
+      'wait:1000',
+      'write:本桌对手：座位 1 林岚“猎手”｜座位 2 阿凯“疯狗”｜座位 3 莫叔“跟注站”',
       'wait:1000',
       'write:第 1 手开始，盲注 1/2。',
       'wait:1000',

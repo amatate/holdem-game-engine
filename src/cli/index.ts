@@ -3,16 +3,17 @@ import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
-import { createCharacterAgent } from '../agents/characters.js';
 import type { DecisionContext } from '../agents/types.js';
 import type { TournamentConfig } from '../core/config.js';
 import type { TournamentState } from '../core/state.js';
-import { AgentParticipant, type Participant } from '../game/participant.js';
+import { createCharacterParticipant, selectNpcRoster } from '../game/roster.js';
+import type { Participant } from '../game/participant.js';
 import {
   runTournament,
   type RunTournamentOptions,
 } from '../game/tournament-controller.js';
 import { promptForLegalAction, type PromptIO } from './prompts.js';
+import { parseCliOptions, promptForPlayerCount } from './options.js';
 import { createLinePacer } from './pacing.js';
 import { renderPublicEvents, renderTable } from './renderer.js';
 
@@ -62,22 +63,6 @@ function defaultRuntime(): CliRuntime {
   };
 }
 
-function parseSeed(argv: readonly string[], uuid: () => string): string {
-  let seed: string | undefined;
-  for (let index = 0; index < argv.length; index += 1) {
-    const argument = argv[index];
-    if (argument !== '--seed') throw new Error(`未知参数：${argument ?? ''}`);
-    if (seed !== undefined) throw new Error('--seed 只能使用一次');
-    const value = argv[index + 1];
-    if (value === undefined || value.length === 0 || value.startsWith('--')) {
-      throw new Error('--seed 需要一个非空值');
-    }
-    seed = value;
-    index += 1;
-  }
-  return seed ?? uuid();
-}
-
 class HumanParticipant implements Participant {
   public readonly playerId = '你';
   readonly #io: Readonly<PromptIO>;
@@ -96,21 +81,29 @@ export async function main(
   argv: readonly string[] = process.argv.slice(2),
   runtime: Readonly<CliRuntime> = defaultRuntime(),
 ): Promise<TournamentState> {
-  const seed = parseSeed(argv, runtime.randomUUID);
+  const options = parseCliOptions(argv, runtime.randomUUID);
   const paceLine = createLinePacer(runtime.write, runtime.sleep, 1_000);
-  await paceLine(`本局种子：${seed}`);
   const prompt = await runtime.createPrompt();
   try {
+    const playerCount = options.playerCount ?? await promptForPlayerCount(prompt);
+    const npcIds = selectNpcRoster(playerCount);
     const participants: Participant[] = [
       new HumanParticipant(prompt),
-      new AgentParticipant('林岚“猎手”', createCharacterAgent('hunter')),
-      new AgentParticipant('阿凯“疯狗”', createCharacterAgent('maniac')),
-      new AgentParticipant('莫叔“跟注站”', createCharacterAgent('calling-station')),
+      ...npcIds.map((characterId) => createCharacterParticipant(characterId)),
     ];
+    const config: TournamentConfig = Object.freeze({
+      ...DEFAULT_TOURNAMENT_CONFIG,
+      maxSeats: playerCount,
+    });
+
+    await paceLine(`本局种子：${options.seed}`);
+    await paceLine(`本桌对手：${participants.slice(1)
+      .map((participant, index) => `座位 ${index + 1} ${participant.playerId}`)
+      .join('｜')}`);
     return await runtime.runTournament({
-      config: DEFAULT_TOURNAMENT_CONFIG,
+      config,
       participants,
-      runSeed: seed,
+      runSeed: options.seed,
       invalidAgentActionMode: 'fallback',
       publicViewerSeatIndex: 0,
       onPublicEvents: async (events) => {
