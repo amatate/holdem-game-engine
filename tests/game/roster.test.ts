@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CHARACTER_IDS,
@@ -17,6 +17,8 @@ const EXPECTED_ROSTERS = new Map<number, readonly CharacterId[]>([
   [5, ['rock', 'hunter', 'small-ball', 'value-bettor']],
   [6, ['rock', 'hunter', 'maniac', 'trapper', 'value-bettor']],
 ]);
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('selectNpcRoster', () => {
   it.each([...EXPECTED_ROSTERS])(
@@ -61,6 +63,11 @@ describe('selectNpcRoster', () => {
     });
 
     expect(selectNpcRoster(6)).toEqual(EXPECTED_ROSTERS.get(6));
+  });
+
+  it('restores ambient randomness and time after the isolation check', () => {
+    expect(() => Math.random()).not.toThrow();
+    expect(() => Date.now()).not.toThrow();
   });
 });
 
