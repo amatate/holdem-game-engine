@@ -4,7 +4,17 @@ import {
 } from './parametric-agent.js';
 import type { StyleProfile } from './types.js';
 
-export type CharacterId = 'rock' | 'hunter' | 'maniac' | 'calling-station';
+export const CHARACTER_IDS = Object.freeze([
+  'rock',
+  'hunter',
+  'maniac',
+  'calling-station',
+  'small-ball',
+  'trapper',
+  'value-bettor',
+] as const);
+
+export type CharacterId = (typeof CHARACTER_IDS)[number];
 
 export interface CharacterDefinition {
   readonly characterId: CharacterId;
@@ -79,11 +89,44 @@ export const CHARACTERS: Readonly<Record<CharacterId, CharacterDefinition>> = Ob
     variability: 0.10,
     sizing: { preferredPotFraction: 0.5, variance: 0.08, overbetFrequency: 0 },
   }),
+  'small-ball': definition('small-ball', '程墨', '小刀', {
+    looseness: 0.48,
+    aggression: 0.62,
+    bluffing: 0.38,
+    stickiness: 0.40,
+    positionAwareness: 0.82,
+    riskAppetite: 0.32,
+    slowPlay: 0.16,
+    variability: 0.14,
+    sizing: { preferredPotFraction: 0.5, variance: 0.12, overbetFrequency: 0.03 },
+  }),
+  trapper: definition('trapper', '苏蔓', '伏蛇', {
+    looseness: 0.30,
+    aggression: 0.42,
+    bluffing: 0.06,
+    stickiness: 0.58,
+    positionAwareness: 0.50,
+    riskAppetite: 0.36,
+    slowPlay: 0.86,
+    variability: 0.05,
+    sizing: { preferredPotFraction: 0.5, variance: 0.04, overbetFrequency: 0.02 },
+  }),
+  'value-bettor': definition('value-bettor', '韩烈', '重锤', {
+    looseness: 0.26,
+    aggression: 0.80,
+    bluffing: 0.07,
+    stickiness: 0.46,
+    positionAwareness: 0.38,
+    riskAppetite: 0.62,
+    slowPlay: 0.10,
+    variability: 0.08,
+    sizing: { preferredPotFraction: 1, variance: 0.08, overbetFrequency: 0.12 },
+  }),
 });
 
 function isCharacterId(value: unknown): value is CharacterId {
-  return value === 'rock' || value === 'hunter' || value === 'maniac'
-    || value === 'calling-station';
+  return typeof value === 'string'
+    && CHARACTER_IDS.includes(value as CharacterId);
 }
 
 export function createCharacterAgent(

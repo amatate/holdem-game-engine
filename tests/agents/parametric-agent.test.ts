@@ -12,6 +12,7 @@ import {
   type EquityProvider,
 } from '../../src/agents/parametric-agent.js';
 import {
+  CHARACTER_IDS,
   CHARACTERS,
   createCharacterAgent,
   type CharacterId,
@@ -66,7 +67,41 @@ const EXPECTED = {
       sizing: { preferredPotFraction: 0.5, variance: 0.08, overbetFrequency: 0 },
     },
   },
+  'small-ball': {
+    characterId: 'small-ball', displayName: '程墨', nickname: '小刀',
+    profile: {
+      looseness: 0.48, aggression: 0.62, bluffing: 0.38, stickiness: 0.40,
+      positionAwareness: 0.82, riskAppetite: 0.32, slowPlay: 0.16, variability: 0.14,
+      sizing: { preferredPotFraction: 0.5, variance: 0.12, overbetFrequency: 0.03 },
+    },
+  },
+  trapper: {
+    characterId: 'trapper', displayName: '苏蔓', nickname: '伏蛇',
+    profile: {
+      looseness: 0.30, aggression: 0.42, bluffing: 0.06, stickiness: 0.58,
+      positionAwareness: 0.50, riskAppetite: 0.36, slowPlay: 0.86, variability: 0.05,
+      sizing: { preferredPotFraction: 0.5, variance: 0.04, overbetFrequency: 0.02 },
+    },
+  },
+  'value-bettor': {
+    characterId: 'value-bettor', displayName: '韩烈', nickname: '重锤',
+    profile: {
+      looseness: 0.26, aggression: 0.80, bluffing: 0.07, stickiness: 0.46,
+      positionAwareness: 0.38, riskAppetite: 0.62, slowPlay: 0.10, variability: 0.08,
+      sizing: { preferredPotFraction: 1, variance: 0.08, overbetFrequency: 0.12 },
+    },
+  },
 } as const satisfies Readonly<Record<CharacterId, unknown>>;
+
+const EXPECTED_CHARACTER_IDS = [
+  'rock',
+  'hunter',
+  'maniac',
+  'calling-station',
+  'small-ball',
+  'trapper',
+  'value-bettor',
+] as const;
 
 const BASE_PROFILE: StyleProfile = EXPECTED.hunter.profile;
 
@@ -226,8 +261,11 @@ function expectActionLegal(action: ActionIntent, legal: LegalActionSet): void {
 }
 
 describe('parametric holdem character API', () => {
-  it('publishes the four exact character definitions', () => {
+  it('publishes the seven exact character definitions in stable catalog order', () => {
     expect(CHARACTERS).toEqual(EXPECTED);
+    expect(CHARACTER_IDS).toEqual(EXPECTED_CHARACTER_IDS);
+    expect(Object.isFrozen(CHARACTER_IDS)).toBe(true);
+    expect(Object.keys(CHARACTERS)).toEqual(EXPECTED_CHARACTER_IDS);
   });
 
   it('deep-freezes definitions, profiles, and sizing objects', () => {
@@ -252,7 +290,7 @@ describe('parametric holdem character API', () => {
   });
 
   it('rejects invalid runtime character IDs', () => {
-    expect(() => createCharacterAgent('ghost' as CharacterId)).toThrow();
+    expect(() => createCharacterAgent('ghost' as CharacterId)).toThrow('Invalid character ID');
   });
 
   it('snapshots a caller profile instead of aliasing later mutation', () => {
@@ -276,6 +314,7 @@ describe('parametric holdem character API', () => {
 
   it('root-exports only the public policy and character API, not formula helpers', () => {
     expect(publicApi.ParametricHoldemAgent).toBe(ParametricHoldemAgent);
+    expect(publicApi.CHARACTER_IDS).toBe(CHARACTER_IDS);
     expect(publicApi.CHARACTERS).toBe(CHARACTERS);
     expect(publicApi.createCharacterAgent).toBe(createCharacterAgent);
     expect(publicApi).not.toHaveProperty('computePolicyScores');

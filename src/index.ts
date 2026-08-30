@@ -31,7 +31,7 @@ export type {
   EquityProvider,
   ParametricHoldemAgentOptions,
 } from './agents/parametric-agent.js';
-export { CHARACTERS, createCharacterAgent } from './agents/characters.js';
+export { CHARACTER_IDS, CHARACTERS, createCharacterAgent } from './agents/characters.js';
 export type { CharacterDefinition, CharacterId } from './agents/characters.js';
 export * from './game/participant.js';
 export * from './game/tournament-controller.js';
