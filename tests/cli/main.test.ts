@@ -43,6 +43,8 @@ function observationForSixSeats(
       revealedHoleCards: null,
     })),
     actionHistory: [
+      { type: 'blindPosted', seatIndex: 5, kind: 'small', amount: 1, allIn: false },
+      { type: 'blindPosted', seatIndex: 0, kind: 'big', amount: 2, allIn: false },
       { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 2, betTo: 2, allIn: false },
       { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 2, betTo: 2, allIn: false },
       { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 2, betTo: 2, allIn: false },
@@ -132,6 +134,8 @@ describe('terminal table composition', () => {
           revealedHoleCards: null,
         })));
         expect(observation.actionHistory).toEqual([
+          { type: 'blindPosted', seatIndex: 5, kind: 'small', amount: 1, allIn: false },
+          { type: 'blindPosted', seatIndex: 0, kind: 'big', amount: 2, allIn: false },
           { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 2, betTo: 2, allIn: false },
           { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 2, betTo: 2, allIn: false },
           { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 2, betTo: 2, allIn: false },
