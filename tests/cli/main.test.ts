@@ -21,7 +21,7 @@ function observationForSixSeats(
     schemaVersion: 1,
     handId: 'six-seat-preflop',
     handNumber: 1,
-    decisionIndex: 0,
+    decisionIndex: 5,
     actorSeatIndex: 0,
     street: 'preflop',
     holeCards: [parseCard('As'), parseCard('Kd')],
@@ -31,19 +31,31 @@ function observationForSixSeats(
     bigBlindSeat: 0,
     smallBlind: 1,
     bigBlind: 2,
-    potTotal: 3,
-    sidePots: [{ amount: 3, eligibleSeatIndexes: [0, 1, 2, 3, 4, 5] }],
+    potTotal: 12,
+    sidePots: [],
     seats: options.participants.map((participant, seatIndex) => ({
       playerId: participant.playerId,
       seatIndex,
-      stack: seatIndex === 0 ? 98 : seatIndex === 5 ? 99 : 100,
+      stack: 98,
       status: 'active' as const,
-      committedStreet: seatIndex === 0 ? 2 : seatIndex === 5 ? 1 : 0,
-      committedHand: seatIndex === 0 ? 2 : seatIndex === 5 ? 1 : 0,
+      committedStreet: 2,
+      committedHand: 2,
       revealedHoleCards: null,
     })),
-    actionHistory: [],
-    legalActions: { fold: false, check: true, call: null, raiseTo: null, allIn: null },
+    actionHistory: [
+      { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 2, betTo: 2, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 2, betTo: 2, allIn: false },
+      { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 2, betTo: 2, allIn: false },
+      { type: 'playerActed', seatIndex: 4, kind: 'call', paid: 2, betTo: 2, allIn: false },
+      { type: 'playerActed', seatIndex: 5, kind: 'call', paid: 1, betTo: 2, allIn: false },
+    ],
+    legalActions: {
+      fold: false,
+      check: true,
+      call: null,
+      raiseTo: { min: 4, max: 100 },
+      allIn: { to: 100, mode: 'fullRaise' },
+    },
   };
 }
 
@@ -106,8 +118,35 @@ describe('terminal table composition', () => {
         lifecycleOperations.push('controller:start');
         const human = options.participants[0];
         if (human === undefined) throw new Error('human participant missing');
+        const observation = observationForSixSeats(options);
+        expect(observation.decisionIndex).toBe(5);
+        expect(observation.potTotal).toBe(12);
+        expect(observation.sidePots).toEqual([]);
+        expect(observation.seats).toEqual(options.participants.map((participant, seatIndex) => ({
+          playerId: participant.playerId,
+          seatIndex,
+          stack: 98,
+          status: 'active',
+          committedStreet: 2,
+          committedHand: 2,
+          revealedHoleCards: null,
+        })));
+        expect(observation.actionHistory).toEqual([
+          { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 2, betTo: 2, allIn: false },
+          { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 2, betTo: 2, allIn: false },
+          { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 2, betTo: 2, allIn: false },
+          { type: 'playerActed', seatIndex: 4, kind: 'call', paid: 2, betTo: 2, allIn: false },
+          { type: 'playerActed', seatIndex: 5, kind: 'call', paid: 1, betTo: 2, allIn: false },
+        ]);
+        expect(observation.legalActions).toEqual({
+          fold: false,
+          check: true,
+          call: null,
+          raiseTo: { min: 4, max: 100 },
+          allIn: { to: 100, mode: 'fullRaise' },
+        });
         await expect(human.decide({
-          observation: observationForSixSeats(options),
+          observation,
           random: createSeededRandom('six-seat-human'),
         })).resolves.toEqual({ action: { type: 'check' } });
         return terminalState();
