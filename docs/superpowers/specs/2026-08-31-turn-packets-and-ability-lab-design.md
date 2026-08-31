@@ -2,7 +2,7 @@
 
 日期：2026-08-31
 
-状态：待用户审阅
+状态：已批准（2026-08-31）
 
 ## 1. 目标
 
@@ -515,7 +515,7 @@ heroContestableTotal = callPay + sum(min(seat.committedHand, contestCap))
 
 ### 6.1 共同前置条件
 
-能力解析器在读取随机源或生成事件前依次验证：
+解析器先以不反射、不序列化原始输入的固定方式确认命令对象、判别字段和必需字段具有可读取的基本形状；失败固定返回 `malformed-command`。对结构有效的能力命令，在读取随机源或生成事件前依次验证：
 
 1. 模式为 `ability-lab`。
 2. 当前存在下注街和当前行动者。
@@ -525,6 +525,8 @@ heroContestableTotal = callPay + sum(min(seat.committedHand, contestCap))
 6. 对应能力仍有一次次数。
 7. 本决策尚未成功使用其他能力。
 8. 能力专属参数合法。
+
+该顺序同时定义拒绝优先级：`classic` 的结构有效能力命令始终先返回 `wrong-mode`；能力模式中若 `expectedPacketIndex` 与 `decisionKey` 同时过期，返回 `stale-packet`。扑克 `act` 命令在确认当前是 decision boundary 后也先检查 packet index、再检查 decision key。
 
 成功事件本身代表能力已消耗，不单独生成 `AbilityChargeConsumed`，避免出现“已扣次数但能力效果尚未发生”的可回放中间态。
 
