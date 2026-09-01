@@ -267,6 +267,7 @@ export function createDecisionKey(
     const safeHandNumber = requireSafeInteger(handNumber, 1);
     const safeSeatIndex = requireSafeInteger(seatIndex);
     const safeDecisionIndex = requireSafeInteger(decisionIndex);
+    if (safeSeatIndex > 5) throw new Error(INVALID_TURN_PACKET_MESSAGE);
     return `hand/${safeHandNumber}/seat/${safeSeatIndex}/decision/${safeDecisionIndex}`;
   } catch {
     throw new Error(INVALID_TURN_PACKET_MESSAGE);

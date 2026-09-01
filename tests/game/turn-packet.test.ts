@@ -361,6 +361,14 @@ describe('classic decision packet identity', () => {
     expectSafeTurnPacketError(() => createDecisionKey(3, -1, 4));
   });
 
+  it('rejects physical seat index 6 with the fixed safe error', () => {
+    expectSafeTurnPacketError(() => createDecisionKey(1, 6, 0));
+  });
+
+  it('rejects an extreme safe-integer seat index with the fixed safe error', () => {
+    expectSafeTurnPacketError(() => createDecisionKey(1, Number.MAX_SAFE_INTEGER, 0));
+  });
+
   it('projects an uncommitted candidate over a half-open core version range', async () => {
     const prepared = await createUncommittedCandidate();
     if (prepared.candidateBoundary.kind !== 'decision') {
