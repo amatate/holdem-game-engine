@@ -93,7 +93,7 @@ function isRecursivelyFrozen(value: unknown, seen = new WeakSet<object>()): bool
 
 describe('buildHandResultSummary', () => {
   it('summarizes authoritative main-pot, side-pot and refund events', () => {
-    const summary = buildHandResultSummary(seats, mainAndSidePotEvents());
+    const summary = buildHandResultSummary(seats, mainAndSidePotEvents(), 0);
 
     expect(summary.handNumber).toBe(4);
     expect(summary.seats).toEqual([
@@ -126,6 +126,68 @@ describe('buildHandResultSummary', () => {
     ]);
   });
 
+  it('assigns ownHoleCardsDealt only to an explicitly identified nonzero viewer', () => {
+    const physicalSeats: readonly TournamentSeatInput[] = [
+      { playerId: 'villain', seatIndex: 0 },
+      { playerId: 'hero', seatIndex: 1 },
+    ];
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 15, smallBlind: 1, bigBlind: 2 },
+      { type: 'ownHoleCardsDealt', cards: [parseCard('Ah'), parseCard('Kd')] },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 1_000 },
+          { seatIndex: 1, stack: 1_000 },
+        ],
+      },
+    ];
+
+    const result = buildHandResultSummary(physicalSeats, events, 1);
+
+    expect(result.seats).toMatchObject([
+      { seatIndex: 0, holeCards: null },
+      { seatIndex: 1, holeCards: [parseCard('Ah'), parseCard('Kd')] },
+    ]);
+  });
+
+  it('rejects ownHoleCardsDealt when the two-argument call cannot prove the viewer', () => {
+    const physicalSeats: readonly TournamentSeatInput[] = [
+      { playerId: 'villain', seatIndex: 0 },
+      { playerId: 'hero', seatIndex: 1 },
+    ];
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 16, smallBlind: 1, bigBlind: 2 },
+      { type: 'ownHoleCardsDealt', cards: [parseCard('Qh'), parseCard('Jd')] },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 1_000 },
+          { seatIndex: 1, stack: 1_000 },
+        ],
+      },
+    ];
+
+    expectSafeHandResultError(() => buildHandResultSummary(physicalSeats, events));
+  });
+
+  it('rejects ownHoleCardsDealt when the explicit viewer is not a described seat', () => {
+    const physicalSeats: readonly TournamentSeatInput[] = [
+      { playerId: 'villain', seatIndex: 0 },
+      { playerId: 'hero', seatIndex: 1 },
+    ];
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 17, smallBlind: 1, bigBlind: 2 },
+      { type: 'ownHoleCardsDealt', cards: [parseCard('9h'), parseCard('8d')] },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 1_000 },
+          { seatIndex: 1, stack: 1_000 },
+        ],
+      },
+    ];
+
+    expectSafeHandResultError(() => buildHandResultSummary(physicalSeats, events, 2));
+  });
+
   it('labels an independently settled single pot as 底池', () => {
     const onePotEvents: PublicGameEvent[] = [
       { type: 'handStarted', handNumber: 5, smallBlind: 25, bigBlind: 50 },
@@ -151,8 +213,11 @@ describe('buildHandResultSummary', () => {
   it('keeps folded own cards and revealed evaluations visible without exposing a hidden NPC', () => {
     const visibilityEvents: PublicGameEvent[] = [
       { type: 'handStarted', handNumber: 6, smallBlind: 10, bigBlind: 20 },
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 10, allIn: false },
+      { type: 'blindPosted', seatIndex: 1, kind: 'big', amount: 20, allIn: false },
       { type: 'ownHoleCardsDealt', cards: [parseCard('Ah'), parseCard('Kd')] },
       { type: 'playerActed', seatIndex: 0, kind: 'fold', paid: 0, betTo: 0, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 20, betTo: 20, allIn: false },
       {
         type: 'holeCardsRevealed', seatIndex: 1,
         cards: [parseCard('Qc'), parseCard('Qd')], reason: 'showdown',
@@ -171,8 +236,8 @@ describe('buildHandResultSummary', () => {
           ReturnType<typeof parseCard>, ReturnType<typeof parseCard>,
         ],
       },
-      { type: 'potConstructed', potId: 'pot-0', amount: 60, eligibleSeats: [1, 2] },
-      { type: 'potAwarded', potId: 'pot-0', winners: [1], amounts: [60], oddChipRecipients: [] },
+      { type: 'potConstructed', potId: 'pot-0', amount: 50, eligibleSeats: [1, 2] },
+      { type: 'potAwarded', potId: 'pot-0', winners: [1], amounts: [50], oddChipRecipients: [] },
       {
         type: 'handCompleted', finalStacks: [
           { seatIndex: 0, stack: 980 },
@@ -182,7 +247,7 @@ describe('buildHandResultSummary', () => {
       },
     ];
 
-    const result = buildHandResultSummary(seats, visibilityEvents);
+    const result = buildHandResultSummary(seats, visibilityEvents, 0);
 
     expect(result.seats[0]).toMatchObject({
       holeCards: [parseCard('Ah'), parseCard('Kd')],
@@ -206,7 +271,7 @@ describe('buildHandResultSummary', () => {
       type: 'potConstructed', potId: 'pot-0', amount: 1, eligibleSeats: [0, 1],
     });
 
-    expectSafeHandResultError(() => buildHandResultSummary(seats, events));
+    expectSafeHandResultError(() => buildHandResultSummary(seats, events, 0));
   });
 
   it('rejects an award that appears before its pot is constructed', () => {
@@ -247,7 +312,7 @@ describe('buildHandResultSummary', () => {
     const events = mainAndSidePotEvents();
     events.pop();
 
-    expectSafeHandResultError(() => buildHandResultSummary(seats, events));
+    expectSafeHandResultError(() => buildHandResultSummary(seats, events, 0));
   });
 
   it('rejects unsafe integer arithmetic', () => {
@@ -266,7 +331,106 @@ describe('buildHandResultSummary', () => {
       },
     ];
 
+    expectSafeHandResultError(() => buildHandResultSummary(seats.slice(0, 2), events, 0));
+  });
+
+  it('rejects cancellation that hides an overflowing potWon plus returned intermediate', () => {
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 12, smallBlind: 1, bigBlind: 2 },
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 2, allIn: false },
+      { type: 'uncalledBetReturned', seatIndex: 0, amount: 2 },
+      {
+        type: 'potConstructed', potId: 'pot-0', amount: Number.MAX_SAFE_INTEGER,
+        eligibleSeats: [0, 1],
+      },
+      {
+        type: 'potAwarded', potId: 'pot-0', winners: [0],
+        amounts: [Number.MAX_SAFE_INTEGER], oddChipRecipients: [],
+      },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: Number.MAX_SAFE_INTEGER },
+          { seatIndex: 1, stack: 0 },
+        ],
+      },
+    ];
+
     expectSafeHandResultError(() => buildHandResultSummary(seats.slice(0, 2), events));
+  });
+
+  it('rejects settlement whose net investment does not equal constructed pots', () => {
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 13, smallBlind: 25, bigBlind: 50 },
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 50, allIn: false },
+      { type: 'playerActed', seatIndex: 0, kind: 'call', paid: 50, betTo: 100, allIn: true },
+      { type: 'potConstructed', potId: 'pot-0', amount: 99, eligibleSeats: [0, 1] },
+      { type: 'potAwarded', potId: 'pot-0', winners: [1], amounts: [99], oddChipRecipients: [] },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 900 },
+          { seatIndex: 1, stack: 1_099 },
+        ],
+      },
+    ];
+
+    expectSafeHandResultError(() => buildHandResultSummary(seats.slice(0, 2), events));
+  });
+
+  it('rejects an odd-chip recipient and award amounts that disagree with button order', () => {
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 14, smallBlind: 1, bigBlind: 2 },
+      {
+        type: 'positionsAssigned', buttonPosition: 1, smallBlindSeat: 0,
+        bigBlindSeat: 1,
+      },
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 1, allIn: false },
+      { type: 'playerActed', seatIndex: 1, kind: 'bet', paid: 1, betTo: 1, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 1, betTo: 1, allIn: false },
+      { type: 'potConstructed', potId: 'pot-0', amount: 3, eligibleSeats: [0, 1, 2] },
+      {
+        type: 'potAwarded', potId: 'pot-0', winners: [0, 2], amounts: [2, 1],
+        oddChipRecipients: [0],
+      },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 1_001 },
+          { seatIndex: 1, stack: 999 },
+          { seatIndex: 2, stack: 999 },
+        ],
+      },
+    ];
+
+    expectSafeHandResultError(() => buildHandResultSummary(seats, events));
+  });
+
+  it('accepts the core odd-chip order and one-chip award difference', () => {
+    const events: PublicGameEvent[] = [
+      { type: 'handStarted', handNumber: 18, smallBlind: 1, bigBlind: 2 },
+      {
+        type: 'positionsAssigned', buttonPosition: 1, smallBlindSeat: 0,
+        bigBlindSeat: 1,
+      },
+      { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 1, allIn: false },
+      { type: 'playerActed', seatIndex: 1, kind: 'bet', paid: 1, betTo: 1, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'call', paid: 1, betTo: 1, allIn: false },
+      { type: 'potConstructed', potId: 'pot-0', amount: 3, eligibleSeats: [0, 1, 2] },
+      {
+        type: 'potAwarded', potId: 'pot-0', winners: [0, 2], amounts: [1, 2],
+        oddChipRecipients: [2],
+      },
+      {
+        type: 'handCompleted', finalStacks: [
+          { seatIndex: 0, stack: 1_000 },
+          { seatIndex: 1, stack: 999 },
+          { seatIndex: 2, stack: 1_001 },
+        ],
+      },
+    ];
+
+    expect(buildHandResultSummary(seats, events).pots[0]).toMatchObject({
+      winnerSeatIndexes: [0, 2],
+      awards: [1, 2],
+    });
   });
 
   it('rejects a sparse nested event array', () => {
@@ -309,7 +473,17 @@ describe('buildHandResultSummary', () => {
       },
     ];
 
-    expectSafeHandResultError(() => buildHandResultSummary(seats.slice(0, 2), events));
+    expectSafeHandResultError(() => buildHandResultSummary(seats.slice(0, 2), events, 0));
+  });
+
+  it('rejects an unknown runtime public-event variant instead of ignoring it', () => {
+    const events = mainAndSidePotEvents();
+    events.splice(events.length - 1, 0, {
+      type: 'futureSettlementNotice',
+      payload: 'UNKNOWN-VARIANT-SEED-SENTINEL',
+    } as unknown as PublicGameEvent);
+
+    expectSafeHandResultError(() => buildHandResultSummary(seats, events, 0));
   });
 
   it('copies poisoned dense inputs without mutating or freezing them and deep-freezes the result', () => {
@@ -333,7 +507,7 @@ describe('buildHandResultSummary', () => {
     };
     const poisonedSeats = poisonArrayMethods(seats);
 
-    const result = buildHandResultSummary(poisonedSeats, poisonedEvents);
+    const result = buildHandResultSummary(poisonedSeats, poisonedEvents, 0);
 
     expect(JSON.stringify(poisonedEvents)).toBe(semanticSnapshot);
     expect(Object.isFrozen(poisonedSeats)).toBe(false);

@@ -164,13 +164,63 @@ function requireStreet(value: unknown): void {
   }
 }
 
+function sameNumberArray(left: readonly number[], right: readonly number[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function validateOddChipAward(
+  potAmount: number,
+  winners: readonly number[],
+  amounts: readonly number[],
+  oddChipRecipients: readonly number[],
+  buttonPosition: number | null,
+  maxSeats: number,
+): void {
+  const share = Math.floor(potAmount / winners.length);
+  const remainder = potAmount % winners.length;
+  if (remainder > 0 && buttonPosition === null) throw new Error('missing button position');
+  const expectedOddRecipients: number[] = [];
+  if (buttonPosition !== null) {
+    const winnerSet = new Set<number>();
+    for (let index = 0; index < winners.length; index += 1) winnerSet.add(winners[index]!);
+    for (let offset = 1; offset <= maxSeats && expectedOddRecipients.length < remainder; offset += 1) {
+      const seatIndex = (buttonPosition + offset) % maxSeats;
+      if (winnerSet.has(seatIndex)) expectedOddRecipients.push(seatIndex);
+    }
+  }
+  if (!sameNumberArray(oddChipRecipients, expectedOddRecipients)) {
+    throw new Error('invalid odd-chip recipients');
+  }
+  const oddRecipientSet = new Set<number>();
+  for (let index = 0; index < oddChipRecipients.length; index += 1) {
+    oddRecipientSet.add(oddChipRecipients[index]!);
+  }
+  for (let index = 0; index < winners.length; index += 1) {
+    const expectedAmount = oddRecipientSet.has(winners[index]!)
+      ? addSafeNonnegative(share, 1)
+      : share;
+    if (amounts[index] !== expectedAmount) throw new Error('invalid odd-chip amount');
+  }
+}
+
 function addSafeNonnegative(left: number, right: unknown): number {
   return requireSafeNonnegative(requireSafeNonnegative(left) + requireSafeNonnegative(right));
+}
+
+function subtractSafe(left: unknown, right: unknown): number {
+  const result = requireSafeNonnegative(left) - requireSafeNonnegative(right);
+  if (!Number.isSafeInteger(result)) throw new Error('unsafe subtraction');
+  return result;
 }
 
 function buildHandResultSummaryUnchecked(
   seats: readonly TournamentSeatInput[],
   viewerEvents: readonly PublicGameEvent[],
+  viewerSeatIndexValue: number | undefined,
 ): Readonly<HandResultSummary> {
   if (!Array.isArray(seats) || seats.length < 2 || seats.length > MAX_SEATS) {
     throw new Error('invalid seats');
@@ -201,6 +251,12 @@ function buildHandResultSummaryUnchecked(
   for (let seatIndex = 0; seatIndex < seats.length; seatIndex += 1) {
     if (!seatsByIndex.has(seatIndex)) throw new Error('non-contiguous seats');
   }
+  const viewerSeatIndex = viewerSeatIndexValue === undefined
+    ? null
+    : requireSeatIndex(viewerSeatIndexValue);
+  if (viewerSeatIndex !== null && !seatsByIndex.has(viewerSeatIndex)) {
+    throw new Error('unknown viewer seat');
+  }
 
   if (!Array.isArray(viewerEvents) || viewerEvents.length < 2) {
     throw new Error('invalid event interval');
@@ -208,6 +264,7 @@ function buildHandResultSummaryUnchecked(
   let handNumber = 0;
   let completed = false;
   let ownCardsSeen = false;
+  let buttonPosition: number | null = null;
   const revealedSeats = new Set<number>();
   const evaluatedSeats = new Set<number>();
   const finalizedSeats = new Set<number>();
@@ -255,9 +312,9 @@ function buildHandResultSummaryUnchecked(
         break;
       }
       case 'ownHoleCardsDealt':
-        if (ownCardsSeen) throw new Error('duplicate own cards');
+        if (ownCardsSeen || viewerSeatIndex === null) throw new Error('ambiguous own cards');
         ownCardsSeen = true;
-        seatResults[0]!.holeCards = cloneCardPair(event.cards);
+        seatsByIndex.get(viewerSeatIndex)!.holeCards = cloneCardPair(event.cards);
         break;
       case 'holeCardsRevealed': {
         const seatIndex = requireSeatIndex(event.seatIndex);
@@ -316,7 +373,7 @@ function buildHandResultSummaryUnchecked(
         if (winners.length !== amounts.length) {
           throw new Error('mismatched awards');
         }
-        cloneSeatIndexes(event.oddChipRecipients, seatsByIndex, 0);
+        const oddChipRecipients = cloneSeatIndexes(event.oddChipRecipients, seatsByIndex, 0);
         let awardedTotal = 0;
         for (let awardIndex = 0; awardIndex < winners.length; awardIndex += 1) {
           const winnerSeatIndex = winners[awardIndex]!;
@@ -326,6 +383,14 @@ function buildHandResultSummaryUnchecked(
           winner.potWon = addSafeNonnegative(winner.potWon, amounts[awardIndex]);
         }
         if (awardedTotal !== pot.amount) throw new Error('pot award total mismatch');
+        validateOddChipAward(
+          pot.amount,
+          winners,
+          amounts,
+          oddChipRecipients,
+          buttonPosition,
+          seatsByIndex.size,
+        );
         pot.winnerSeatIndexes = winners;
         pot.awards = amounts;
         awardedPots.add(potId);
@@ -363,9 +428,16 @@ function buildHandResultSummaryUnchecked(
         cloneSeatIndexes(event.revealOrder, seatsByIndex, 1);
         break;
       case 'positionsAssigned':
-        requireSeatIndex(event.buttonPosition);
-        if (event.smallBlindSeat !== null) requireSeatIndex(event.smallBlindSeat);
-        requireSeatIndex(event.bigBlindSeat);
+        if (buttonPosition !== null) throw new Error('duplicate positions');
+        buttonPosition = requireSeatIndex(event.buttonPosition);
+        if (!seatsByIndex.has(buttonPosition)) throw new Error('unknown button seat');
+        if (event.smallBlindSeat !== null
+          && !seatsByIndex.has(requireSeatIndex(event.smallBlindSeat))) {
+          throw new Error('unknown small blind seat');
+        }
+        if (!seatsByIndex.has(requireSeatIndex(event.bigBlindSeat))) {
+          throw new Error('unknown big blind seat');
+        }
         break;
       case 'bettingRoundStarted':
         requireStreet(event.street);
@@ -386,7 +458,7 @@ function buildHandResultSummaryUnchecked(
       case 'gameCompleted':
         throw new Error('event outside current hand interval');
       default:
-        break;
+        throw new Error('unknown public event');
     }
   }
 
@@ -398,10 +470,14 @@ function buildHandResultSummaryUnchecked(
   }
 
   const finalSeats: HandSeatResult[] = [];
+  let totalInvested = 0;
+  let totalReturned = 0;
   for (let index = 0; index < seatResults.length; index += 1) {
     const seat = seatResults[index]!;
-    const net = seat.potWon + seat.returned - seat.invested;
-    if (!Number.isSafeInteger(net)) throw new Error('unsafe net');
+    totalInvested = addSafeNonnegative(totalInvested, seat.invested);
+    totalReturned = addSafeNonnegative(totalReturned, seat.returned);
+    const grossReceived = addSafeNonnegative(seat.potWon, seat.returned);
+    const net = subtractSafe(grossReceived, seat.invested);
     finalSeats.push({
       seatIndex: seat.seatIndex,
       playerId: seat.playerId,
@@ -416,8 +492,14 @@ function buildHandResultSummaryUnchecked(
     });
   }
   const finalPots: HandResultPot[] = [];
+  let totalConstructed = 0;
+  let totalAwarded = 0;
   for (let index = 0; index < pots.length; index += 1) {
     const pot = pots[index]!;
+    totalConstructed = addSafeNonnegative(totalConstructed, pot.amount);
+    for (let awardIndex = 0; awardIndex < pot.awards.length; awardIndex += 1) {
+      totalAwarded = addSafeNonnegative(totalAwarded, pot.awards[awardIndex]);
+    }
     finalPots.push({
       potId: pot.potId,
       label: pots.length === 1 ? '底池' : index === 0 ? '主池' : `边池 ${index}`,
@@ -427,15 +509,31 @@ function buildHandResultSummaryUnchecked(
       awards: pot.awards,
     });
   }
+  const netInvested = subtractSafe(totalInvested, totalReturned);
+  if (netInvested < 0
+    || netInvested !== totalConstructed
+    || totalConstructed !== totalAwarded) {
+    throw new Error('settlement conservation mismatch');
+  }
   return freezeRecursively({ handNumber, seats: finalSeats, pots: finalPots });
 }
 
 export function buildHandResultSummary(
   seats: readonly TournamentSeatInput[],
   viewerEvents: readonly PublicGameEvent[],
+): Readonly<HandResultSummary>;
+export function buildHandResultSummary(
+  seats: readonly TournamentSeatInput[],
+  viewerEvents: readonly PublicGameEvent[],
+  viewerSeatIndex: number,
+): Readonly<HandResultSummary>;
+export function buildHandResultSummary(
+  seats: readonly TournamentSeatInput[],
+  viewerEvents: readonly PublicGameEvent[],
+  viewerSeatIndex?: number,
 ): Readonly<HandResultSummary> {
   try {
-    return buildHandResultSummaryUnchecked(seats, viewerEvents);
+    return buildHandResultSummaryUnchecked(seats, viewerEvents, viewerSeatIndex);
   } catch {
     throw new Error(INVALID_HAND_RESULT_MESSAGE);
   }

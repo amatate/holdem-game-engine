@@ -137,6 +137,13 @@ function requireBoolean(value: unknown): boolean {
   return value;
 }
 
+function requireNonemptyString(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  return value;
+}
+
 function snapshotLegalActions(value: unknown): LegalActionSet {
   const legal = requireRecord(value);
   const fold = requireBoolean(Reflect.get(legal, 'fold'));
@@ -192,13 +199,51 @@ function sameDataTree(
     || Array.isArray(left) !== Array.isArray(right)) {
     return false;
   }
+  if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;
   const previous = seen.get(left);
   if (previous !== undefined) return previous === right;
   seen.set(left, right);
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length || !Number.isSafeInteger(left.length)) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!Object.hasOwn(left, index) || !Object.hasOwn(right, index)) return false;
+      const leftDescriptor = Object.getOwnPropertyDescriptor(left, String(index));
+      const rightDescriptor = Object.getOwnPropertyDescriptor(right, String(index));
+      if (leftDescriptor === undefined || rightDescriptor === undefined
+        || !('value' in leftDescriptor) || !('value' in rightDescriptor)
+        || !sameDataTree(leftDescriptor.value, rightDescriptor.value, seen)) {
+        return false;
+      }
+    }
+    const leftKeys = Reflect.ownKeys(left);
+    const rightKeys = Reflect.ownKeys(right);
+    let leftEnumerableCount = 0;
+    let rightEnumerableCount = 0;
+    for (let index = 0; index < leftKeys.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(left, leftKeys[index]!);
+      if (descriptor?.enumerable === true) leftEnumerableCount += 1;
+    }
+    for (let index = 0; index < rightKeys.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(right, rightKeys[index]!);
+      if (descriptor?.enumerable === true) rightEnumerableCount += 1;
+    }
+    return leftEnumerableCount === left.length && rightEnumerableCount === right.length;
+  }
+  const leftKeys = Reflect.ownKeys(left);
   const rightKeys = Reflect.ownKeys(right);
+  const leftEnumerableKeys: PropertyKey[] = [];
+  const rightEnumerableKeys: PropertyKey[] = [];
+  for (let index = 0; index < leftKeys.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(left, leftKeys[index]!);
+    if (descriptor?.enumerable === true) leftEnumerableKeys.push(leftKeys[index]!);
+  }
   for (let index = 0; index < rightKeys.length; index += 1) {
-    if (!Object.hasOwn(rightKeys, index)) return false;
-    const key = rightKeys[index]!;
+    const descriptor = Object.getOwnPropertyDescriptor(right, rightKeys[index]!);
+    if (descriptor?.enumerable === true) rightEnumerableKeys.push(rightKeys[index]!);
+  }
+  if (leftEnumerableKeys.length !== rightEnumerableKeys.length) return false;
+  for (let index = 0; index < rightEnumerableKeys.length; index += 1) {
+    const key = rightEnumerableKeys[index]!;
     if (!Object.hasOwn(left, key)) return false;
     const leftDescriptor = Object.getOwnPropertyDescriptor(left, key);
     const rightDescriptor = Object.getOwnPropertyDescriptor(right, key);
@@ -246,6 +291,98 @@ function snapshotPacketDelivery(
     toCoreVersion,
     viewerEvents: projectEventsForViewer(eventRange, humanSeatIndex),
   };
+}
+
+function validateHandSeatDescriptors(
+  descriptors: readonly TournamentSeatInput[],
+  candidateSeats: TournamentState['seats'],
+): void {
+  if (!Array.isArray(descriptors)
+    || !Array.isArray(candidateSeats)
+    || descriptors.length < 2
+    || descriptors.length > 6
+    || descriptors.length !== candidateSeats.length) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  const candidateBySeat = new Map<number, string>();
+  const candidatePlayerIds = new Set<string>();
+  for (let index = 0; index < candidateSeats.length; index += 1) {
+    if (!Object.hasOwn(candidateSeats, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    const candidate = requireRecord(Reflect.get(candidateSeats, String(index)));
+    const seatIndex = requireSeatIndex(Reflect.get(candidate, 'seatIndex'));
+    const playerId = requireNonemptyString(Reflect.get(candidate, 'playerId'));
+    if (seatIndex !== index
+      || candidateBySeat.has(seatIndex)
+      || candidatePlayerIds.has(playerId)) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    candidateBySeat.set(seatIndex, playerId);
+    candidatePlayerIds.add(playerId);
+  }
+  const descriptorSeats = new Set<number>();
+  const descriptorPlayerIds = new Set<string>();
+  for (let index = 0; index < descriptors.length; index += 1) {
+    if (!Object.hasOwn(descriptors, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    const descriptor = requireRecord(Reflect.get(descriptors, String(index)));
+    const seatIndex = requireSeatIndex(Reflect.get(descriptor, 'seatIndex'));
+    const playerId = requireNonemptyString(Reflect.get(descriptor, 'playerId'));
+    if (seatIndex !== index
+      || descriptorSeats.has(seatIndex)
+      || descriptorPlayerIds.has(playerId)
+      || candidateBySeat.get(seatIndex) !== playerId) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    descriptorSeats.add(seatIndex);
+    descriptorPlayerIds.add(playerId);
+  }
+  for (let seatIndex = 0; seatIndex < descriptors.length; seatIndex += 1) {
+    if (!candidateBySeat.has(seatIndex) || !descriptorSeats.has(seatIndex)) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+  }
+}
+
+function projectAuthoritativeCurrentHandEvents(
+  state: Readonly<TournamentState>,
+  humanSeatIndex: number,
+): readonly PublicGameEvent[] {
+  const activeHand = state.activeHand;
+  if (activeHand === null || typeof activeHand.handId !== 'string' || activeHand.handId.length === 0) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  const authorityEvents = state.eventLog;
+  if (!Array.isArray(authorityEvents) || authorityEvents.length !== state.version) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  let startIndex = -1;
+  let endIndex = -1;
+  for (let index = 0; index < authorityEvents.length; index += 1) {
+    if (!Object.hasOwn(authorityEvents, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    const event = requireRecord(Reflect.get(authorityEvents, String(index)));
+    const type = Reflect.get(event, 'type');
+    const handId = Reflect.get(event, 'handId');
+    if (type === 'HandStarted' && handId === activeHand.handId) {
+      if (startIndex !== -1 || endIndex !== -1) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+      startIndex = index;
+    }
+    if (startIndex !== -1 && endIndex === -1 && handId !== activeHand.handId) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    if (type === 'HandCompleted' && handId === activeHand.handId) {
+      if (startIndex === -1 || endIndex !== -1) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+      endIndex = index;
+    }
+  }
+  if (startIndex < 0 || endIndex < startIndex || endIndex !== authorityEvents.length - 1) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  const currentHandAuthorityEvents: DomainEvent[] = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    currentHandAuthorityEvents.push(
+      Reflect.get(authorityEvents, String(index)) as DomainEvent,
+    );
+  }
+  return projectEventsForViewer(currentHandAuthorityEvents, humanSeatIndex);
 }
 
 function buildActionPanelUnchecked(
@@ -397,47 +534,6 @@ export function createClassicDecisionPacket(
   }
 }
 
-function viewerFirstSeatDescriptors(
-  seats: readonly TournamentSeatInput[],
-  humanSeatIndex: number,
-): TournamentSeatInput[] {
-  if (!Array.isArray(seats) || seats.length < 2 || seats.length > 6) {
-    throw new Error(INVALID_TURN_PACKET_MESSAGE);
-  }
-  const ordered: TournamentSeatInput[] = [];
-  let human: TournamentSeatInput | null = null;
-  for (let index = 0; index < seats.length; index += 1) {
-    if (!Object.hasOwn(seats, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
-    const seat = Reflect.get(seats, String(index)) as TournamentSeatInput;
-    if (seat.seatIndex === humanSeatIndex) human = seat;
-  }
-  if (human === null) throw new Error(INVALID_TURN_PACKET_MESSAGE);
-  ordered.push(human);
-  for (let index = 0; index < seats.length; index += 1) {
-    const seat = Reflect.get(seats, String(index)) as TournamentSeatInput;
-    if (seat.seatIndex !== humanSeatIndex) ordered.push(seat);
-  }
-  return ordered;
-}
-
-function reorderSummarySeats(
-  summary: Readonly<HandResultSummary>,
-  seats: readonly TournamentSeatInput[],
-): Readonly<HandResultSummary> {
-  const bySeat = new Map<number, HandResultSummary['seats'][number]>();
-  for (let index = 0; index < summary.seats.length; index += 1) {
-    const result = summary.seats[index]!;
-    bySeat.set(result.seatIndex, result);
-  }
-  const ordered: HandResultSummary['seats'][number][] = [];
-  for (let index = 0; index < seats.length; index += 1) {
-    const result = bySeat.get(seats[index]!.seatIndex);
-    if (result === undefined) throw new Error(INVALID_TURN_PACKET_MESSAGE);
-    ordered.push(result);
-  }
-  return { handNumber: summary.handNumber, seats: ordered, pots: summary.pots };
-}
-
 export function createClassicHandResultPacket(
   input: Readonly<HandResultPacketInput>,
 ): Readonly<HandResultPacket> {
@@ -455,6 +551,7 @@ export function createClassicHandResultPacket(
       || input.boundary.handNumber !== state.handNumber) {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
+    validateHandSeatDescriptors(input.seats, state.seats);
     const events = input.currentHandViewerEvents;
     if (!Array.isArray(events) || events.length < 2
       || !Object.hasOwn(events, 0) || !Object.hasOwn(events, events.length - 1)) {
@@ -466,11 +563,11 @@ export function createClassicHandResultPacket(
       || last.type !== 'handCompleted') {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
-    const viewerFirst = viewerFirstSeatDescriptors(input.seats, humanSeatIndex);
-    const summary = reorderSummarySeats(
-      buildHandResultSummary(viewerFirst, events),
-      input.seats,
-    );
+    const authoritativeViewerEvents = projectAuthoritativeCurrentHandEvents(state, humanSeatIndex);
+    if (!sameDataTree(events, authoritativeViewerEvents)) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const summary = buildHandResultSummary(input.seats, events, humanSeatIndex);
     if (summary.handNumber !== input.boundary.handNumber) {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }

@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservationV1 } from '../../src/agents/types.js';
 import { parseCard } from '../../src/core/cards.js';
 import type { TournamentConfig } from '../../src/core/config.js';
-import { projectEventsForViewer } from '../../src/core/public-events.js';
+import {
+  projectEventsForViewer,
+  type PublicGameEvent,
+} from '../../src/core/public-events.js';
 import type { Participant } from '../../src/game/participant.js';
 import { createTournamentDriver } from '../../src/game/tournament-driver.js';
 import {
@@ -770,6 +773,175 @@ describe('classic result packet variants', () => {
       humanSeatIndex: 0,
       packetIndex: 0,
       fromCoreVersion: hand.candidateAuthorityState.version,
+    }));
+  });
+
+  it('rejects duplicate physical seat descriptors before hand aggregation', async () => {
+    const { hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const fullViewerEvents = projectEventsForViewer(state.eventLog.slice(start, end + 1), 0);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: [
+        { playerId: 'hero', seatIndex: 0 },
+        { playerId: 'villain', seatIndex: 0 },
+      ],
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: fullViewerEvents,
+    }));
+  });
+
+  it('rejects otherwise authentic physical seat descriptors in non-contiguous array order', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const fullViewerEvents = projectEventsForViewer(state.eventLog.slice(start, end + 1), 0);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: [completedSeats[1]!, completedSeats[0]!],
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: fullViewerEvents,
+    }));
+  });
+
+  it('rejects physical seat descriptors whose player IDs are swapped against the candidate', async () => {
+    const { hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const fullViewerEvents = projectEventsForViewer(state.eventLog.slice(start, end + 1), 0);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: [
+        { playerId: 'villain', seatIndex: 0 },
+        { playerId: 'hero', seatIndex: 1 },
+      ],
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: fullViewerEvents,
+    }));
+  });
+
+  it('rejects a forged player ID for an otherwise matching physical seat', async () => {
+    const { hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const fullViewerEvents = projectEventsForViewer(state.eventLog.slice(start, end + 1), 0);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: [
+        { playerId: 'impostor', seatIndex: 0 },
+        { playerId: 'villain', seatIndex: 1 },
+      ],
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: fullViewerEvents,
+    }));
+  });
+
+  it('rejects supplied handCompleted stacks that differ from the candidate projection', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const authentic = projectEventsForViewer(state.eventLog.slice(start, end + 1), 0);
+    const supplied = structuredClone(authentic) as PublicGameEvent[];
+    const completion = supplied[supplied.length - 1];
+    if (completion?.type !== 'handCompleted') throw new Error('fixture mismatch');
+    supplied[supplied.length - 1] = {
+      type: 'handCompleted',
+      finalStacks: completion.finalStacks.map((entry, index) => ({
+        ...entry,
+        stack: index === 0 ? entry.stack + 1 : entry.stack,
+      })),
+    };
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: completedSeats,
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: supplied,
+    }));
+  });
+
+  it('rejects a replaced middle event in the supplied full-hand interval', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const supplied = structuredClone(projectEventsForViewer(
+      state.eventLog.slice(start, end + 1),
+      0,
+    )) as PublicGameEvent[];
+    const positionsIndex = supplied.findIndex((event) => event.type === 'positionsAssigned');
+    const positions = supplied[positionsIndex];
+    if (positions?.type !== 'positionsAssigned') throw new Error('fixture mismatch');
+    supplied[positionsIndex] = {
+      ...positions,
+      buttonPosition: positions.buttonPosition === 0 ? 1 : 0,
+    };
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: completedSeats,
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: supplied,
+    }));
+  });
+
+  it('rejects a full-hand interval projected for the wrong viewer', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const wrongViewerEvents = projectEventsForViewer(state.eventLog.slice(start, end + 1), 1);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: completedSeats,
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: wrongViewerEvents,
     }));
   });
 });
