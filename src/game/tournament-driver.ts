@@ -138,7 +138,57 @@ function freezeRecursively<T>(value: T, seen = new WeakSet<object>()): T {
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  const leftToRight = new WeakMap<object, object>();
+  const rightToLeft = new WeakMap<object, object>();
+  const compare = (leftValue: unknown, rightValue: unknown): boolean => {
+    if (Object.is(leftValue, rightValue)) return true;
+    if (typeof leftValue !== 'object' || leftValue === null
+      || typeof rightValue !== 'object' || rightValue === null) {
+      return false;
+    }
+
+    const knownRight = leftToRight.get(leftValue);
+    const knownLeft = rightToLeft.get(rightValue);
+    if (knownRight !== undefined || knownLeft !== undefined) {
+      return knownRight === rightValue && knownLeft === leftValue;
+    }
+    leftToRight.set(leftValue, rightValue);
+    rightToLeft.set(rightValue, leftValue);
+
+    if (Object.getPrototypeOf(leftValue) !== Object.getPrototypeOf(rightValue)) return false;
+    const leftKeys = Reflect.ownKeys(leftValue);
+    const rightKeys = Reflect.ownKeys(rightValue);
+    if (leftKeys.length !== rightKeys.length) return false;
+    for (const leftKey of leftKeys) {
+      if (!rightKeys.includes(leftKey)) return false;
+      const leftDescriptor = Object.getOwnPropertyDescriptor(leftValue, leftKey);
+      const rightDescriptor = Object.getOwnPropertyDescriptor(rightValue, leftKey);
+      if (leftDescriptor === undefined || rightDescriptor === undefined
+        || leftDescriptor.configurable !== rightDescriptor.configurable
+        || leftDescriptor.enumerable !== rightDescriptor.enumerable) {
+        return false;
+      }
+      const leftIsData = 'value' in leftDescriptor;
+      const rightIsData = 'value' in rightDescriptor;
+      if (leftIsData !== rightIsData) return false;
+      if (leftIsData && rightIsData) {
+        if (leftDescriptor.writable !== rightDescriptor.writable
+          || !compare(leftDescriptor.value, rightDescriptor.value)) {
+          return false;
+        }
+      } else if (leftDescriptor.get !== rightDescriptor.get
+        || leftDescriptor.set !== rightDescriptor.set) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  try {
+    return compare(left, right);
+  } catch {
+    return false;
+  }
 }
 
 function snapshotDecision(decision: ActionDecision): ActionSnapshot {

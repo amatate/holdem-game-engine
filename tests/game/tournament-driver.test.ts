@@ -5,6 +5,7 @@ import { applyIntent } from '../../src/core/reducer.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import type { TournamentState, TransitionResult } from '../../src/core/state.js';
 import type { Participant } from '../../src/game/participant.js';
+import { runTournament } from '../../src/game/tournament-controller.js';
 import {
   createTournamentDriver,
   openTournamentDriver,
@@ -116,6 +117,54 @@ function expectMetadataUnchanged(snapshots: readonly ObjectMetadata[]): void {
       },
     ]))).toEqual(snapshot.descriptors);
   }
+}
+
+type ReachableMetadata = Readonly<{
+  path: string;
+  prototype: 'array' | 'object' | 'null';
+  frozen: boolean;
+  descriptors: readonly Readonly<{
+    key: string;
+    kind: 'data' | 'accessor';
+    configurable: boolean;
+    enumerable: boolean;
+    writable: boolean | null;
+  }>[];
+}>;
+
+function snapshotReachableMetadata(root: object): readonly ReachableMetadata[] {
+  const seen = new WeakSet<object>();
+  const snapshots: ReachableMetadata[] = [];
+  const visit = (value: unknown, path: string): void => {
+    if (typeof value !== 'object' || value === null || seen.has(value)) return;
+    seen.add(value);
+    const prototype = Object.getPrototypeOf(value) as object | null;
+    const keys = Reflect.ownKeys(value);
+    snapshots.push({
+      path,
+      prototype: prototype === null ? 'null' : Array.isArray(value) ? 'array' : 'object',
+      frozen: Object.isFrozen(value),
+      descriptors: keys.map((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+        return {
+          key: typeof key === 'symbol' ? `[${String(key)}]` : key,
+          kind: 'value' in descriptor ? 'data' : 'accessor',
+          configurable: descriptor.configurable ?? false,
+          enumerable: descriptor.enumerable ?? false,
+          writable: 'writable' in descriptor ? descriptor.writable ?? false : null,
+        };
+      }),
+    });
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+      if ('value' in descriptor) {
+        const segment = typeof key === 'symbol' ? `[${String(key)}]` : key;
+        visit(descriptor.value, `${path}.${segment}`);
+      }
+    }
+  };
+  visit(root, '$');
+  return snapshots;
 }
 
 async function openDecisionDriver(
@@ -253,6 +302,37 @@ describe('TournamentDriver boundaries and transactions', () => {
     await expect(guarded.prepareOpen()).rejects.toThrow(/event guard exceeded/i);
   });
 
+  it('rejects forged authority state even when a hidden toJSON hook disguises it', async () => {
+    const driver = await openDecisionDriver();
+    const committed = driver.getAuthorityState();
+    let toJSONCalls = 0;
+    const forged = { ...committed, runSeed: 'forged-run-seed' } as TournamentState;
+    Object.defineProperty(forged, 'toJSON', {
+      configurable: true,
+      enumerable: false,
+      value: () => {
+        toJSONCalls += 1;
+        return committed;
+      },
+    });
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: forged, events: [] },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/replay mismatch/i);
+    expect(toJSONCalls).toBe(0);
+    expect(driver.getAuthorityState()).toBe(committed);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: committed, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(committed);
+  });
+
   it('enforces one active lease during pending and prepared operations', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -360,6 +440,87 @@ describe('TournamentDriver boundaries and transactions', () => {
       enumerable: true,
       writable: true,
     });
+  });
+});
+
+describe('TournamentDriver classic compatibility gates', () => {
+  it('matches the legacy controller NPC random seed path and generated trace', async () => {
+    type RandomTrace = Readonly<{
+      seatIndex: number;
+      decisionIndex: number;
+      seedHash: number;
+      draws: readonly [number, number];
+    }>;
+    const legacyTrace: RandomTrace[] = [];
+    const driverTrace: RandomTrace[] = [];
+    const participants = (trace: RandomTrace[]): Participant[] => [0, 1].map((seatIndex) => ({
+      playerId: `p${seatIndex}`,
+      decide: async ({ observation, random }) => {
+        trace.push({
+          seatIndex: observation.actorSeatIndex,
+          decisionIndex: observation.decisionIndex,
+          seedHash: random.seedHash,
+          draws: [random.nextUint32(), random.nextUint32()],
+        });
+        const legal = observation.legalActions;
+        if (legal.call !== null) return { action: { type: 'call' } };
+        if (legal.check) return { action: { type: 'check' } };
+        return { action: { type: 'fold' } };
+      },
+    }));
+
+    await runTournament({
+      config: oneHandConfig,
+      participants: participants(legacyTrace),
+      runSeed: 'driver-rng-compatibility-v1',
+    });
+    const driver = await openTournamentDriver({
+      config: oneHandConfig,
+      runSeed: 'driver-rng-compatibility-v1',
+      seats: [{ playerId: 'p0', seatIndex: 0 }, { playerId: 'p1', seatIndex: 1 }],
+      participants: participants(driverTrace),
+      pauseSeatIndexes: [],
+    });
+    await driver.continueAfterHand();
+
+    expect(driverTrace).toEqual(legacyTrace);
+    expect(driverTrace).toEqual([{
+      seatIndex: 0,
+      decisionIndex: 0,
+      seedHash: 2_310_341_521,
+      draws: [2_918_232_665, 1_242_128_488],
+    }]);
+  });
+
+  it('matches legacy final state and all reachable freeze and descriptor metadata', async () => {
+    const participants = (): Participant[] => [0, 1].map((seatIndex) => ({
+      playerId: `p${seatIndex}`,
+      decide: async ({ observation }) => ({
+        action: observation.legalActions.call !== null
+          ? { type: 'call' }
+          : observation.legalActions.check
+            ? { type: 'check' }
+            : { type: 'fold' },
+      }),
+    }));
+    const legacyState = await runTournament({
+      config: oneHandConfig,
+      participants: participants(),
+      runSeed: 'driver-metadata-compatibility-v1',
+    });
+    const driver = await openTournamentDriver({
+      config: oneHandConfig,
+      runSeed: 'driver-metadata-compatibility-v1',
+      seats: [{ playerId: 'p0', seatIndex: 0 }, { playerId: 'p1', seatIndex: 1 }],
+      participants: participants(),
+      pauseSeatIndexes: [],
+    });
+    await driver.continueAfterHand();
+    const driverState = driver.getAuthorityState();
+
+    expect(driverState).toEqual(legacyState);
+    expect(snapshotReachableMetadata(driverState))
+      .toEqual(snapshotReachableMetadata(legacyState));
   });
 });
 
