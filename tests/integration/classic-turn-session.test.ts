@@ -54,8 +54,10 @@ type RandomTrace = Readonly<{
 
 interface SessionRun {
   readonly handle: GameSessionHandle;
+  readonly driver: TournamentDriver;
   readonly packets: readonly Readonly<TurnPacket>[];
   readonly acknowledgedHandPacketIndexes: readonly number[];
+  readonly acknowledgedHandNumbers: readonly number[];
 }
 
 function tournamentConfig(playerCount: number): TournamentConfig {
@@ -125,6 +127,7 @@ async function runClassicSession(
     playerId: participant.playerId,
     seatIndex,
   }));
+  const capturedDriverIndex = capture.drivers.length;
   let { handle, packet } = await openGameSession({
     mode: 'classic',
     config,
@@ -134,8 +137,11 @@ async function runClassicSession(
     participants: [null, ...participants.slice(1)],
     maxTransitions: MAX_COMMANDS,
   });
+  expect(capture.drivers).toHaveLength(capturedDriverIndex + 1);
+  const driver = capture.drivers[capturedDriverIndex]!;
   const packets: Readonly<TurnPacket>[] = [];
   const acknowledgedHandPacketIndexes: number[] = [];
+  const acknowledgedHandNumbers: number[] = [];
   let commandCount = 0;
 
   while (true) {
@@ -162,14 +168,39 @@ async function runClassicSession(
       continue;
     }
 
-    acknowledgedHandPacketIndexes.push(packet.packetIndex);
-    const result = await continueAfterHandResult(handle, packet.packetIndex);
+    const acknowledgedPacket = packet;
+    acknowledgedHandPacketIndexes.push(acknowledgedPacket.packetIndex);
+    acknowledgedHandNumbers.push(acknowledgedPacket.handNumber);
+    const result = await continueAfterHandResult(handle, acknowledgedPacket.packetIndex);
     expect(result.accepted).toBe(true);
     if (!result.accepted) throw new Error(`hand result acknowledgement rejected: ${result.rejection}`);
     ({ handle, packet } = result.step);
+
+    const authorityAfterAcknowledgement = driver.getAuthorityState();
+    const eventLogAfterAcknowledgement = authorityAfterAcknowledgement.eventLog;
+    const authorityVersionAfterAcknowledgement = authorityAfterAcknowledgement.version;
+    const authorityEventCountAfterAcknowledgement = eventLogAfterAcknowledgement.length;
+    const duplicatePacketIndex = acknowledgedPacket.packetIndex;
+    const duplicate = await continueAfterHandResult(handle, duplicatePacketIndex);
+    expect(duplicate).toMatchObject({ accepted: false, rejection: 'stale-packet' });
+    if (duplicate.accepted) throw new Error('duplicate hand acknowledgement was accepted');
+    expect(duplicate.handle).toBe(handle);
+    expect(duplicate.packet).toBe(packet);
+    expect(driver.getAuthorityState()).toBe(authorityAfterAcknowledgement);
+    expect(driver.getAuthorityState().eventLog).toBe(eventLogAfterAcknowledgement);
+    expect(driver.getAuthorityState().version).toBe(authorityVersionAfterAcknowledgement);
+    expect(driver.getAuthorityState().eventLog).toHaveLength(
+      authorityEventCountAfterAcknowledgement,
+    );
   }
 
-  return { handle, packets, acknowledgedHandPacketIndexes };
+  return {
+    handle,
+    driver,
+    packets,
+    acknowledgedHandPacketIndexes,
+    acknowledgedHandNumbers,
+  };
 }
 
 function expectCompletePacketDelivery(run: Readonly<SessionRun>, initialChipTotal: number): void {
@@ -191,6 +222,15 @@ function expectCompletePacketDelivery(run: Readonly<SessionRun>, initialChipTota
   expect(run.acknowledgedHandPacketIndexes).toEqual(handPacketIndexes);
   expect(new Set(run.acknowledgedHandPacketIndexes).size)
     .toBe(run.acknowledgedHandPacketIndexes.length);
+  const handNumbers = run.packets
+    .filter((packet) => packet.kind === 'hand-result')
+    .map((packet) => packet.handNumber);
+  expect(run.acknowledgedHandNumbers).toEqual(handNumbers);
+  expect(new Set(run.acknowledgedHandNumbers).size).toBe(run.acknowledgedHandNumbers.length);
+  for (let index = 1; index < run.acknowledgedHandNumbers.length; index += 1) {
+    expect(run.acknowledgedHandNumbers[index])
+      .toBeGreaterThan(run.acknowledgedHandNumbers[index - 1]!);
+  }
 
   const gameResult = run.packets.at(-1);
   expect(gameResult?.kind).toBe('game-result');
@@ -210,6 +250,7 @@ describe('classic TurnPacket tournament sessions', () => {
   it.each([2, 6])(
     'delivers one contiguous, acknowledged packet stream for a real %i-seat session',
     async (playerCount) => {
+      expect(capture.drivers).toEqual([]);
       const config = tournamentConfig(playerCount);
       const run = await runClassicSession(
         config,
@@ -218,6 +259,9 @@ describe('classic TurnPacket tournament sessions', () => {
       );
 
       expectCompletePacketDelivery(run, playerCount * config.startingStack);
+      expect(capture.drivers).toEqual([run.driver]);
+      expect(run.packets.at(-1)?.coreEventRange.toVersionExclusive)
+        .toBe(run.driver.getAuthorityState().version);
     },
     30_000,
   );
