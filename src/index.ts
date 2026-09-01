@@ -36,6 +36,34 @@ export type { CharacterDefinition, CharacterId } from './agents/characters.js';
 export * from './game/participant.js';
 export { createCharacterParticipant, selectNpcRoster } from './game/roster.js';
 export * from './game/tournament-controller.js';
+export {
+  openGameSession,
+  getCurrentPacket,
+  submitSessionCommand,
+  continueAfterHandResult,
+} from './game/game-session.js';
+export type {
+  AbilityRejectionCode,
+  GameSessionHandle,
+  OpenGameSessionOptions,
+  SessionCommand,
+  SessionCommandResult,
+  SessionContinueResult,
+  SessionStep,
+} from './game/session-types.js';
+export type {
+  ActionPanel,
+  ClassicDecisionPacket,
+  GameResultPacket,
+  HandResultPacket,
+  RenderableCommand,
+  TurnPacket,
+} from './game/turn-packet.js';
+export type {
+  HandResultPot,
+  HandResultSummary,
+  HandSeatResult,
+} from './game/hand-result.js';
 export * from './cli/renderer.js';
 export * from './cli/prompts.js';
 export { parseCliOptions, promptForPlayerCount } from './cli/options.js';
