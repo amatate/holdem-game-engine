@@ -333,6 +333,96 @@ describe('TournamentDriver boundaries and transactions', () => {
     expect(driver.getAuthorityState()).toBe(committed);
   });
 
+  it('rejects a value-equal state whose shared config alias was split', async () => {
+    const driver = await openDecisionDriver();
+    const committed = driver.getAuthorityState();
+    const forgedEventLog = committed.eventLog.map((event) => event.type === 'GameStarted'
+      ? { ...event, config: { ...event.config } }
+      : event);
+    const forged = {
+      ...committed,
+      config: committed.config,
+      eventLog: forgedEventLog,
+    } as TournamentState;
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: forged, events: [] },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/replay mismatch/i);
+    expect(driver.getAuthorityState()).toBe(committed);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: committed, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(committed);
+  });
+
+  it('rejects a Proxy transition state without triggering any Proxy trap', async () => {
+    const driver = await openDecisionDriver();
+    const committed = driver.getAuthorityState();
+    let trapCount = 0;
+    const malicious = new Proxy(
+      { ...committed, runSeed: 'proxy-forged-seed' } as TournamentState,
+      {
+        get: (target, key, receiver) => {
+          trapCount += 1;
+          return Reflect.get(target, key, receiver);
+        },
+        getOwnPropertyDescriptor: (target, key) => {
+          trapCount += 1;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        getPrototypeOf: (target) => {
+          trapCount += 1;
+          return Reflect.getPrototypeOf(target);
+        },
+        ownKeys: (target) => {
+          trapCount += 1;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: malicious, events: [] },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/replay mismatch/i);
+    expect(driver.getAuthorityState()).toBe(committed);
+    expect(trapCount).toBe(0);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: committed, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(committed);
+  });
+
+  it('accepts a wide replay-equivalent graph without a timing threshold', async () => {
+    const driver = await openDecisionDriver();
+    const committed = driver.getAuthorityState();
+    const mutableConfig = committed.config as TournamentConfig & Record<string, unknown>;
+    for (let index = 0; index < 4_096; index += 1) {
+      mutableConfig[`compatibilityField${index}`] = index;
+    }
+    const equivalent = structuredClone(committed);
+
+    const prepared = await driver.prepareAuthorityTransition(
+      { state: equivalent, events: [] },
+      'ability-swap',
+      0,
+    );
+    expect(prepared.candidateAuthorityState).toEqual(committed);
+    driver.discardPreparedTransition(prepared);
+    expect(driver.getAuthorityState()).toBe(committed);
+  });
+
   it('enforces one active lease during pending and prepared operations', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });

@@ -137,30 +137,86 @@ function freezeRecursively<T>(value: T, seen = new WeakSet<object>()): T {
   return Object.freeze(value);
 }
 
-function sameValue(left: unknown, right: unknown): boolean {
+type ProxyDetector = (value: object) => boolean;
+
+function loadProxyDetector(): ProxyDetector | null {
+  const runtime = globalThis as typeof globalThis & {
+    process?: { getBuiltinModule?: (specifier: string) => unknown };
+  };
+  const getBuiltinModule = runtime.process?.getBuiltinModule;
+  if (typeof getBuiltinModule !== 'function') return null;
+  try {
+    const nodeUtil = getBuiltinModule('node:util') as {
+      types?: { isProxy?: (value: unknown) => boolean };
+    };
+    const isProxy = nodeUtil.types?.isProxy;
+    return typeof isProxy === 'function' ? (value) => isProxy(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+const proxyDetector = loadProxyDetector();
+
+function ownDataVersion(value: unknown): number | null | undefined {
+  if (proxyDetector === null) return undefined;
+  if (typeof value !== 'object' || value === null) return null;
+  try {
+    if (proxyDetector(value)) return null;
+    const descriptor = Object.getOwnPropertyDescriptor(value, 'version');
+    return descriptor !== undefined
+      && 'value' in descriptor
+      && typeof descriptor.value === 'number'
+      ? descriptor.value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function sameValue(
+  left: unknown,
+  right: unknown,
+  enforceAliasTopology: boolean,
+): boolean | null {
+  if (proxyDetector === null) return null;
   const leftToRight = new WeakMap<object, object>();
   const rightToLeft = new WeakMap<object, object>();
+  const comparedPairs = new WeakMap<object, WeakSet<object>>();
   const compare = (leftValue: unknown, rightValue: unknown): boolean => {
-    if (Object.is(leftValue, rightValue)) return true;
     if (typeof leftValue !== 'object' || leftValue === null
       || typeof rightValue !== 'object' || rightValue === null) {
-      return false;
+      return Object.is(leftValue, rightValue);
     }
+    if (proxyDetector(leftValue) || proxyDetector(rightValue)) return false;
 
-    const knownRight = leftToRight.get(leftValue);
-    const knownLeft = rightToLeft.get(rightValue);
-    if (knownRight !== undefined || knownLeft !== undefined) {
-      return knownRight === rightValue && knownLeft === leftValue;
+    if (enforceAliasTopology) {
+      const knownRight = leftToRight.get(leftValue);
+      const knownLeft = rightToLeft.get(rightValue);
+      if (knownRight !== undefined || knownLeft !== undefined) {
+        return knownRight === rightValue && knownLeft === leftValue;
+      }
+      leftToRight.set(leftValue, rightValue);
+      rightToLeft.set(rightValue, leftValue);
+    } else {
+      if (Object.is(leftValue, rightValue)) return true;
+      const knownRights = comparedPairs.get(leftValue);
+      if (knownRights?.has(rightValue) === true) return true;
+      if (knownRights === undefined) {
+        comparedPairs.set(leftValue, new WeakSet([rightValue]));
+      } else {
+        knownRights.add(rightValue);
+      }
     }
-    leftToRight.set(leftValue, rightValue);
-    rightToLeft.set(rightValue, leftValue);
+    if (Object.is(leftValue, rightValue)) return true;
 
     if (Object.getPrototypeOf(leftValue) !== Object.getPrototypeOf(rightValue)) return false;
     const leftKeys = Reflect.ownKeys(leftValue);
     const rightKeys = Reflect.ownKeys(rightValue);
     if (leftKeys.length !== rightKeys.length) return false;
+    const rightKeySet = new Set<PropertyKey>(rightKeys);
     for (const leftKey of leftKeys) {
-      if (!rightKeys.includes(leftKey)) return false;
+      if (!rightKeySet.has(leftKey)) return false;
       const leftDescriptor = Object.getOwnPropertyDescriptor(leftValue, leftKey);
       const rightDescriptor = Object.getOwnPropertyDescriptor(rightValue, leftKey);
       if (leftDescriptor === undefined || rightDescriptor === undefined
@@ -304,6 +360,28 @@ function safeDriverError(message: string): Error {
   return new Error(message);
 }
 
+function canonicalizeReplayAliases(state: TournamentState): TournamentState {
+  const hand = state.activeHand;
+  if (hand?.showdownRanks === undefined || hand.evaluatedHands === undefined) return state;
+  const trustedRanks = new Map(hand.showdownRanks.map((evaluation) => [
+    evaluation.seat,
+    evaluation.rank,
+  ] as const));
+  const evaluatedHands = hand.evaluatedHands.map((evaluation) => ({
+    ...evaluation,
+    rank: trustedRanks.get(evaluation.seat) ?? evaluation.rank,
+  }));
+  const eventLog = state.eventLog.map((event) => event.type === 'HandEvaluated'
+    && event.handId === hand.handId
+    ? { ...event, rank: trustedRanks.get(event.seat) ?? event.rank }
+    : event);
+  return {
+    ...state,
+    eventLog,
+    activeHand: { ...hand, evaluatedHands },
+  };
+}
+
 class TournamentDriverImplementation implements TournamentDriver {
   readonly #options: Readonly<TournamentDriverOptions>;
   readonly #maximum: number;
@@ -359,22 +437,40 @@ class TournamentDriverImplementation implements TournamentDriver {
       assertTournamentInvariants(candidate);
       candidateEventCount += 1;
     }
-    if (candidateEventCount !== transition.state.version) {
+    if (candidate !== null
+      && transition.events.some((event) => event.type === 'HandEvaluated')) {
+      candidate = canonicalizeReplayAliases(candidate);
+    }
+    if (candidate === null || candidateEventCount !== candidate.version) {
       throw safeDriverError('Tournament transition version mismatch');
     }
-    if (!sameValue(candidate, transition.state)) {
+    const suppliedVersion = ownDataVersion(transition.state);
+    if (suppliedVersion !== undefined
+      && suppliedVersion !== null
+      && suppliedVersion !== candidateEventCount) {
+      throw safeDriverError('Tournament transition version mismatch');
+    }
+    const replayMatches = sameValue(
+      candidate,
+      transition.state,
+      transition.events.length === 0,
+    );
+    if (replayMatches === false
+      || (replayMatches === null
+        && transition.events.length === 0
+        && !Object.is(candidate, transition.state))) {
       throw safeDriverError('Tournament transition replay mismatch');
     }
     const batch = freezeRecursively({
       source,
       commandIndex,
       beforeVersion: before?.version ?? 0,
-      afterVersion: transition.state.version,
+      afterVersion: candidate.version,
       authorityEvents: structuredClone(transition.events),
     });
     await this.#options.onAcceptedTransition?.(batch);
     return {
-      state: transition.state,
+      state: candidate,
       eventCount: candidateEventCount,
       batches: [...draft.batches, batch],
     };
