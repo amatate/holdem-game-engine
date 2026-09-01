@@ -1,6 +1,40 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import * as publicApi from '../../src/index.js';
+import type {
+  AbilityRejectionCode as RootAbilityRejectionCode,
+  ActionPanel as RootActionPanel,
+  ClassicDecisionPacket as RootClassicDecisionPacket,
+  GameResultPacket as RootGameResultPacket,
+  GameSessionHandle as RootGameSessionHandle,
+  HandResultPacket as RootHandResultPacket,
+  HandResultPot as RootHandResultPot,
+  HandResultSummary as RootHandResultSummary,
+  HandSeatResult as RootHandSeatResult,
+  OpenGameSessionOptions as RootOpenGameSessionOptions,
+  RenderableCommand as RootRenderableCommand,
+  SessionCommand as RootSessionCommand,
+  SessionCommandResult as RootSessionCommandResult,
+  SessionContinueResult as RootSessionContinueResult,
+  SessionStep as RootSessionStep,
+  TurnPacket as RootTurnPacket,
+} from '../../src/index.js';
+// @ts-expect-error TournamentDriver is authority-only and must not be root-exported.
+import type { TournamentDriver } from '../../src/index.js';
+// @ts-expect-error TournamentDriverOptions is authority-only and must not be root-exported.
+import type { TournamentDriverOptions } from '../../src/index.js';
+// @ts-expect-error PreparedDriverTransition is authority-only and must not be root-exported.
+import type { PreparedDriverTransition } from '../../src/index.js';
+// @ts-expect-error DriverBoundary is authority-only and must not be root-exported.
+import type { DriverBoundary } from '../../src/index.js';
+// @ts-expect-error DriverTransitionSource is authority-only and must not be root-exported.
+import type { DriverTransitionSource } from '../../src/index.js';
+// @ts-expect-error DriverTransitionBatch is authority-only and must not be root-exported.
+import type { DriverTransitionBatch } from '../../src/index.js';
+// @ts-expect-error DriverActionResult is authority-only and must not be root-exported.
+import type { DriverActionResult } from '../../src/index.js';
+// @ts-expect-error SessionAuthorityCapability is authority-only and must not be root-exported.
+import type { SessionAuthorityCapability } from '../../src/index.js';
 import {
   DEFAULT_TOURNAMENT_CONFIG,
   main,
@@ -8,14 +42,28 @@ import {
   type CliRuntime,
 } from '../../src/cli/index.js';
 import { parseCard } from '../../src/core/cards.js';
+import type { PublicGameEvent } from '../../src/core/public-events.js';
 import type {
+  HandResultPot,
+  HandResultSummary,
+  HandSeatResult,
+} from '../../src/game/hand-result.js';
+import type {
+  AbilityRejectionCode,
   GameSessionHandle,
   OpenGameSessionOptions,
+  SessionCommand,
+  SessionCommandResult,
+  SessionContinueResult,
+  SessionStep,
 } from '../../src/game/session-types.js';
 import type {
+  ActionPanel,
   ClassicDecisionPacket,
   GameResultPacket,
   HandResultPacket,
+  RenderableCommand,
+  TurnPacket,
 } from '../../src/game/turn-packet.js';
 
 const PLAYER_COUNT_PROMPT = '请选择牌桌人数（2-6，直接回车默认 4）：';
@@ -35,14 +83,17 @@ function freezeRecursively<T>(value: T, seen = new WeakSet<object>()): Readonly<
   return Object.freeze(value);
 }
 
-function decisionPacket(packetIndex = 0): Readonly<ClassicDecisionPacket> {
+function decisionPacket(
+  packetIndex = 0,
+  viewerEventsSinceLastPacket: readonly PublicGameEvent[] = [],
+): Readonly<ClassicDecisionPacket> {
   return freezeRecursively({
     schemaVersion: 1,
     kind: 'decision',
     packetIndex,
     decisionKey: 'hand/1/seat/0/decision/0',
     coreEventRange: { fromVersionInclusive: 0, toVersionExclusive: 4 },
-    viewerEventsSinceLastPacket: [],
+    viewerEventsSinceLastPacket,
     privateEventsSinceLastPacket: [],
     observation: {
       schemaVersion: 1,
@@ -259,24 +310,54 @@ describe('terminal GameSession composition', () => {
     ]);
   });
 
-  it('prints a safe rejection, retains the rejected packet, and asks again', async () => {
-    const first = decisionPacket();
-    const completed = gameResultPacket(1);
+  it('does not replay a rejected packet and renders each later packet normally', async () => {
+    const first = decisionPacket(0, [
+      { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false },
+    ]);
+    const settled = handResultPacket(1);
+    const completed = gameResultPacket(2);
     const handle = Object.freeze({}) as GameSessionHandle;
+    const operations: string[] = [];
+    const writes: string[] = [];
     const questions: string[] = [];
     const promptWrites: string[] = [];
     const submittedPackets: number[] = [];
-    const close = vi.fn();
 
     await main(['--players', '2', '--seed', 'rejection'], {
-      write: () => {},
-      sleep: async () => {},
+      write: (message) => {
+        writes.push(message);
+        if (message === '座位 1 过牌。') operations.push('write:event');
+        else if (message.startsWith('第 1 手｜')) operations.push('write:decision');
+        else if (message.startsWith('第 1 手结算')) operations.push('write:settlement');
+        else if (message.startsWith('比赛结束')) operations.push('write:game-result');
+      },
+      sleep: async (milliseconds) => { operations.push(`wait:${milliseconds}`); },
       randomUUID: () => 'unused',
-      createPrompt: () => promptFromInputs(['u peek 1', 'x'], questions, promptWrites, close),
-      openGameSession: async () => ({ handle, packet: first }),
+      createPrompt: () => {
+        const inputs = ['u peek 1', 'x'];
+        return {
+          question: async (question) => {
+            questions.push(question);
+            operations.push('prompt:question');
+            const input = inputs.shift();
+            if (input === undefined) throw new Error('prompt input queue exhausted');
+            return input;
+          },
+          write: (message) => {
+            promptWrites.push(message);
+            operations.push('prompt:rejection');
+          },
+          close: () => { operations.push('prompt:close'); },
+        };
+      },
+      openGameSession: async () => {
+        operations.push('session:open');
+        return { handle, packet: first };
+      },
       submitSessionCommand: async (receivedHandle, command) => {
         expect(receivedHandle).toBe(handle);
         submittedPackets.push(command.expectedPacketIndex);
+        operations.push(`session:submit:${submittedPackets.length}`);
         if (submittedPackets.length === 1) {
           return {
             accepted: false,
@@ -285,15 +366,36 @@ describe('terminal GameSession composition', () => {
             packet: first,
           };
         }
+        return { accepted: true, step: { handle, packet: settled } };
+      },
+      continueAfterHandResult: async () => {
+        operations.push('session:continue');
         return { accepted: true, step: { handle, packet: completed } };
       },
-      continueAfterHandResult: async () => { throw new Error('unexpected continue'); },
     });
 
     expect(submittedPackets).toEqual([first.packetIndex, first.packetIndex]);
     expect(questions).toEqual([ACTION_PROMPT, ACTION_PROMPT]);
     expect(promptWrites).toEqual(['经典模式不能使用能力。']);
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(writes.filter((message) => message === '座位 1 过牌。')).toHaveLength(1);
+    expect(writes.filter((message) => message.startsWith('第 1 手｜'))).toHaveLength(1);
+    expect(writes.filter((message) => message.startsWith('第 1 手结算'))).toHaveLength(1);
+    expect(writes.filter((message) => message.startsWith('比赛结束'))).toHaveLength(1);
+    expect(operations).toEqual([
+      'session:open',
+      'write:event',
+      'write:decision',
+      'prompt:question',
+      'session:submit:1',
+      'prompt:rejection',
+      'prompt:question',
+      'session:submit:2',
+      'wait:1000',
+      'write:settlement',
+      'session:continue',
+      'write:game-result',
+      'prompt:close',
+    ]);
   });
 
   it('throws on a rejected current hand result and still closes the prompt once', async () => {
@@ -354,6 +456,58 @@ describe('terminal GameSession composition', () => {
 });
 
 describe('public package surface', () => {
+  it('type-exports exactly the viewer-safe session, packet, and summary contracts', () => {
+    type RootViewerSurface = readonly [
+      RootAbilityRejectionCode,
+      RootGameSessionHandle,
+      RootOpenGameSessionOptions,
+      RootSessionCommand,
+      RootSessionCommandResult,
+      RootSessionContinueResult,
+      RootSessionStep,
+      RootActionPanel,
+      RootClassicDecisionPacket,
+      RootGameResultPacket,
+      RootHandResultPacket,
+      RootRenderableCommand,
+      RootTurnPacket,
+      RootHandResultPot,
+      RootHandResultSummary,
+      RootHandSeatResult,
+    ];
+    type DirectViewerSurface = readonly [
+      AbilityRejectionCode,
+      GameSessionHandle,
+      OpenGameSessionOptions,
+      SessionCommand,
+      SessionCommandResult,
+      SessionContinueResult,
+      SessionStep,
+      ActionPanel,
+      ClassicDecisionPacket,
+      GameResultPacket,
+      HandResultPacket,
+      RenderableCommand,
+      TurnPacket,
+      HandResultPot,
+      HandResultSummary,
+      HandSeatResult,
+    ];
+    type ForbiddenAuthorityTypes = readonly [
+      TournamentDriver,
+      TournamentDriverOptions,
+      PreparedDriverTransition,
+      DriverBoundary,
+      DriverTransitionSource,
+      DriverTransitionBatch,
+      DriverActionResult,
+      SessionAuthorityCapability,
+    ];
+
+    expectTypeOf<RootViewerSurface>().toEqualTypeOf<DirectViewerSurface>();
+    expectTypeOf<ForbiddenAuthorityTypes>().toMatchTypeOf<readonly unknown[]>();
+  });
+
   it('exports viewer-safe session operations without driver authority hooks', () => {
     expect(publicApi).toMatchObject({
       openGameSession: expect.any(Function),
@@ -365,7 +519,12 @@ describe('public package surface', () => {
     const exportedNames = Object.keys(publicApi);
     for (const forbiddenName of [
       'TournamentDriver',
+      'TournamentDriverOptions',
       'PreparedDriverTransition',
+      'DriverBoundary',
+      'DriverTransitionSource',
+      'DriverTransitionBatch',
+      'DriverActionResult',
       'createTournamentDriver',
       'openTournamentDriver',
       'getAuthorityState',

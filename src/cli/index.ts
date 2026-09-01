@@ -10,7 +10,7 @@ import {
   openGameSession,
   submitSessionCommand,
 } from '../game/game-session.js';
-import type { GameResultPacket } from '../game/turn-packet.js';
+import type { GameResultPacket, TurnPacket } from '../game/turn-packet.js';
 import { type PromptIO } from './prompts.js';
 import { parseCliOptions, promptForPlayerCount } from './options.js';
 import { playRenderBlocks } from './semantic-pacing.js';
@@ -103,10 +103,14 @@ export async function main(
       invalidAgentActionMode: 'fallback',
       humanSeatIndex: 0,
     });
+    let renderedPacket: Readonly<TurnPacket> | null = null;
 
     while (true) {
-      if (packet.kind === 'decision') {
+      if (packet !== renderedPacket) {
         await playRenderBlocks(renderTurnPacket(packet), runtime);
+        renderedPacket = packet;
+      }
+      if (packet.kind === 'decision') {
         const command = await promptForTurnCommand(packet, prompt);
         const result = await runtime.submitSessionCommand(handle, command);
         if (!result.accepted) {
@@ -116,14 +120,12 @@ export async function main(
           ({ handle, packet } = result.step);
         }
       } else if (packet.kind === 'hand-result') {
-        await playRenderBlocks(renderTurnPacket(packet), runtime);
         const continued = await runtime.continueAfterHandResult(handle, packet.packetIndex);
         if (!continued.accepted) {
           throw new Error('Session rejected its current hand result');
         }
         ({ handle, packet } = continued.step);
       } else {
-        await playRenderBlocks(renderTurnPacket(packet), runtime);
         return packet;
       }
     }
