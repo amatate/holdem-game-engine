@@ -554,6 +554,107 @@ describe('TournamentDriver boundaries and transactions', () => {
     expect(driver.getAuthorityState()).toBe(before);
   });
 
+  it.each([
+    'extra card',
+    'sparse card pair',
+    'non-array card pair',
+  ] as const)('rejects HoleCardsRevealed with an %s before alias restoration', async (shape) => {
+    const callbackBatches: Readonly<DriverTransitionBatch>[] = [];
+    const driver = await openDecisionDriver({
+      onAcceptedTransition: (batch) => {
+        if (batch.source === 'ability-swap') callbackBatches.push(batch);
+      },
+    });
+    const before = driver.getAuthorityState();
+    const legal = allInRunoutTransition(before);
+    const targetIndex = legal.events.findIndex((event) => event.type === 'HoleCardsRevealed');
+    const target = legal.events[targetIndex];
+    if (target?.type !== 'HoleCardsRevealed') {
+      throw new Error('fixture must include HoleCardsRevealed');
+    }
+    let cards: unknown;
+    if (shape === 'extra card') {
+      cards = [...target.cards, target.cards[0]];
+    } else if (shape === 'sparse card pair') {
+      const sparse = new Array<typeof target.cards[number]>(2);
+      sparse[0] = target.cards[0];
+      cards = sparse;
+    } else {
+      cards = { 0: target.cards[0], 1: target.cards[1], length: 2 };
+    }
+    const forgedEvents = legal.events.map((event, index) => index === targetIndex
+      ? { ...target, cards: cards as typeof target.cards }
+      : event);
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: legal.state, events: forgedEvents },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/HoleCardsRevealed authority card shape mismatch/);
+    expect(callbackBatches).toEqual([]);
+    expect(driver.getAuthorityState()).toBe(before);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: before as TournamentState, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(before);
+  });
+
+  it.each([
+    'sparse array',
+    'non-array object',
+  ] as const)('rejects CommunityCardsDealt with a %s before alias restoration', async (shape) => {
+    const callbackBatches: Readonly<DriverTransitionBatch>[] = [];
+    const driver = await openDecisionDriver({
+      onAcceptedTransition: (batch) => {
+        if (batch.source === 'ability-swap') callbackBatches.push(batch);
+      },
+    });
+    const before = driver.getAuthorityState();
+    const legal = allInRunoutTransition(before);
+    const targetIndex = legal.events.findIndex((event) => event.type === 'CommunityCardsDealt');
+    const target = legal.events[targetIndex];
+    if (target?.type !== 'CommunityCardsDealt') {
+      throw new Error('fixture must include CommunityCardsDealt');
+    }
+    let cards: unknown;
+    if (shape === 'sparse array') {
+      const sparse = new Array<typeof target.cards[number]>(target.cards.length);
+      sparse[0] = target.cards[0]!;
+      sparse[2] = target.cards[2]!;
+      cards = sparse;
+    } else {
+      cards = {
+        0: target.cards[0],
+        1: target.cards[1],
+        2: target.cards[2],
+        length: target.cards.length,
+      };
+    }
+    const forgedEvents = legal.events.map((event, index) => index === targetIndex
+      ? { ...target, cards: cards as typeof target.cards }
+      : event);
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: legal.state, events: forgedEvents },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/CommunityCardsDealt authority card shape mismatch/);
+    expect(callbackBatches).toEqual([]);
+    expect(driver.getAuthorityState()).toBe(before);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: before as TournamentState, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(before);
+  });
+
   it('accepts an ordinary eventful core transition when Proxy detection is available', async () => {
     const driver = await openDecisionDriver();
     const before = driver.getAuthorityState();

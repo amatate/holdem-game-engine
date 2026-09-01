@@ -389,6 +389,9 @@ function canonicalizeOwnedEventReferences(
 ): DomainEvent {
   if (state?.activeHand === null || state?.activeHand === undefined) return event;
   if (event.type === 'HoleCardsRevealed') {
+    if (!isDenseOwnArray(event.cards, 2)) {
+      throw safeDriverError('HoleCardsRevealed authority card shape mismatch');
+    }
     const holeCards = state.seats.find((seat) => seat.seatIndex === event.seat)?.holeCards;
     if (holeCards === null || holeCards === undefined) return event;
     if (!sameCardValue(holeCards[0], event.cards[0])
@@ -407,6 +410,9 @@ function canonicalizeOwnedEventReferences(
   }
   if (event.type === 'CommunityCardsDealt') {
     const expectedCount = event.street === 'flop' ? 3 : 1;
+    if (!isDenseOwnArray(event.cards, expectedCount)) {
+      throw safeDriverError('CommunityCardsDealt authority card shape mismatch');
+    }
     const cards = state.activeHand.deck.slice(
       state.activeHand.dealCursor,
       state.activeHand.dealCursor + expectedCount,
@@ -419,6 +425,14 @@ function canonicalizeOwnedEventReferences(
     return { ...event, cards };
   }
   return event;
+}
+
+function isDenseOwnArray(value: unknown, expectedLength: number): value is readonly unknown[] {
+  if (!Array.isArray(value) || value.length !== expectedLength) return false;
+  for (let index = 0; index < expectedLength; index += 1) {
+    if (!Object.hasOwn(value, index)) return false;
+  }
+  return true;
 }
 
 function sameCardValue(left: Readonly<Card>, right: Readonly<Card>): boolean {
