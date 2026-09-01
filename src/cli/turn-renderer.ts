@@ -114,15 +114,9 @@ function repeatedRanks(cards: readonly Readonly<Card>[], count: number): readonl
 function describedCategory(
   category: HandCategory,
   bestFive: readonly Readonly<Card>[],
-  holeCards: readonly Readonly<Card>[] | null,
 ): string {
   const base = HAND_CATEGORY_LABELS[category];
-  if (category === 'one-pair') {
-    const pairRank = repeatedRanks(bestFive, 2)[0]
-      ?? holeCards?.[1]?.code.slice(0, -1)
-      ?? '';
-    return `${base}${pairRank}`;
-  }
+  if (category === 'one-pair') return `${base}${repeatedRanks(bestFive, 2)[0] ?? ''}`;
   if (category === 'two-pair') return `${base}${repeatedRanks(bestFive, 2).join('和')}`;
   if (category === 'three-of-a-kind') return `${base}${repeatedRanks(bestFive, 3)[0] ?? ''}`;
   if (category === 'four-of-a-kind') return `${base}${repeatedRanks(bestFive, 4)[0] ?? ''}`;
@@ -150,7 +144,7 @@ function renderSettlement(summary: Readonly<HandResultSummary>): string {
     const holeCards = seat.holeCards === null ? '—' : cardsText(seat.holeCards);
     const category = seat.category === null || seat.bestFive === null
       ? '—'
-      : `${describedCategory(seat.category, seat.bestFive, seat.holeCards)}（${cardsText(seat.bestFive)}）`;
+      : `${describedCategory(seat.category, seat.bestFive)}（${cardsText(seat.bestFive)}）`;
     lines.push(`${seat.playerId} | ${holeCards} | ${category} | ${seat.potWon}`
       + ` | ${seat.invested} | ${seat.returned} | ${signed(seat.net)}`);
   }

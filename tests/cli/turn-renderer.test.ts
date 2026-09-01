@@ -97,7 +97,7 @@ const twoPotResult: HandResultSummary = {
       playerId: 'Morgan',
       holeCards: [parseCard('9c'), parseCard('2s')],
       category: 'one-pair',
-      bestFive: ['9c', '7s', '3h', '2s', 'Qc'].map(parseCard),
+      bestFive: ['2s', '2h', 'Qc', '9c', '7s'].map(parseCard),
       potWon: 466,
       invested: 818,
       returned: 0,
@@ -196,7 +196,7 @@ describe('turn packet renderer', () => {
         '第 4 手结算',
         '玩家 | 手牌 | 牌型 | 赢得底池 | 本手投入 | 退回 | 净结果',
         '你 | K♠ 3♣ | 一对3（K♠ 7♠ 3♥ 3♣ Q♣） | 1755 | 585 | 0 | +1170',
-        'Morgan | 9♣ 2♠ | 一对2（9♣ 7♠ 3♥ 2♠ Q♣） | 466 | 818 | 0 | -352',
+        'Morgan | 9♣ 2♠ | 一对2（2♠ 2♥ Q♣ 9♣ 7♠） | 466 | 818 | 0 | -352',
         '主池 1755：你 1755',
         '边池 1 466：Morgan 466',
         '结论：你赢得 1755；Morgan 赢得 466。',
@@ -229,6 +229,30 @@ describe('turn packet renderer', () => {
     expect(text).toContain('底池 11：林岚 5；你 6');
     expect(text).toContain('结论：你赢得 6；林岚赢得 5。');
     expect(text).not.toContain('最佳五张');
+  });
+
+  it('does not invent a one-pair rank from hole cards when bestFive is inconsistent', () => {
+    const inconsistent: HandResultSummary = {
+      handNumber: 6,
+      seats: [{
+        seatIndex: 0,
+        playerId: 'synthetic',
+        holeCards: [parseCard('As'), parseCard('Jd')],
+        category: 'one-pair',
+        bestFive: ['As', 'Kh', '9c', '7d', '3s'].map(parseCard),
+        potWon: 0,
+        invested: 0,
+        returned: 0,
+        net: 0,
+        finalStack: 100,
+      }],
+      pots: [],
+    };
+
+    const text = renderTurnPacket(resultPacket(inconsistent))[0]!.text;
+
+    expect(text).toContain('synthetic | A♠ J♦ | 一对（A♠ K♥ 9♣ 7♦ 3♠）');
+    expect(text).not.toContain('一对J');
   });
 
   it('renders a game result as one immediate ordinary block', () => {
