@@ -236,6 +236,75 @@ function isSafeCallable(value: unknown): value is (...args: unknown[]) => unknow
   return typeof value === 'function' && !isDetectedProxy(value);
 }
 
+const MAX_PARTICIPANT_PROTOTYPE_DEPTH = 32;
+
+function snapshotParticipant(
+  value: unknown,
+  expectedPlayerId: string,
+): Participant | null {
+  if (typeof value !== 'object' || value === null || isDetectedProxy(value)) return null;
+  try {
+    const playerIdDescriptor = Object.getOwnPropertyDescriptor(value, 'playerId');
+    if (playerIdDescriptor === undefined
+      || !('value' in playerIdDescriptor)
+      || playerIdDescriptor.value !== expectedPlayerId
+      || typeof playerIdDescriptor.value !== 'string'
+      || playerIdDescriptor.value.length === 0) {
+      return null;
+    }
+
+    let trustedDecide: Participant['decide'] | null = null;
+    const ownDecideDescriptor = Object.getOwnPropertyDescriptor(value, 'decide');
+    if (ownDecideDescriptor !== undefined) {
+      if (!('value' in ownDecideDescriptor) || !isSafeCallable(ownDecideDescriptor.value)) {
+        return null;
+      }
+      trustedDecide = ownDecideDescriptor.value as Participant['decide'];
+    }
+
+    const visited = new Set<object>([value]);
+    let prototype = Object.getPrototypeOf(value) as object | null;
+    let depth = 0;
+    while (prototype !== null) {
+      if (isDetectedProxy(prototype)
+        || visited.has(prototype)
+        || depth >= MAX_PARTICIPANT_PROTOTYPE_DEPTH) {
+        return null;
+      }
+      visited.add(prototype);
+      depth += 1;
+
+      if (Object.getOwnPropertyDescriptor(prototype, 'playerId') !== undefined) return null;
+      const inheritedDecideDescriptor = Object.getOwnPropertyDescriptor(prototype, 'decide');
+      if (inheritedDecideDescriptor !== undefined) {
+        if (!('value' in inheritedDecideDescriptor)
+          || !isSafeCallable(inheritedDecideDescriptor.value)) {
+          return null;
+        }
+        if (trustedDecide === null) {
+          trustedDecide = inheritedDecideDescriptor.value as Participant['decide'];
+        }
+      }
+      prototype = Object.getPrototypeOf(prototype) as object | null;
+    }
+    if (trustedDecide === null) return null;
+
+    const originalParticipant = value;
+    const playerId = playerIdDescriptor.value;
+    const decide = trustedDecide;
+    return Object.freeze({
+      playerId,
+      decide: async (context: Parameters<Participant['decide']>[0]) => await Reflect.apply(
+        decide,
+        originalParticipant,
+        [context],
+      ),
+    });
+  } catch {
+    return null;
+  }
+}
+
 function snapshotParticipants(
   value: unknown,
   seats: readonly TournamentSeatInput[],
@@ -252,22 +321,12 @@ function snapshotParticipants(
       participants.push(null);
       continue;
     }
-    const rawParticipant = rawParticipants[seatIndex];
-    const record = snapshotOwnDataRecord(rawParticipant);
-    if (record === null || !hasExactFields(record, ['playerId', 'decide'])) return null;
-    const playerId = record.get('playerId');
-    const decide = record.get('decide');
-    if (playerId !== seats[seatIndex]!.playerId || !isSafeCallable(decide)) return null;
-    const participant = rawParticipant as object;
-    const trustedDecide = decide as Participant['decide'];
-    participants.push(Object.freeze({
-      playerId,
-      decide: async (context: Parameters<Participant['decide']>[0]) => await Reflect.apply(
-        trustedDecide,
-        participant,
-        [context],
-      ),
-    }));
+    const participant = snapshotParticipant(
+      rawParticipants[seatIndex],
+      seats[seatIndex]!.playerId,
+    );
+    if (participant === null) return null;
+    participants.push(participant);
   }
   return Object.freeze(participants);
 }

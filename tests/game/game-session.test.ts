@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { DecisionContext, PokerAgent } from '../../src/agents/types.js';
 import type { TournamentConfig } from '../../src/core/config.js';
 import type { ActionIntent } from '../../src/core/legal-actions.js';
-import type { Participant } from '../../src/game/participant.js';
+import {
+  AgentParticipant,
+  ScriptedParticipant,
+  type Participant,
+} from '../../src/game/participant.js';
 import {
   continueAfterHandResult,
   getCurrentPacket,
@@ -691,6 +696,88 @@ describe('hand-result acknowledgement and delivery cursors', () => {
   });
 });
 
+describe('class participant snapshots', () => {
+  it('runs a real ScriptedParticipant with its private cursor intact', async () => {
+    const scripted = new ScriptedParticipant('npc', [{ type: 'check' }, { type: 'check' }]);
+    const first = await openGameSession(options({ participants: [null, scripted] }));
+
+    const result = await submitSessionCommand(first.handle, act(first.packet));
+
+    expect(result.accepted).toBe(true);
+    expect(capture.driverOptions[0]!.participants[1]).not.toBe(scripted);
+  });
+
+  it('runs a real AgentParticipant while preserving awaited RNG context delivery', async () => {
+    let releaseDecision!: () => void;
+    let reportEntered!: () => void;
+    let settled = false;
+    const entered = new Promise<void>((resolve) => { reportEntered = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseDecision = resolve; });
+    const receivedContexts: Readonly<DecisionContext>[] = [];
+    const randomSamples: number[] = [];
+    const agent: PokerAgent = {
+      agentId: 'test-agent',
+      decide: async (context) => {
+        receivedContexts.push(context);
+        randomSamples.push(context.random.nextFloat());
+        reportEntered();
+        await gate;
+        return context.observation.legalActions.check
+          ? { action: { type: 'check' } }
+          : { action: { type: 'call' } };
+      },
+    };
+    const participant = new AgentParticipant('npc', agent);
+    const first = await openGameSession(options({ participants: [null, participant] }));
+
+    const inFlight = submitSessionCommand(first.handle, act(first.packet));
+    void inFlight.then(() => { settled = true; });
+    await entered;
+
+    expect(settled).toBe(false);
+    expect(receivedContexts).toHaveLength(1);
+    expect(receivedContexts[0]!.observation.actorSeatIndex).toBe(1);
+    expect(receivedContexts[0]!.random.algorithm).toBe('mulberry32-v1');
+    expect(randomSamples[0]).toBeGreaterThanOrEqual(0);
+    expect(randomSamples[0]).toBeLessThan(1);
+
+    releaseDecision();
+    await expect(inFlight).resolves.toMatchObject({ accepted: true });
+  });
+
+  it('binds an inherited class decide method to the original stateful instance', async () => {
+    class StatefulParticipant implements Participant {
+      public readonly playerId = 'npc';
+      public calls = 0;
+      public lastContext: Readonly<DecisionContext> | null = null;
+      public randomSample: number | null = null;
+
+      public async decide(context: Readonly<DecisionContext>) {
+        await Promise.resolve();
+        this.calls += 1;
+        this.lastContext = context;
+        this.randomSample = context.random.nextFloat();
+        return context.observation.legalActions.check
+          ? { action: { type: 'check' as const } }
+          : { action: { type: 'call' as const } };
+      }
+    }
+    const participant = new StatefulParticipant();
+    const first = await openGameSession(options({ participants: [null, participant] }));
+    StatefulParticipant.prototype.decide = async () => {
+      throw new Error('mutated prototype method must not run');
+    };
+
+    await expect(submitSessionCommand(first.handle, act(first.packet)))
+      .resolves.toMatchObject({ accepted: true });
+
+    expect(participant.calls).toBe(2);
+    expect(participant.lastContext?.observation.actorSeatIndex).toBe(1);
+    expect(participant.randomSample).toBeGreaterThanOrEqual(0);
+    expect(participant.randomSample).toBeLessThan(1);
+  });
+});
+
 describe('session validation and active-operation guard', () => {
   it.each([
     {
@@ -910,6 +997,88 @@ describe('session validation and active-operation guard', () => {
     expect(diagnostic).not.toHaveBeenCalled();
     expect(capture.driverOptions).toEqual([]);
     expect(capture.drivers).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'revoked provider',
+      create() {
+        const revocable = Proxy.revocable({
+          playerId: 'npc',
+          decide: async () => ({ action: { type: 'fold' as const } }),
+        }, {});
+        revocable.revoke();
+        return { provider: revocable.proxy as Participant, traps: [] };
+      },
+    },
+    {
+      name: 'proxied provider prototype',
+      create() {
+        const trap = vi.fn(() => { throw new Error('PROVIDER-PROTOTYPE-TRAP'); });
+        const prototype = new Proxy({
+          decide: async () => ({ action: { type: 'fold' as const } }),
+        }, {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        const provider = Object.create(prototype) as Record<string, unknown>;
+        Object.defineProperty(provider, 'playerId', { enumerable: true, value: 'npc' });
+        return { provider: provider as unknown as Participant, traps: [trap] };
+      },
+    },
+    {
+      name: 'revoked provider prototype',
+      create() {
+        const revocable = Proxy.revocable({
+          decide: async () => ({ action: { type: 'fold' as const } }),
+        }, {});
+        const provider = Object.create(revocable.proxy) as Record<string, unknown>;
+        Object.defineProperty(provider, 'playerId', { enumerable: true, value: 'npc' });
+        revocable.revoke();
+        return { provider: provider as unknown as Participant, traps: [] };
+      },
+    },
+    {
+      name: 'prototype decide accessor',
+      create() {
+        const getter = vi.fn(() => async () => ({ action: { type: 'fold' as const } }));
+        const prototype = {} as Record<string, unknown>;
+        Object.defineProperty(prototype, 'decide', { enumerable: true, get: getter });
+        const provider = Object.create(prototype) as Record<string, unknown>;
+        Object.defineProperty(provider, 'playerId', { enumerable: true, value: 'npc' });
+        return { provider: provider as unknown as Participant, traps: [getter] };
+      },
+    },
+    {
+      name: 'inherited playerId',
+      create() {
+        const decide = vi.fn(async () => ({ action: { type: 'fold' as const } }));
+        const provider = Object.create({ playerId: 'npc', decide }) as Participant;
+        return { provider, traps: [decide] };
+      },
+    },
+    {
+      name: 'overlong prototype chain',
+      create() {
+        const decide = vi.fn(async () => ({ action: { type: 'fold' as const } }));
+        let prototype: object = { decide };
+        for (let depth = 0; depth < 40; depth += 1) prototype = Object.create(prototype);
+        const provider = Object.create(prototype) as Record<string, unknown>;
+        Object.defineProperty(provider, 'playerId', { enumerable: true, value: 'npc' });
+        return { provider: provider as unknown as Participant, traps: [decide] };
+      },
+    },
+  ])('rejects $name without traversing traps or constructing a driver', async ({ create }) => {
+    const hostile = create();
+
+    await expect(openGameSession(options({ participants: [null, hostile.provider] })))
+      .rejects.toThrowError('Invalid game session options');
+
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+    for (const trap of hostile.traps) expect(trap).not.toHaveBeenCalled();
   });
 
   it('does not invoke a valid participant when a prior seat phase fails', async () => {
