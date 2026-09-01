@@ -7,6 +7,7 @@ import { assertTournamentInvariants } from '../core/invariants.js';
 import type { ActionIntent, ActionRejection } from '../core/legal-actions.js';
 import { createSeededRandom } from '../core/random.js';
 import { applyIntent } from '../core/reducer.js';
+import type { Card } from '../core/types.js';
 import {
   createTournament,
   reduceDomainEvent,
@@ -389,22 +390,39 @@ function canonicalizeOwnedEventReferences(
   if (state?.activeHand === null || state?.activeHand === undefined) return event;
   if (event.type === 'HoleCardsRevealed') {
     const holeCards = state.seats.find((seat) => seat.seatIndex === event.seat)?.holeCards;
-    return holeCards === null || holeCards === undefined
-      ? event
-      : { ...event, cards: [holeCards[0], holeCards[1]] };
+    if (holeCards === null || holeCards === undefined) return event;
+    if (!sameCardValue(holeCards[0], event.cards[0])
+      || !sameCardValue(holeCards[1], event.cards[1])) {
+      throw safeDriverError('HoleCardsRevealed authority card mismatch');
+    }
+    return { ...event, cards: [holeCards[0], holeCards[1]] };
   }
   if (event.type === 'CardBurned') {
     const card = state.activeHand.deck[state.activeHand.dealCursor];
-    return card === undefined ? event : { ...event, card };
+    if (card === undefined) return event;
+    if (!sameCardValue(card, event.card)) {
+      throw safeDriverError('CardBurned authority card mismatch');
+    }
+    return { ...event, card };
   }
   if (event.type === 'CommunityCardsDealt') {
+    const expectedCount = event.street === 'flop' ? 3 : 1;
     const cards = state.activeHand.deck.slice(
       state.activeHand.dealCursor,
-      state.activeHand.dealCursor + event.cards.length,
+      state.activeHand.dealCursor + expectedCount,
     );
-    return cards.length !== event.cards.length ? event : { ...event, cards };
+    if (cards.length !== expectedCount) return event;
+    if (event.cards.length !== expectedCount
+      || cards.some((card, index) => !sameCardValue(card, event.cards[index]!))) {
+      throw safeDriverError('CommunityCardsDealt authority card mismatch');
+    }
+    return { ...event, cards };
   }
   return event;
+}
+
+function sameCardValue(left: Readonly<Card>, right: Readonly<Card>): boolean {
+  return left.code === right.code && left.rank === right.rank && left.suit === right.suit;
 }
 
 class TournamentDriverImplementation implements TournamentDriver {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { assertTournamentInvariants } from '../../src/core/invariants.js';
 import type { DomainEvent } from '../../src/core/events.js';
+import { advanceAutomaticPhases } from '../../src/core/dealing.js';
 import type { ActionIntent } from '../../src/core/legal-actions.js';
 import { applyIntent } from '../../src/core/reducer.js';
 import type { TournamentConfig } from '../../src/core/config.js';
@@ -177,6 +178,18 @@ async function openDecisionDriver(
   overrides: Partial<TournamentDriverOptions> = {},
 ) {
   return await openTournamentDriver(options(overrides));
+}
+
+function allInRunoutTransition(state: Readonly<TournamentState>): TransitionResult {
+  const shove = applyIntent(state as TournamentState, 0, { type: 'allIn' });
+  if (!shove.accepted) throw new Error('fixture shove must be accepted');
+  const call = applyIntent(shove.state, 1, { type: 'call' });
+  if (!call.accepted) throw new Error('fixture call must be accepted');
+  const runout = advanceAutomaticPhases(call.state);
+  return {
+    state: runout.state,
+    events: [...shove.events, ...call.events, ...runout.events],
+  };
 }
 
 describe('TournamentDriver opening and validation', () => {
@@ -480,6 +493,65 @@ describe('TournamentDriver boundaries and transactions', () => {
     expect(committedEvent?.audit.labels).toEqual(['original']);
     expect(committedEvent?.paid).not.toBe(999);
     assertTournamentInvariants(committed as TournamentState);
+  });
+
+  it.each([
+    'HoleCardsRevealed',
+    'CardBurned',
+    'CommunityCardsDealt',
+  ] as const)('rejects forged %s card evidence before restoring trusted aliases', async (type) => {
+    const callbackBatches: Readonly<DriverTransitionBatch>[] = [];
+    const driver = await openDecisionDriver({
+      onAcceptedTransition: (batch) => {
+        if (batch.source === 'ability-swap') callbackBatches.push(batch);
+      },
+    });
+    const before = driver.getAuthorityState();
+    const legal = allInRunoutTransition(before);
+    const targetIndex = legal.events.findIndex((event) => event.type === type);
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    const target = legal.events[targetIndex]!;
+    const forgedTarget: DomainEvent = target.type === 'HoleCardsRevealed'
+      ? {
+        ...target,
+        cards: [
+          { ...target.cards[0], suit: target.cards[0].suit === 'c' ? 'd' : 'c' },
+          target.cards[1],
+        ],
+      }
+      : target.type === 'CardBurned'
+        ? {
+          ...target,
+          card: { ...target.card, suit: target.card.suit === 'c' ? 'd' : 'c' },
+        }
+        : target.type === 'CommunityCardsDealt'
+          ? {
+            ...target,
+            cards: [
+              { ...target.cards[0]!, suit: target.cards[0]!.suit === 'c' ? 'd' : 'c' },
+              ...target.cards.slice(1),
+            ],
+          }
+          : (() => { throw new Error('fixture target must carry authoritative cards'); })();
+    const forgedEvents = legal.events.map((event, index) => index === targetIndex
+      ? forgedTarget
+      : event);
+
+    await expect(driver.prepareAuthorityTransition(
+      { state: legal.state, events: forgedEvents },
+      'ability-swap',
+      0,
+    )).rejects.toThrow(/card|authority|replay/i);
+    expect(callbackBatches).toEqual([]);
+    expect(driver.getAuthorityState()).toBe(before);
+
+    const retry = await driver.prepareAuthorityTransition(
+      { state: before as TournamentState, events: [] },
+      'ability-swap',
+      1,
+    );
+    driver.discardPreparedTransition(retry);
+    expect(driver.getAuthorityState()).toBe(before);
   });
 
   it('accepts an ordinary eventful core transition when Proxy detection is available', async () => {
