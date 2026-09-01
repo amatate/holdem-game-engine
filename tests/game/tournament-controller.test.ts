@@ -1,4 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const projectionControl = vi.hoisted(() => ({ emptyViewerSeatIndex: undefined as number | undefined }));
+const driverControl = vi.hoisted(() => ({ openCalls: 0 }));
+
+vi.mock('../../src/core/public-events.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/core/public-events.js')>();
+  return {
+    ...actual,
+    projectEventsForViewer: (
+      events: Parameters<typeof actual.projectEventsForViewer>[0],
+      viewerSeatIndex: Parameters<typeof actual.projectEventsForViewer>[1],
+    ) => viewerSeatIndex === projectionControl.emptyViewerSeatIndex
+      ? []
+      : actual.projectEventsForViewer(events, viewerSeatIndex),
+  };
+});
+
+vi.mock('../../src/game/tournament-driver.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/game/tournament-driver.js')>();
+  return {
+    ...actual,
+    openTournamentDriver: (
+      options: Parameters<typeof actual.openTournamentDriver>[0],
+    ) => {
+      driverControl.openCalls += 1;
+      return actual.openTournamentDriver(options);
+    },
+  };
+});
 
 import type { DecisionContext } from '../../src/agents/types.js';
 import type { TournamentConfig } from '../../src/core/config.js';
@@ -17,6 +46,12 @@ const headsUp: TournamentConfig = {
   blindLevels: [{ smallBlind: 1, bigBlind: 2 }],
   initialButtonSeat: 0,
 };
+
+function deferred(): Readonly<{ promise: Promise<void>; resolve: () => void }> {
+  let resolve!: () => void;
+  const promise = new Promise<void>((accept) => { resolve = accept; });
+  return { promise, resolve };
+}
 
 describe('participants', () => {
   it('copies scripted actions, exhausts the copy, and forwards an agent decision', async () => {
@@ -41,6 +76,138 @@ describe('participants', () => {
 });
 
 describe('runTournament', () => {
+  it('awaits each authority and public callback before the next callback or participant', async () => {
+    const authorityGate = deferred();
+    const publicGate = deferred();
+    const operations: string[] = [];
+    let authorityCalls = 0;
+    let publicCalls = 0;
+    let participantCalls = 0;
+    const participants: Participant[] = [0, 1].map((seatIndex) => ({
+      playerId: `p${seatIndex}`,
+      decide: async () => {
+        participantCalls += 1;
+        return { action: { type: 'fold' } };
+      },
+    }));
+
+    const running = runTournament({
+      config: headsUp,
+      participants,
+      runSeed: 'controller-callback-blocking',
+      publicViewerSeatIndex: 0,
+      onAuthorityEvents: async (events) => {
+        authorityCalls += 1;
+        if (events[0]?.type !== 'GameStarted') return;
+        operations.push('authority:start:GameStarted');
+        await authorityGate.promise;
+        operations.push('authority:end:GameStarted');
+      },
+      onPublicEvents: async (events) => {
+        publicCalls += 1;
+        if (events[0]?.type !== 'gameStarted') return;
+        operations.push('public:start:gameStarted');
+        await publicGate.promise;
+        operations.push('public:end:gameStarted');
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(operations).toEqual(['authority:start:GameStarted']);
+    });
+    expect(authorityCalls).toBe(1);
+    expect(publicCalls).toBe(0);
+    expect(participantCalls).toBe(0);
+
+    authorityGate.resolve();
+    await vi.waitFor(() => {
+      expect(operations).toEqual([
+        'authority:start:GameStarted',
+        'authority:end:GameStarted',
+        'public:start:gameStarted',
+      ]);
+    });
+    expect(authorityCalls).toBe(1);
+    expect(publicCalls).toBe(1);
+    expect(participantCalls).toBe(0);
+
+    publicGate.resolve();
+    await running;
+    expect(operations).toEqual([
+      'authority:start:GameStarted',
+      'authority:end:GameStarted',
+      'public:start:gameStarted',
+      'public:end:gameStarted',
+    ]);
+    expect(participantCalls).toBeGreaterThan(0);
+  });
+
+  it('does not invoke the public callback for an empty projected batch', async () => {
+    const authorityBatches: string[][] = [];
+    const publicBatches: string[][] = [];
+    const participants: Participant[] = [0, 1].map((seatIndex) => ({
+      playerId: `p${seatIndex}`,
+      decide: async () => ({ action: { type: 'fold' } }),
+    }));
+    projectionControl.emptyViewerSeatIndex = 0;
+
+    try {
+      await expect(runTournament({
+        config: headsUp,
+        participants,
+        runSeed: 'controller-empty-public-batch',
+        maxTransitions: 1,
+        publicViewerSeatIndex: 0,
+        onAuthorityEvents: (events) => {
+          authorityBatches.push(events.map((event) => event.type));
+        },
+        onPublicEvents: (events) => {
+          publicBatches.push(events.map((event) => event.type));
+        },
+      })).rejects.toThrow(/event guard/i);
+    } finally {
+      projectionControl.emptyViewerSeatIndex = undefined;
+    }
+
+    expect(authorityBatches).toEqual([['GameStarted']]);
+    expect(publicBatches).toEqual([]);
+  });
+
+  it.each([
+    ['negative', -1],
+    ['fractional', 0.5],
+    ['out-of-range', 2],
+  ])('rejects a %s public viewer before opening the driver or invoking user code', async (
+    _label,
+    publicViewerSeatIndex,
+  ) => {
+    const participantOperations: string[] = [];
+    const authorityOperations: string[] = [];
+    const publicOperations: string[] = [];
+    driverControl.openCalls = 0;
+    const participants: Participant[] = [0, 1].map((seatIndex) => ({
+      playerId: `p${seatIndex}`,
+      decide: async () => {
+        participantOperations.push(`participant:${seatIndex}`);
+        return { action: { type: 'fold' } };
+      },
+    }));
+
+    await expect(runTournament({
+      config: headsUp,
+      participants,
+      runSeed: 'controller-invalid-viewer',
+      publicViewerSeatIndex,
+      onAuthorityEvents: () => { authorityOperations.push('authority'); },
+      onPublicEvents: () => { publicOperations.push('public'); },
+    })).rejects.toThrow('publicViewerSeatIndex must identify a physical seat');
+
+    expect(driverControl.openCalls).toBe(0);
+    expect(participantOperations).toEqual([]);
+    expect(authorityOperations).toEqual([]);
+    expect(publicOperations).toEqual([]);
+  });
+
   it('routes the physical actor with the exact decision RNG path and reaches one champion', async () => {
     const calls: Array<{ seat: number; decision: number; seedHash: number }> = [];
     const participants: Participant[] = [0, 1].map((seatIndex) => ({
