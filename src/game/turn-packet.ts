@@ -6,7 +6,11 @@ import {
   projectEventsForViewer,
   type PublicGameEvent,
 } from '../core/public-events.js';
-import type { TournamentState } from '../core/state.js';
+import type { TournamentSeatInput, TournamentState } from '../core/state.js';
+import {
+  buildHandResultSummary,
+  type HandResultSummary,
+} from './hand-result.js';
 import type { DriverBoundary } from './tournament-driver.js';
 
 const INVALID_TURN_PACKET_MESSAGE = 'Invalid turn packet data';
@@ -55,11 +59,41 @@ export type ClassicDecisionPacket = Readonly<PacketBase & {
   abilities: null;
 }>;
 
-export type TurnPacket = ClassicDecisionPacket;
+export type HandResultPacket = Readonly<PacketBase & {
+  kind: 'hand-result';
+  handNumber: number;
+  handResult: Readonly<HandResultSummary>;
+}>;
+
+export type GameResultPacket = Readonly<PacketBase & {
+  kind: 'game-result';
+  winnerSeatIndex: number;
+  finalStacks: readonly Readonly<{ seatIndex: number; stack: number }>[];
+}>;
+
+export type TurnPacket = ClassicDecisionPacket | HandResultPacket | GameResultPacket;
 
 export interface ClassicDecisionPacketInput {
   readonly state: Readonly<TournamentState>;
   readonly boundary: Readonly<Extract<DriverBoundary, { kind: 'decision' }>>;
+  readonly humanSeatIndex: number;
+  readonly packetIndex: number;
+  readonly fromCoreVersion: number;
+}
+
+export interface HandResultPacketInput {
+  readonly state: Readonly<TournamentState>;
+  readonly boundary: Readonly<Extract<DriverBoundary, { kind: 'hand-complete' }>>;
+  readonly seats: readonly TournamentSeatInput[];
+  readonly humanSeatIndex: number;
+  readonly packetIndex: number;
+  readonly fromCoreVersion: number;
+  readonly currentHandViewerEvents: readonly PublicGameEvent[];
+}
+
+export interface GameResultPacketInput {
+  readonly state: Readonly<TournamentState>;
+  readonly boundary: Readonly<Extract<DriverBoundary, { kind: 'game-complete' }>>;
   readonly humanSeatIndex: number;
   readonly packetIndex: number;
   readonly fromCoreVersion: number;
@@ -83,6 +117,12 @@ function requireSafeInteger(value: unknown, minimum = 0): number {
     throw new Error(INVALID_TURN_PACKET_MESSAGE);
   }
   return value as number;
+}
+
+function requireSeatIndex(value: unknown): number {
+  const seatIndex = requireSafeInteger(value);
+  if (seatIndex > 5) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  return seatIndex;
 }
 
 function requireRecord(value: unknown): Record<PropertyKey, unknown> {
@@ -169,6 +209,43 @@ function sameDataTree(
     }
   }
   return true;
+}
+
+interface PacketDeliverySnapshot {
+  readonly packetIndex: number;
+  readonly fromCoreVersion: number;
+  readonly toCoreVersion: number;
+  readonly viewerEvents: readonly PublicGameEvent[];
+}
+
+function snapshotPacketDelivery(
+  state: Readonly<TournamentState>,
+  humanSeatIndexValue: unknown,
+  packetIndexValue: unknown,
+  fromCoreVersionValue: unknown,
+): PacketDeliverySnapshot {
+  const humanSeatIndex = requireSeatIndex(humanSeatIndexValue);
+  const packetIndex = requireSafeInteger(packetIndexValue);
+  const fromCoreVersion = requireSafeInteger(fromCoreVersionValue);
+  const toCoreVersion = requireSafeInteger(state.version);
+  if (fromCoreVersion > toCoreVersion) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  const authorityEvents = state.eventLog;
+  if (!Array.isArray(authorityEvents) || authorityEvents.length !== toCoreVersion) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  const eventRange: DomainEvent[] = [];
+  for (let index = 0; index < toCoreVersion; index += 1) {
+    if (!Object.hasOwn(authorityEvents, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    if (index >= fromCoreVersion) {
+      eventRange.push(Reflect.get(authorityEvents, String(index)) as DomainEvent);
+    }
+  }
+  return {
+    packetIndex,
+    fromCoreVersion,
+    toCoreVersion,
+    viewerEvents: projectEventsForViewer(eventRange, humanSeatIndex),
+  };
 }
 
 function buildActionPanelUnchecked(
@@ -279,12 +356,14 @@ export function createClassicDecisionPacket(
 ): Readonly<ClassicDecisionPacket> {
   try {
     const state = input.state;
-    const humanSeatIndex = requireSafeInteger(input.humanSeatIndex);
-    const packetIndex = requireSafeInteger(input.packetIndex);
-    const fromCoreVersion = requireSafeInteger(input.fromCoreVersion);
-    const toCoreVersion = requireSafeInteger(state.version);
-    if (fromCoreVersion > toCoreVersion
-      || input.boundary.kind !== 'decision'
+    const humanSeatIndex = requireSeatIndex(input.humanSeatIndex);
+    const delivery = snapshotPacketDelivery(
+      state,
+      humanSeatIndex,
+      input.packetIndex,
+      input.fromCoreVersion,
+    );
+    if (input.boundary.kind !== 'decision'
       || input.boundary.seatIndex !== humanSeatIndex) {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
@@ -293,38 +372,180 @@ export function createClassicDecisionPacket(
     if (!sameDataTree(input.boundary.observation, observation)) {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
-    const authorityEvents = state.eventLog;
-    if (!Array.isArray(authorityEvents) || authorityEvents.length !== toCoreVersion) {
-      throw new Error(INVALID_TURN_PACKET_MESSAGE);
-    }
-    const eventRange: DomainEvent[] = [];
-    for (let index = fromCoreVersion; index < toCoreVersion; index += 1) {
-      if (!Object.hasOwn(authorityEvents, index)) {
-        throw new Error(INVALID_TURN_PACKET_MESSAGE);
-      }
-      eventRange.push(Reflect.get(authorityEvents, String(index)) as DomainEvent);
-    }
-    const viewerEvents = projectEventsForViewer(eventRange, humanSeatIndex);
     const packet: ClassicDecisionPacket = {
       schemaVersion: 1,
       kind: 'decision',
-      packetIndex,
+      packetIndex: delivery.packetIndex,
       decisionKey: createDecisionKey(
         observation.handNumber,
         humanSeatIndex,
         observation.decisionIndex,
       ),
       coreEventRange: {
-        fromVersionInclusive: fromCoreVersion,
-        toVersionExclusive: toCoreVersion,
+        fromVersionInclusive: delivery.fromCoreVersion,
+        toVersionExclusive: delivery.toCoreVersion,
       },
-      viewerEventsSinceLastPacket: viewerEvents,
+      viewerEventsSinceLastPacket: delivery.viewerEvents,
       privateEventsSinceLastPacket: [],
       observation,
       actionPanel: buildActionPanelUnchecked(observation),
       abilities: null,
     };
     return freezeRecursively(packet);
+  } catch {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+}
+
+function viewerFirstSeatDescriptors(
+  seats: readonly TournamentSeatInput[],
+  humanSeatIndex: number,
+): TournamentSeatInput[] {
+  if (!Array.isArray(seats) || seats.length < 2 || seats.length > 6) {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+  const ordered: TournamentSeatInput[] = [];
+  let human: TournamentSeatInput | null = null;
+  for (let index = 0; index < seats.length; index += 1) {
+    if (!Object.hasOwn(seats, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    const seat = Reflect.get(seats, String(index)) as TournamentSeatInput;
+    if (seat.seatIndex === humanSeatIndex) human = seat;
+  }
+  if (human === null) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  ordered.push(human);
+  for (let index = 0; index < seats.length; index += 1) {
+    const seat = Reflect.get(seats, String(index)) as TournamentSeatInput;
+    if (seat.seatIndex !== humanSeatIndex) ordered.push(seat);
+  }
+  return ordered;
+}
+
+function reorderSummarySeats(
+  summary: Readonly<HandResultSummary>,
+  seats: readonly TournamentSeatInput[],
+): Readonly<HandResultSummary> {
+  const bySeat = new Map<number, HandResultSummary['seats'][number]>();
+  for (let index = 0; index < summary.seats.length; index += 1) {
+    const result = summary.seats[index]!;
+    bySeat.set(result.seatIndex, result);
+  }
+  const ordered: HandResultSummary['seats'][number][] = [];
+  for (let index = 0; index < seats.length; index += 1) {
+    const result = bySeat.get(seats[index]!.seatIndex);
+    if (result === undefined) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    ordered.push(result);
+  }
+  return { handNumber: summary.handNumber, seats: ordered, pots: summary.pots };
+}
+
+export function createClassicHandResultPacket(
+  input: Readonly<HandResultPacketInput>,
+): Readonly<HandResultPacket> {
+  try {
+    const state = input.state;
+    const humanSeatIndex = requireSeatIndex(input.humanSeatIndex);
+    const delivery = snapshotPacketDelivery(
+      state,
+      humanSeatIndex,
+      input.packetIndex,
+      input.fromCoreVersion,
+    );
+    if (input.boundary.kind !== 'hand-complete'
+      || state.activeHand?.phase !== 'hand-complete'
+      || input.boundary.handNumber !== state.handNumber) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const events = input.currentHandViewerEvents;
+    if (!Array.isArray(events) || events.length < 2
+      || !Object.hasOwn(events, 0) || !Object.hasOwn(events, events.length - 1)) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const first = Reflect.get(events, '0') as PublicGameEvent;
+    const last = Reflect.get(events, String(events.length - 1)) as PublicGameEvent;
+    if (first.type !== 'handStarted' || first.handNumber !== input.boundary.handNumber
+      || last.type !== 'handCompleted') {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const viewerFirst = viewerFirstSeatDescriptors(input.seats, humanSeatIndex);
+    const summary = reorderSummarySeats(
+      buildHandResultSummary(viewerFirst, events),
+      input.seats,
+    );
+    if (summary.handNumber !== input.boundary.handNumber) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    return freezeRecursively({
+      schemaVersion: 1,
+      kind: 'hand-result',
+      packetIndex: delivery.packetIndex,
+      handNumber: input.boundary.handNumber,
+      handResult: summary,
+      coreEventRange: {
+        fromVersionInclusive: delivery.fromCoreVersion,
+        toVersionExclusive: delivery.toCoreVersion,
+      },
+      viewerEventsSinceLastPacket: delivery.viewerEvents,
+      privateEventsSinceLastPacket: [],
+    });
+  } catch {
+    throw new Error(INVALID_TURN_PACKET_MESSAGE);
+  }
+}
+
+export function createClassicGameResultPacket(
+  input: Readonly<GameResultPacketInput>,
+): Readonly<GameResultPacket> {
+  try {
+    const state = input.state;
+    const humanSeatIndex = requireSeatIndex(input.humanSeatIndex);
+    const delivery = snapshotPacketDelivery(
+      state,
+      humanSeatIndex,
+      input.packetIndex,
+      input.fromCoreVersion,
+    );
+    if (input.boundary.kind !== 'game-complete'
+      || state.activeHand?.phase !== 'game-complete') {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const seats = state.seats;
+    if (!Array.isArray(seats) || seats.length < 2 || seats.length > 6) {
+      throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const finalStacks: Array<{ seatIndex: number; stack: number }> = [];
+    const seenSeatIndexes = new Set<number>();
+    let survivorSeatIndex: number | null = null;
+    for (let index = 0; index < seats.length; index += 1) {
+      if (!Object.hasOwn(seats, index)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+      const seat = Reflect.get(seats, String(index)) as TournamentState['seats'][number];
+      const seatIndex = requireSeatIndex(seat.seatIndex);
+      const stack = requireSafeInteger(seat.stack);
+      if (seenSeatIndexes.has(seatIndex)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+      seenSeatIndexes.add(seatIndex);
+      if (stack > 0 && seat.status !== 'eliminated') {
+        if (survivorSeatIndex !== null) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+        survivorSeatIndex = seatIndex;
+      }
+      finalStacks.push({ seatIndex, stack });
+    }
+    for (let seatIndex = 0; seatIndex < seats.length; seatIndex += 1) {
+      if (!seenSeatIndexes.has(seatIndex)) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    }
+    const winnerSeatIndex = requireSeatIndex(input.boundary.winnerSeatIndex);
+    if (survivorSeatIndex !== winnerSeatIndex) throw new Error(INVALID_TURN_PACKET_MESSAGE);
+    return freezeRecursively({
+      schemaVersion: 1,
+      kind: 'game-result',
+      packetIndex: delivery.packetIndex,
+      winnerSeatIndex,
+      finalStacks,
+      coreEventRange: {
+        fromVersionInclusive: delivery.fromCoreVersion,
+        toVersionExclusive: delivery.toCoreVersion,
+      },
+      viewerEventsSinceLastPacket: delivery.viewerEvents,
+      privateEventsSinceLastPacket: [],
+    });
   } catch {
     throw new Error(INVALID_TURN_PACKET_MESSAGE);
   }

@@ -9,8 +9,11 @@ import { createTournamentDriver } from '../../src/game/tournament-driver.js';
 import {
   buildActionPanel,
   createClassicDecisionPacket,
+  createClassicGameResultPacket,
+  createClassicHandResultPacket,
   createDecisionKey,
   type ClassicDecisionPacket,
+  type TurnPacket,
 } from '../../src/game/turn-packet.js';
 
 type Equal<Left, Right> =
@@ -28,6 +31,12 @@ type ClassicPrivateEventsAreExactlyEmpty = Assert<Equal<
 >>;
 const classicPrivateEventsAreExactlyEmpty: ClassicPrivateEventsAreExactlyEmpty = true;
 void classicPrivateEventsAreExactlyEmpty;
+type ClassicUnionPrivateEventsAreExactlyEmpty = Assert<Equal<
+  Extract<TurnPacket, { kind: 'decision' }>['privateEventsSinceLastPacket'],
+  readonly []
+>>;
+const classicUnionPrivateEventsAreExactlyEmpty: ClassicUnionPrivateEventsAreExactlyEmpty = true;
+void classicUnionPrivateEventsAreExactlyEmpty;
 
 const packetConfig: TournamentConfig = {
   maxSeats: 2,
@@ -60,6 +69,36 @@ async function createUncommittedCandidate() {
     pauseSeatIndexes: [0],
   });
   return await driver.prepareOpen();
+}
+
+async function createCompletedCandidates() {
+  const completedConfig: TournamentConfig = {
+    ...packetConfig,
+    startingStack: 20,
+  };
+  const completedSeats = [
+    { playerId: 'hero', seatIndex: 0 },
+    { playerId: 'villain', seatIndex: 1 },
+  ] as const;
+  const driver = createTournamentDriver({
+    config: completedConfig,
+    runSeed: 'TURN-PACKET-COMPLETED-SEED-SENTINEL',
+    seats: completedSeats,
+    participants: [null, passiveParticipant('villain')],
+    pauseSeatIndexes: [0],
+  });
+  const opened = await driver.prepareOpen();
+  driver.commitPreparedTransition(opened);
+  const hand = await driver.preparePausedAction(0, { type: 'call' }, 0);
+  if (hand.candidateBoundary.kind !== 'hand-complete') {
+    throw new Error('fixture must pause after the completed hand');
+  }
+  driver.commitPreparedTransition(hand);
+  const game = await driver.prepareContinueAfterHand();
+  if (game.candidateBoundary.kind !== 'game-complete') {
+    throw new Error('fixture must end the game');
+  }
+  return { completedSeats, hand, game };
 }
 
 function normalCallObservation(): PlayerObservationV1 {
@@ -561,6 +600,176 @@ describe('classic decision packet identity', () => {
       humanSeatIndex: 0,
       packetIndex: 0,
       fromCoreVersion: 0,
+    }));
+  });
+});
+
+describe('classic result packet variants', () => {
+  it('keeps full-hand summary history separate from the half-open delivery increment', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const handStart = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const handEnd = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    if (handStart < 0 || handEnd < handStart) throw new Error('fixture hand interval missing');
+    const currentHandViewerEvents = projectEventsForViewer(
+      state.eventLog.slice(handStart, handEnd + 1),
+      0,
+    );
+    const fromCoreVersion = state.version - 4;
+
+    const packet = createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: completedSeats,
+      humanSeatIndex: 0,
+      packetIndex: 8,
+      fromCoreVersion,
+      currentHandViewerEvents,
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: 1,
+      kind: 'hand-result',
+      packetIndex: 8,
+      handNumber: 1,
+      coreEventRange: {
+        fromVersionInclusive: fromCoreVersion,
+        toVersionExclusive: state.version,
+      },
+      privateEventsSinceLastPacket: [],
+    });
+    expect(packet.viewerEventsSinceLastPacket).toEqual(projectEventsForViewer(
+      state.eventLog.slice(fromCoreVersion, state.version),
+      0,
+    ));
+    expect(packet.handResult.seats[0]!.holeCards).toHaveLength(2);
+    expect(packet.handResult.handNumber).toBe(1);
+    expect(isRecursivelyFrozen(packet)).toBe(true);
+  });
+
+  it('builds a frozen game result from the explicit game-complete candidate', async () => {
+    const { hand, game } = await createCompletedCandidates();
+    if (game.candidateBoundary.kind !== 'game-complete') throw new Error('fixture mismatch');
+    const state = game.candidateAuthorityState;
+
+    const packet = createClassicGameResultPacket({
+      state,
+      boundary: game.candidateBoundary,
+      humanSeatIndex: 0,
+      packetIndex: 9,
+      fromCoreVersion: hand.candidateAuthorityState.version,
+    });
+
+    expect(packet).toEqual({
+      schemaVersion: 1,
+      kind: 'game-result',
+      packetIndex: 9,
+      winnerSeatIndex: game.candidateBoundary.winnerSeatIndex,
+      finalStacks: state.seats.map(({ seatIndex, stack }) => ({ seatIndex, stack })),
+      coreEventRange: {
+        fromVersionInclusive: hand.candidateAuthorityState.version,
+        toVersionExclusive: state.version,
+      },
+      viewerEventsSinceLastPacket: projectEventsForViewer(
+        state.eventLog.slice(hand.candidateAuthorityState.version, state.version),
+        0,
+      ),
+      privateEventsSinceLastPacket: [],
+    });
+    expect(isRecursivelyFrozen(packet)).toBe(true);
+    expect(JSON.stringify(packet)).not.toContain('TURN-PACKET-COMPLETED-SEED-SENTINEL');
+  });
+
+  it('assigns own cards to a nonzero human seat without filling an unrevealed NPC row', async () => {
+    const physicalSeats = [
+      { playerId: 'villain', seatIndex: 0 },
+      { playerId: 'hero', seatIndex: 1 },
+    ] as const;
+    const aggressiveVillain: Participant = {
+      playerId: 'villain',
+      decide: async ({ observation }) => {
+        const range = observation.legalActions.raiseTo;
+        if (range !== null) return { action: { type: 'raiseTo', amount: range.min } };
+        if (observation.legalActions.call !== null) return { action: { type: 'call' } };
+        return { action: { type: 'check' } };
+      },
+    };
+    const driver = createTournamentDriver({
+      config: packetConfig,
+      runSeed: 'TURN-PACKET-NONZERO-HUMAN-SEED-SENTINEL',
+      seats: physicalSeats,
+      participants: [aggressiveVillain, null],
+      pauseSeatIndexes: [1],
+    });
+    const opened = await driver.prepareOpen();
+    driver.commitPreparedTransition(opened);
+    const hand = await driver.preparePausedAction(1, { type: 'fold' }, 0);
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const state = hand.candidateAuthorityState;
+    const handStart = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const handEnd = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const fullViewerEvents = projectEventsForViewer(
+      state.eventLog.slice(handStart, handEnd + 1),
+      1,
+    );
+
+    const packet = createClassicHandResultPacket({
+      state,
+      boundary: hand.candidateBoundary,
+      seats: physicalSeats,
+      humanSeatIndex: 1,
+      packetIndex: 2,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: fullViewerEvents,
+    });
+
+    expect(packet.handResult.seats).toMatchObject([
+      { seatIndex: 0, holeCards: null, category: null, bestFive: null },
+      { seatIndex: 1, holeCards: expect.any(Array) },
+    ]);
+    expect(packet.handResult.seats[1]!.holeCards).toHaveLength(2);
+    const villainCards = state.seats[0]!.holeCards;
+    if (villainCards === null) throw new Error('fixture requires hidden NPC cards');
+    expect(JSON.stringify(packet)).not.toContain(villainCards[0].code);
+    expect(JSON.stringify(packet)).not.toContain(villainCards[1].code);
+  });
+
+  it('rejects a full-hand summary interval whose first event is not handStarted', async () => {
+    const { completedSeats, hand } = await createCompletedCandidates();
+    if (hand.candidateBoundary.kind !== 'hand-complete') throw new Error('fixture mismatch');
+    const boundary = hand.candidateBoundary;
+    const state = hand.candidateAuthorityState;
+    const start = state.eventLog.findIndex((event) => event.type === 'HandStarted');
+    const end = state.eventLog.findIndex((event) => event.type === 'HandCompleted');
+    const malformedInterval = projectEventsForViewer(state.eventLog.slice(start + 1, end + 1), 0);
+
+    expectSafeTurnPacketError(() => createClassicHandResultPacket({
+      state,
+      boundary,
+      seats: completedSeats,
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: state.version,
+      currentHandViewerEvents: malformedInterval,
+    }));
+  });
+
+  it('rejects a game-result winner that does not match the explicit candidate', async () => {
+    const { hand, game } = await createCompletedCandidates();
+    if (game.candidateBoundary.kind !== 'game-complete') throw new Error('fixture mismatch');
+    const forgedBoundary = {
+      kind: 'game-complete' as const,
+      winnerSeatIndex: game.candidateBoundary.winnerSeatIndex === 0 ? 1 : 0,
+    };
+
+    expectSafeTurnPacketError(() => createClassicGameResultPacket({
+      state: game.candidateAuthorityState,
+      boundary: forgedBoundary,
+      humanSeatIndex: 0,
+      packetIndex: 0,
+      fromCoreVersion: hand.candidateAuthorityState.version,
     }));
   });
 });
