@@ -342,7 +342,7 @@ function validateHandSeatDescriptors(
   }
 }
 
-function projectAuthoritativeCurrentHandEvents(
+export function projectCurrentHandViewerEvents(
   state: Readonly<TournamentState>,
   humanSeatIndex: number,
 ): readonly PublicGameEvent[] {
@@ -563,7 +563,7 @@ export function createClassicHandResultPacket(
       || last.type !== 'handCompleted') {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
-    const authoritativeViewerEvents = projectAuthoritativeCurrentHandEvents(state, humanSeatIndex);
+    const authoritativeViewerEvents = projectCurrentHandViewerEvents(state, humanSeatIndex);
     if (!sameDataTree(events, authoritativeViewerEvents)) {
       throw new Error(INVALID_TURN_PACKET_MESSAGE);
     }
