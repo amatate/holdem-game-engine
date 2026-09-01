@@ -398,6 +398,129 @@ describe('classic command identity and rejection precedence', () => {
     expect(ownKeys).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      name: 'top-level accessor',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const getter = vi.fn(() => 'act');
+        const command = {
+          decisionKey: packet.decisionKey,
+          expectedPacketIndex: packet.packetIndex,
+          intent: { type: 'call' },
+        } as Record<string, unknown>;
+        Object.defineProperty(command, 'type', { enumerable: true, get: getter });
+        return { command, traps: [getter] };
+      },
+    },
+    {
+      name: 'top-level Proxy',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const trap = vi.fn(() => { throw new Error('TOP-PROXY-TRAP'); });
+        const command = new Proxy(act(packet) as object, {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        return { command, traps: [trap] };
+      },
+    },
+    {
+      name: 'nested intent accessor',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const getter = vi.fn(() => 'call');
+        const intent = {} as Record<string, unknown>;
+        Object.defineProperty(intent, 'type', { enumerable: true, get: getter });
+        return {
+          command: {
+            type: 'act',
+            decisionKey: packet.decisionKey,
+            expectedPacketIndex: packet.packetIndex,
+            intent,
+          },
+          traps: [getter],
+        };
+      },
+    },
+    {
+      name: 'nested intent Proxy',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const trap = vi.fn(() => { throw new Error('INTENT-PROXY-TRAP'); });
+        const intent = new Proxy({ type: 'call' }, {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        return {
+          command: {
+            type: 'act',
+            decisionKey: packet.decisionKey,
+            expectedPacketIndex: packet.packetIndex,
+            intent,
+          },
+          traps: [trap],
+        };
+      },
+    },
+    {
+      name: 'revoked top-level Proxy',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const revocable = Proxy.revocable(act(packet) as object, {});
+        revocable.revoke();
+        return { command: revocable.proxy, traps: [] };
+      },
+    },
+    {
+      name: 'revoked nested intent Proxy',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const revocable = Proxy.revocable({ type: 'call' }, {});
+        revocable.revoke();
+        return {
+          command: {
+            type: 'act',
+            decisionKey: packet.decisionKey,
+            expectedPacketIndex: packet.packetIndex,
+            intent: revocable.proxy,
+          },
+          traps: [],
+        };
+      },
+    },
+    {
+      name: 'inherited command fields',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        const command = Object.create(act(packet)) as Record<string, unknown>;
+        return { command, traps: [] };
+      },
+    },
+    {
+      name: 'extra command field',
+      create(packet: Readonly<ClassicDecisionPacket>) {
+        return { command: { ...act(packet), authority: 'forbidden' }, traps: [] };
+      },
+    },
+  ])('rejects $name without executing traps and releases the guard', async ({ create }) => {
+    const first = await openGameSession(options());
+    const packet = requireDecision(first.packet);
+    const hostile = create(packet);
+
+    const result = await submitSessionCommand(
+      first.handle,
+      hostile.command as SessionCommand,
+    );
+
+    expect(result).toMatchObject({ accepted: false, rejection: 'malformed-command' });
+    if (result.accepted) throw new Error('hostile command must be rejected');
+    expect(result.handle).toBe(first.handle);
+    expect(result.packet).toBe(first.packet);
+    expect(capture.commandIndexes).toEqual([]);
+    for (const trap of hostile.traps) expect(trap).not.toHaveBeenCalled();
+
+    const retry = await submitSessionCommand(first.handle, act(packet));
+    expect(retry.accepted).toBe(true);
+  });
+
   it('uses command indexes 0,0,1,1 while only committed human batches are 0,1', async () => {
     const first = await openGameSession(options());
     const preflop = requireDecision(first.packet);
@@ -590,6 +713,261 @@ describe('session validation and active-operation guard', () => {
     await expect(openGameSession(options(override as Partial<OpenGameSessionOptions>)))
       .rejects.toThrowError('Invalid game session options');
     expect(capture.drivers).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'duplicate seat playerId',
+      create() {
+        return {
+          value: options({
+            seats: [
+              { playerId: 'human', seatIndex: 0 },
+              { playerId: 'human', seatIndex: 1 },
+            ],
+          }),
+          traps: [],
+        };
+      },
+    },
+    {
+      name: 'noncontiguous seat index',
+      create() {
+        return {
+          value: options({
+            seats: [
+              { playerId: 'human', seatIndex: 1 },
+              { playerId: 'npc', seatIndex: 0 },
+            ],
+          }),
+          traps: [],
+        };
+      },
+    },
+    {
+      name: 'sparse seats array',
+      create() {
+        const seats = new Array(2) as Array<{ playerId: string; seatIndex: number }>;
+        seats[0] = { playerId: 'human', seatIndex: 0 };
+        return { value: options({ seats }), traps: [] };
+      },
+    },
+    {
+      name: 'human descriptor with an empty playerId',
+      create() {
+        return {
+          value: options({
+            seats: [
+              { playerId: '', seatIndex: 0 },
+              { playerId: 'npc', seatIndex: 1 },
+            ],
+          }),
+          traps: [],
+        };
+      },
+    },
+    {
+      name: 'accessor seat descriptor',
+      create() {
+        const getter = vi.fn(() => 'human');
+        const seat = { seatIndex: 0 } as Record<string, unknown>;
+        Object.defineProperty(seat, 'playerId', { enumerable: true, get: getter });
+        return {
+          value: options({
+            seats: [seat as unknown as { playerId: string; seatIndex: number }, {
+              playerId: 'npc',
+              seatIndex: 1,
+            }],
+          }),
+          traps: [getter],
+        };
+      },
+    },
+    {
+      name: 'proxied seats array',
+      create() {
+        const trap = vi.fn(() => { throw new Error('SEATS-PROXY-TRAP'); });
+        const seats = new Proxy([
+          { playerId: 'human', seatIndex: 0 },
+          { playerId: 'npc', seatIndex: 1 },
+        ], {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        return { value: options({ seats }), traps: [trap] };
+      },
+    },
+    {
+      name: 'config accessor',
+      create() {
+        const getter = vi.fn(() => 2);
+        const config = { ...decisionConfig } as Record<string, unknown>;
+        Object.defineProperty(config, 'maxSeats', { enumerable: true, get: getter });
+        return {
+          value: options({ config: config as unknown as TournamentConfig }),
+          traps: [getter],
+        };
+      },
+    },
+    {
+      name: 'proxied config',
+      create() {
+        const trap = vi.fn(() => { throw new Error('CONFIG-PROXY-TRAP'); });
+        const config = new Proxy(decisionConfig, {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        return { value: options({ config }), traps: [trap] };
+      },
+    },
+    {
+      name: 'provider accessor',
+      create() {
+        const getter = vi.fn(() => 'npc');
+        const provider = {
+          decide: vi.fn(async () => ({ action: { type: 'fold' as const } })),
+        } as Record<string, unknown>;
+        Object.defineProperty(provider, 'playerId', { enumerable: true, get: getter });
+        return {
+          value: options({ participants: [null, provider as unknown as Participant] }),
+          traps: [getter, provider.decide as ReturnType<typeof vi.fn>],
+        };
+      },
+    },
+    {
+      name: 'proxied provider',
+      create() {
+        const trap = vi.fn(() => { throw new Error('PROVIDER-PROXY-TRAP'); });
+        const decide = vi.fn(async () => ({ action: { type: 'fold' as const } }));
+        const provider = new Proxy({ playerId: 'npc', decide }, {
+          get: trap,
+          getOwnPropertyDescriptor: trap,
+          getPrototypeOf: trap,
+          ownKeys: trap,
+        });
+        return {
+          value: options({ participants: [null, provider] }),
+          traps: [trap, decide],
+        };
+      },
+    },
+  ])('rejects $name before driver construction or callback execution', async ({ create }) => {
+    const diagnostic = vi.fn();
+    const hostile = create();
+    const value = { ...hostile.value, onDiagnostic: diagnostic };
+
+    await expect(openGameSession(value)).rejects.toThrowError('Invalid game session options');
+
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+    expect(diagnostic).not.toHaveBeenCalled();
+    for (const trap of hostile.traps) expect(trap).not.toHaveBeenCalled();
+  });
+
+  it('rejects a top-level options accessor without executing it or constructing a driver', async () => {
+    const getter = vi.fn(() => 'classic');
+    const diagnostic = vi.fn();
+    const hostile = options({ onDiagnostic: diagnostic }) as unknown as Record<string, unknown>;
+    Object.defineProperty(hostile, 'mode', { enumerable: true, get: getter });
+
+    await expect(openGameSession(hostile as unknown as OpenGameSessionOptions))
+      .rejects.toThrowError('Invalid game session options');
+
+    expect(getter).not.toHaveBeenCalled();
+    expect(diagnostic).not.toHaveBeenCalled();
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+  });
+
+  it('rejects revoked top-level options without leaking the native Proxy error', async () => {
+    const revocable = Proxy.revocable(options(), {});
+    revocable.revoke();
+
+    await expect(openGameSession(revocable.proxy)).rejects.toThrowError(
+      'Invalid game session options',
+    );
+
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+  });
+
+  it('rejects a provider decide accessor without executing it', async () => {
+    const decideGetter = vi.fn(() => async () => ({ action: { type: 'fold' as const } }));
+    const diagnostic = vi.fn();
+    const provider = { playerId: 'npc' } as Record<string, unknown>;
+    Object.defineProperty(provider, 'decide', { enumerable: true, get: decideGetter });
+
+    await expect(openGameSession(options({
+      participants: [null, provider as unknown as Participant],
+      onDiagnostic: diagnostic,
+    }))).rejects.toThrowError('Invalid game session options');
+
+    expect(decideGetter).not.toHaveBeenCalled();
+    expect(diagnostic).not.toHaveBeenCalled();
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+  });
+
+  it('does not invoke a valid participant when a prior seat phase fails', async () => {
+    const decide = vi.fn(async () => ({ action: { type: 'fold' as const } }));
+    const diagnostic = vi.fn();
+
+    await expect(openGameSession(options({
+      seats: [
+        { playerId: 'human', seatIndex: 1 },
+        { playerId: 'npc', seatIndex: 0 },
+      ],
+      participants: [null, { playerId: 'npc', decide }],
+      onDiagnostic: diagnostic,
+    }))).rejects.toThrowError('Invalid game session options');
+
+    expect(decide).not.toHaveBeenCalled();
+    expect(diagnostic).not.toHaveBeenCalled();
+    expect(capture.driverOptions).toEqual([]);
+    expect(capture.drivers).toEqual([]);
+  });
+
+  it('passes detached frozen config, seats and provider wrappers to the driver', async () => {
+    const config = { ...decisionConfig, blindLevels: [...decisionConfig.blindLevels] };
+    const seats = [
+      { playerId: 'human', seatIndex: 0 },
+      { playerId: 'npc', seatIndex: 1 },
+    ];
+    const decide = vi.fn(async ({ observation }: Parameters<Participant['decide']>[0]) => (
+      observation.legalActions.check
+        ? { action: { type: 'check' as const } }
+        : { action: { type: 'call' as const } }
+    ));
+    const provider: { playerId: string; decide: Participant['decide'] } = {
+      playerId: 'npc',
+      decide,
+    };
+
+    const first = await openGameSession(options({
+      config,
+      seats,
+      participants: [null, provider],
+    }));
+    const trusted = capture.driverOptions[0]!;
+
+    expect(trusted.config).not.toBe(config);
+    expect(trusted.config.blindLevels).not.toBe(config.blindLevels);
+    expect(trusted.seats).not.toBe(seats);
+    expect(trusted.participants[1]).not.toBe(provider);
+    expect(Object.isFrozen(trusted.config)).toBe(true);
+    expect(Object.isFrozen(trusted.config.blindLevels)).toBe(true);
+    expect(Object.isFrozen(trusted.seats)).toBe(true);
+    expect(Object.isFrozen(trusted.participants)).toBe(true);
+
+    provider.playerId = 'mutated';
+    provider.decide = async () => { throw new Error('mutated provider must not run'); };
+    const result = await submitSessionCommand(first.handle, act(first.packet));
+    expect(result.accepted).toBe(true);
+    expect(decide).toHaveBeenCalled();
   });
 
   it('rejects every concurrent async entry as busy while synchronous reads return the old packet', async () => {
