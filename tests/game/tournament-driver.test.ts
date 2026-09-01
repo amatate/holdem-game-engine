@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { assertTournamentInvariants } from '../../src/core/invariants.js';
+import type { DomainEvent } from '../../src/core/events.js';
 import type { ActionIntent } from '../../src/core/legal-actions.js';
 import { applyIntent } from '../../src/core/reducer.js';
 import type { TournamentConfig } from '../../src/core/config.js';
-import type { TournamentState, TransitionResult } from '../../src/core/state.js';
+import {
+  reduceDomainEvent,
+  type TournamentState,
+  type TransitionResult,
+} from '../../src/core/state.js';
 import type { Participant } from '../../src/game/participant.js';
 import { runTournament } from '../../src/game/tournament-controller.js';
 import {
@@ -421,6 +427,133 @@ describe('TournamentDriver boundaries and transactions', () => {
     expect(prepared.candidateAuthorityState).toEqual(committed);
     driver.discardPreparedTransition(prepared);
     expect(driver.getAuthorityState()).toBe(committed);
+  });
+
+  it('detaches event authority before replay so post-prepare caller mutation cannot leak', async () => {
+    const callbackBatches: Readonly<DriverTransitionBatch>[] = [];
+    const driver = await openDecisionDriver({
+      onAcceptedTransition: (batch) => {
+        if (batch.source === 'ability-swap') callbackBatches.push(batch);
+      },
+    });
+    const before = driver.getAuthorityState();
+    const action = applyIntent(before, 0, { type: 'call' });
+    if (!action.accepted) throw new Error('fixture action must be accepted');
+    const nested = { labels: ['original'] };
+    type AuditedPlayerActedEvent = Extract<DomainEvent, { type: 'PlayerActed' }>
+      & { audit: { labels: string[] } };
+    const callerEvent = {
+      ...action.events[0]!,
+      audit: nested,
+    } as AuditedPlayerActedEvent;
+    const suppliedState = reduceDomainEvent(before as TournamentState, callerEvent);
+    const callerEvents = [callerEvent];
+
+    const prepared = await driver.prepareAuthorityTransition(
+      { state: suppliedState, events: callerEvents },
+      'ability-swap',
+      4,
+    );
+    const callbackBatch = callbackBatches.at(-1);
+    const preparedEvent = prepared.candidateAuthorityState.eventLog.at(-1) as
+      AuditedPlayerActedEvent | undefined;
+    const callbackEvent = callbackBatch?.authorityEvents[0] as AuditedPlayerActedEvent | undefined;
+    expect(preparedEvent?.audit.labels).toEqual(['original']);
+    expect(callbackEvent?.audit.labels).toEqual(['original']);
+    expect(isRecursivelyFrozen(callbackBatch)).toBe(true);
+
+    nested.labels[0] = 'mutated';
+    Reflect.set(callerEvent, 'paid', 999);
+    Reflect.set(suppliedState, 'runSeed', 'mutated-after-prepare');
+    callerEvents.push({ ...callerEvent, eventIndex: callerEvent.eventIndex + 1 });
+
+    expect(preparedEvent?.audit.labels).toEqual(['original']);
+    expect(preparedEvent?.paid).not.toBe(999);
+    expect(callbackEvent?.audit.labels).toEqual(['original']);
+    expect(callbackEvent?.paid).not.toBe(999);
+    driver.commitPreparedTransition(prepared);
+
+    const committed = driver.getAuthorityState();
+    const committedEvent = committed.eventLog.at(-1) as AuditedPlayerActedEvent | undefined;
+    expect(committed).toEqual(prepared.candidateAuthorityState);
+    expect(committed.runSeed).toBe('driver-test-seed');
+    expect(committedEvent?.audit.labels).toEqual(['original']);
+    expect(committedEvent?.paid).not.toBe(999);
+    assertTournamentInvariants(committed as TournamentState);
+  });
+
+  it('accepts an ordinary eventful core transition when Proxy detection is available', async () => {
+    const driver = await openDecisionDriver();
+    const before = driver.getAuthorityState();
+    const action = applyIntent(before as TournamentState, 0, { type: 'call' });
+    if (!action.accepted) throw new Error('fixture action must be accepted');
+
+    const prepared = await driver.prepareAuthorityTransition(action, 'ability-swap', 0);
+    expect(prepared.candidateBoundary).toMatchObject({ kind: 'decision', seatIndex: 1 });
+    driver.discardPreparedTransition(prepared);
+    expect(driver.getAuthorityState()).toBe(before);
+  });
+
+  it('fails closed on arbitrary eventful authority state when Proxy detection is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule');
+    Object.defineProperty(process, 'getBuiltinModule', {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+    vi.resetModules();
+    try {
+      const fallbackModule = await import('../../src/game/tournament-driver.js');
+      const driver = await fallbackModule.openTournamentDriver(options());
+      const before = driver.getAuthorityState();
+      const action = applyIntent(before as TournamentState, 0, { type: 'call' });
+      if (!action.accepted) throw new Error('fixture action must be accepted');
+      let trapCount = 0;
+      const forged = new Proxy(
+        { ...action.state, version: -999, runSeed: 'wrong' } as TournamentState,
+        {
+          get: (target, key, receiver) => {
+            trapCount += 1;
+            return Reflect.get(target, key, receiver);
+          },
+          getOwnPropertyDescriptor: (target, key) => {
+            trapCount += 1;
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          },
+          getPrototypeOf: (target) => {
+            trapCount += 1;
+            return Reflect.getPrototypeOf(target);
+          },
+          ownKeys: (target) => {
+            trapCount += 1;
+            return Reflect.ownKeys(target);
+          },
+        },
+      );
+
+      await expect(driver.prepareAuthorityTransition(
+        { state: forged, events: action.events },
+        'ability-swap',
+        0,
+      )).rejects.toThrow(/replay mismatch/i);
+      expect(trapCount).toBe(0);
+      expect(driver.getAuthorityState()).toBe(before);
+
+      const retry = await driver.prepareAuthorityTransition(
+        { state: before as TournamentState, events: [] },
+        'ability-swap',
+        1,
+      );
+      driver.discardPreparedTransition(retry);
+      expect(driver.getAuthorityState()).toBe(before);
+    } finally {
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(process, 'getBuiltinModule');
+      } else {
+        Object.defineProperty(process, 'getBuiltinModule', descriptor);
+      }
+      vi.resetModules();
+    }
   });
 
   it('enforces one active lease during pending and prepared operations', async () => {

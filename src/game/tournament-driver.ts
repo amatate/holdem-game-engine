@@ -382,6 +382,31 @@ function canonicalizeReplayAliases(state: TournamentState): TournamentState {
   };
 }
 
+function canonicalizeOwnedEventReferences(
+  state: TournamentState | null,
+  event: DomainEvent,
+): DomainEvent {
+  if (state?.activeHand === null || state?.activeHand === undefined) return event;
+  if (event.type === 'HoleCardsRevealed') {
+    const holeCards = state.seats.find((seat) => seat.seatIndex === event.seat)?.holeCards;
+    return holeCards === null || holeCards === undefined
+      ? event
+      : { ...event, cards: [holeCards[0], holeCards[1]] };
+  }
+  if (event.type === 'CardBurned') {
+    const card = state.activeHand.deck[state.activeHand.dealCursor];
+    return card === undefined ? event : { ...event, card };
+  }
+  if (event.type === 'CommunityCardsDealt') {
+    const cards = state.activeHand.deck.slice(
+      state.activeHand.dealCursor,
+      state.activeHand.dealCursor + event.cards.length,
+    );
+    return cards.length !== event.cards.length ? event : { ...event, cards };
+  }
+  return event;
+}
+
 class TournamentDriverImplementation implements TournamentDriver {
   readonly #options: Readonly<TournamentDriverOptions>;
   readonly #maximum: number;
@@ -426,10 +451,18 @@ class TournamentDriverImplementation implements TournamentDriver {
     commandIndex: number | null,
     draft: CandidateDraft,
   ): Promise<CandidateDraft> {
+    if (source === 'ability-swap'
+      && proxyDetector === null
+      && transition.events.length > 0) {
+      throw safeDriverError('Tournament transition replay mismatch');
+    }
+    const ownedEvents = structuredClone(transition.events) as DomainEvent[];
     const before = draft.state;
     let candidate = before;
     let candidateEventCount = draft.eventCount;
-    for (const event of transition.events) {
+    for (let eventIndex = 0; eventIndex < ownedEvents.length; eventIndex += 1) {
+      const event = canonicalizeOwnedEventReferences(candidate, ownedEvents[eventIndex]!);
+      ownedEvents[eventIndex] = event;
       if (candidateEventCount >= this.#maximum) {
         throw safeDriverError('Tournament event guard exceeded');
       }
@@ -438,7 +471,7 @@ class TournamentDriverImplementation implements TournamentDriver {
       candidateEventCount += 1;
     }
     if (candidate !== null
-      && transition.events.some((event) => event.type === 'HandEvaluated')) {
+      && ownedEvents.some((event) => event.type === 'HandEvaluated')) {
       candidate = canonicalizeReplayAliases(candidate);
     }
     if (candidate === null || candidateEventCount !== candidate.version) {
@@ -453,11 +486,11 @@ class TournamentDriverImplementation implements TournamentDriver {
     const replayMatches = sameValue(
       candidate,
       transition.state,
-      transition.events.length === 0,
+      ownedEvents.length === 0,
     );
     if (replayMatches === false
       || (replayMatches === null
-        && transition.events.length === 0
+        && ownedEvents.length === 0
         && !Object.is(candidate, transition.state))) {
       throw safeDriverError('Tournament transition replay mismatch');
     }
@@ -466,7 +499,7 @@ class TournamentDriverImplementation implements TournamentDriver {
       commandIndex,
       beforeVersion: before?.version ?? 0,
       afterVersion: candidate.version,
-      authorityEvents: structuredClone(transition.events),
+      authorityEvents: structuredClone(ownedEvents),
     });
     await this.#options.onAcceptedTransition?.(batch);
     return {
