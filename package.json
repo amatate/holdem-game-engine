@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "play": "tsx src/cli/index.ts",
+    "web": "npm run build && node dist/web/server.js",
     "simulate": "tsx scripts/simulate.ts",
     "test:stress": "tsx scripts/stress.ts"
   },
