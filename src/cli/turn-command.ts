@@ -1,6 +1,6 @@
 import type { ActionIntent } from '../core/legal-actions.js';
 import type { SessionCommand } from '../game/session-types.js';
-import type { ClassicDecisionPacket, RenderableCommand } from '../game/turn-packet.js';
+import type { DecisionPacket, RenderableCommand } from '../game/turn-packet.js';
 import type { PromptIO } from './prompts.js';
 
 const INVALID_COMMAND_MESSAGE = '无效操作，请输入当前合法命令。';
@@ -52,7 +52,7 @@ function hasFixedIntent(
 }
 
 function acceptedAct(
-  packet: Readonly<ClassicDecisionPacket>,
+  packet: Readonly<DecisionPacket>,
   intent: ActionIntent,
 ): TurnCommandParseResult {
   return {
@@ -68,7 +68,7 @@ function acceptedAct(
 
 export function parseTurnCommand(
   input: string,
-  packet: Readonly<ClassicDecisionPacket>,
+  packet: Readonly<DecisionPacket>,
 ): TurnCommandParseResult {
   const answer = input.trim();
   const targetedAbility = /^u (peek|read) ([0-9]+)$/.exec(answer);
@@ -127,7 +127,7 @@ export function parseTurnCommand(
 }
 
 export async function promptForTurnCommand(
-  packet: Readonly<ClassicDecisionPacket>,
+  packet: Readonly<DecisionPacket>,
   io: Readonly<PromptIO>,
 ): Promise<Readonly<SessionCommand>> {
   while (true) {

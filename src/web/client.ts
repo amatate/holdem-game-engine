@@ -3,17 +3,20 @@ import { renderLobby, renderTable, renderPlaybackFrame } from './render.js';
 import { buildPlaybackFrames, PlaybackClock, type PlaybackFrame } from './playback.js';
 import { installTableReadTool, type TableToolContext } from './agent-tools.js';
 import type { ActionIntent } from '../core/legal-actions.js';
+import type { SessionMode } from '../game/session-types.js';
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const notice = document.querySelector<HTMLElement>('#notice')!;
 const connection = document.querySelector<HTMLElement>('#connection')!;
 let state: Bootstrap = { rosters: {}, table: null };
 let count = 4;
+let mode: SessionMode = 'classic';
 let busy = false;
 let choosingTable = false;
 const clock = new PlaybackClock();
 const speedControl = document.querySelector<HTMLSelectElement>('#playback-speed');
 const skipControl = document.querySelector<HTMLButtonElement>('#playback-skip');
+const replaceDialog = document.querySelector<HTMLDialogElement>('#replace-table-dialog');
 const speedKey = 'holdem.playback-speed';
 let playing = false;
 let frame: PlaybackFrame | null = null;
@@ -29,8 +32,11 @@ const toolLifecycle = installTableReadTool(
 window.addEventListener('pagehide', () => { toolLifecycle.abort(); clock.skip(); clearAnimations(); }, { once: true });
 
 function draw(): void {
-  app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount)
-    : state.table && !choosingTable ? renderTable(state.table) : renderLobby(state.rosters, count);
+  app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount, state.table.mode)
+    : state.table && !choosingTable ? renderTable(state.table) : renderLobby(state.rosters, count, mode);
+  const label = document.querySelector('#mode-label');
+  const visibleMode = state.table && !choosingTable ? state.table.mode : mode;
+  if (label) label.textContent = visibleMode === 'ability-lab' ? '能力实验' : '经典德州';
   lock(busy);
 }
 function lock(value: boolean): void {
@@ -130,6 +136,10 @@ speedControl?.addEventListener('change', () => {
   try { localStorage.setItem(speedKey, String(clock.speed)); } catch { /* Keep the in-memory preference. */ }
 });
 skipControl?.addEventListener('click', () => { clock.skip(); clearAnimations(); });
+replaceDialog?.addEventListener('close', () => {
+  if (replaceDialog.returnValue !== 'choose') return;
+  choosingTable = true; message(''); draw();
+});
 
 async function synchronize(): Promise<void> {
   const response = await fetch('/api/bootstrap');
@@ -165,17 +175,36 @@ async function act(intent: ActionIntent): Promise<void> {
     decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex, intent } });
 }
 
+async function peek(targetSeatIndex: number): Promise<void> {
+  const table = state.table;
+  if (busy || choosingTable || !table || table.mode !== 'ability-lab' || table.packet.kind !== 'decision') return;
+  if (!table.packet.abilities?.availableCommands.some((command) => command.targetSeatIndex === targetSeatIndex)) return;
+  await mutate('/api/action', { tableId: table.id, command: { type: 'useAbility', ability: 'peek',
+    decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex, targetSeatIndex } });
+}
+
 app.addEventListener('change', (event) => {
   const target = event.target;
   if (target instanceof HTMLSelectElement && target.id === 'players') { count = Number(target.value); draw(); }
+  if (target instanceof HTMLSelectElement && target.id === 'game-mode'
+    && (target.value === 'classic' || target.value === 'ability-lab')) { mode = target.value; draw(); }
 });
 app.addEventListener('click', (event) => {
   const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
   if (!button || busy) return;
   switch (button.dataset.action) {
-    case 'start': void mutate('/api/table', { players: count }); break;
+    case 'start': void mutate('/api/table', { players: count, mode }); break;
+    case 'peek': {
+      const target = Number(button.dataset.targetSeat);
+      if (Number.isSafeInteger(target)) void peek(target);
+      break;
+    }
     case 'new':
-      if (state.table?.packet.kind !== 'game-result' && !window.confirm('离开当前牌桌并重新选人数？点击“入座发牌”后，旧牌局将结束。')) return;
+      if (state.table?.packet.kind !== 'game-result' && replaceDialog) {
+        replaceDialog.returnValue = 'cancel';
+        replaceDialog.showModal();
+        return;
+      }
       choosingTable = true; message(''); draw(); break;
     case 'continue':
       if (state.table) void mutate('/api/continue', { tableId: state.table.id, expectedPacketIndex: state.table.packet.packetIndex });

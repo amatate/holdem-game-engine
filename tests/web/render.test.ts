@@ -16,7 +16,7 @@ describe('browser table rendering', () => {
       config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: 2 }, seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })),
       participants: [null, { playerId: '林岚', decide: async () => ({ action: { type: 'fold' } }) }],
     });
-    const html = renderTable({ id: 'table', roster, packet, view: advanceTableView(null, packet, roster) });
+    const html = renderTable({ id: 'table', mode: 'classic', roster, packet, view: advanceTableView(null, packet, roster) });
     expect(html).toContain('data-intent="call"');
     expect(html).not.toContain('data-intent="check"');
     expect(html).toContain('加注到');
@@ -36,7 +36,7 @@ describe('browser table rendering', () => {
         { seatIndex: 1, playerId: '林岚', holeCards: null, category: null, bestFive: null,
           potWon: 0, invested: 10, returned: 0, net: -10, finalStack: 90 },
       ], pots: [{ potId: 'pot-0', label: '底池', amount: 20, eligibleSeatIndexes: [0, 1], winnerSeatIndexes: [0], awards: [20] }] } };
-    const html = renderTable({ id: 'table', roster, packet, view: advanceTableView(null, packet, roster) });
+    const html = renderTable({ id: 'table', mode: 'classic', roster, packet, view: advanceTableView(null, packet, roster) });
     expect(html).toContain('一对');
     expect(html).toContain('最佳五张');
     expect(html).toContain('+10');

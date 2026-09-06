@@ -5,7 +5,7 @@ import type { PublicGameEvent } from '../core/public-events.js';
 import type { Card } from '../core/types.js';
 import type { HandResultSummary } from '../game/hand-result.js';
 import type { AbilityRejectionCode } from '../game/session-types.js';
-import type { ClassicDecisionPacket, RenderableCommand, TurnPacket } from '../game/turn-packet.js';
+import type { DecisionPacket, RenderableCommand, TurnPacket } from '../game/turn-packet.js';
 import { renderPublicEvent } from './renderer.js';
 
 export interface RenderBlock {
@@ -62,7 +62,7 @@ function renderCommand(command: Readonly<RenderableCommand>): string {
   return `r ${command.minimum}-${command.maximum} ${command.label}`;
 }
 
-function renderDecision(packet: Readonly<ClassicDecisionPacket>): string {
+function renderDecision(packet: Readonly<DecisionPacket>): string {
   const observation = packet.observation;
   const smallBlindSeat = observation.smallBlindSeat === null
     ? '无'
@@ -255,6 +255,7 @@ export function renderSessionRejection(
 ): string {
   switch (rejection) {
     case 'wrong-mode': return '经典模式不能使用能力。';
+    case 'ability-unavailable': return '本版仅提供偷看能力。';
     case 'not-human-turn': return '当前不是你的行动回合。';
     case 'stale-decision': return '牌局决策已变化，请按最新局面操作。';
     case 'stale-packet': return '该操作来自旧局面，请按最新局面操作。';

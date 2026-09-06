@@ -150,6 +150,7 @@ function act(packet: { readonly kind: string; readonly packetIndex: number }): S
 
 function requireDecision(packet: Readonly<TurnPacket>): Readonly<ClassicDecisionPacket> {
   if (packet.kind !== 'decision') throw new Error('fixture requires a decision packet');
+  if (packet.abilities !== null) throw new Error('fixture requires classic mode');
   return packet;
 }
 

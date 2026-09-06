@@ -12,6 +12,7 @@ import {
   type HandResultSummary,
 } from './hand-result.js';
 import type { DriverBoundary } from './tournament-driver.js';
+import type { PeekKnowledge, PeekAbilityPanel } from './peek-ability.js';
 
 const INVALID_TURN_PACKET_MESSAGE = 'Invalid turn packet data';
 
@@ -71,7 +72,14 @@ export type GameResultPacket = Readonly<PacketBase & {
   finalStacks: readonly Readonly<{ seatIndex: number; stack: number }>[];
 }>;
 
-export type TurnPacket = ClassicDecisionPacket | HandResultPacket | GameResultPacket;
+export type AbilityDecisionPacket = Readonly<Omit<ClassicDecisionPacket, 'abilities' | 'privateEventsSinceLastPacket'> & {
+  abilities: Readonly<PeekAbilityPanel>;
+  privateEventsSinceLastPacket: readonly PeekKnowledge[];
+}>;
+
+export type DecisionPacket = ClassicDecisionPacket | AbilityDecisionPacket;
+export type ClassicTurnPacket = ClassicDecisionPacket | HandResultPacket | GameResultPacket;
+export type TurnPacket = ClassicTurnPacket | AbilityDecisionPacket;
 
 export interface ClassicDecisionPacketInput {
   readonly state: Readonly<TournamentState>;

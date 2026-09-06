@@ -11,8 +11,10 @@ export interface GameSessionHandle {
   readonly [gameSessionHandleBrand]: true;
 }
 
+export type SessionMode = 'classic' | 'ability-lab';
+
 export interface OpenGameSessionOptions {
-  readonly mode: 'classic';
+  readonly mode: SessionMode;
   readonly config: TournamentConfig;
   readonly runSeed: string;
   readonly humanSeatIndex: number;
@@ -31,6 +33,7 @@ export type AbilityRejectionCode =
   | 'stale-decision'
   | 'stale-packet'
   | 'ability-spent'
+  | 'ability-unavailable'
   | 'ability-already-used-this-decision'
   | 'invalid-target'
   | 'target-cards-public'

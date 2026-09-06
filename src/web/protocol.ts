@@ -1,6 +1,7 @@
 import type { Street, PlayerHandStatus } from '../core/state.js';
 import type { Card } from '../core/types.js';
 import type { TurnPacket } from '../game/turn-packet.js';
+import type { SessionMode } from '../game/session-types.js';
 
 export interface SeatIdentity {
   seatIndex: number;
@@ -38,6 +39,7 @@ export interface TableView {
 
 export interface WebTable {
   id: string;
+  mode: SessionMode;
   roster: SeatIdentity[];
   packet: Readonly<TurnPacket>;
   view: TableView;

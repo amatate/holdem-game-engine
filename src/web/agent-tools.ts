@@ -18,7 +18,7 @@ export function installTableReadTool(context: TableToolContext | undefined, read
   try {
     void Promise.resolve(context.registerTool({
       name: 'read_holdem_table', title: '读取当前可见牌桌',
-      description: 'Read the visible classic Hold’em table, legal actions and public hand result. Does not place bets or expose hidden cards.',
+      description: 'Read the human-visible Hold’em table, legal actions, public results and any private intel legitimately acquired in ability mode. Does not place bets, use abilities or expose other hidden cards.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute(input) {

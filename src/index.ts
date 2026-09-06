@@ -50,15 +50,20 @@ export type {
   SessionCommandResult,
   SessionContinueResult,
   SessionStep,
+  SessionMode,
 } from './game/session-types.js';
 export type {
   ActionPanel,
   ClassicDecisionPacket,
+  ClassicTurnPacket,
+  AbilityDecisionPacket,
+  DecisionPacket,
   GameResultPacket,
   HandResultPacket,
   RenderableCommand,
   TurnPacket,
 } from './game/turn-packet.js';
+export type { PeekKnowledge, PeekAbilityPanel } from './game/peek-ability.js';
 export type {
   HandResultPot,
   HandResultSummary,

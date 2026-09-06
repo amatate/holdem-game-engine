@@ -33,14 +33,60 @@ describe('local browser table', () => {
   }
   it('rejects invalid counts and foreign origins without creating a game', async () => {
     expect((await post('/api/table', { players: 7 })).status).toBe(400);
+    expect((await post('/api/table', { players: 2, mode: 'unknown' })).status).toBe(400);
     expect((await post('/api/table', { players: 4 }, { origin: 'https://unrelated.example' })).status).toBe(403);
     expect((await fetch(`${origin}/api/bootstrap`)).status).toBe(200);
     expect((await fetch(`${origin}/src/core/state.ts`)).status).toBe(404);
+  });
+  it('keeps peek private, restores it once, rejects duplicate/spent requests and clears it at settlement', async () => {
+    let { table } = await (await post('/api/table', { players: 2, mode: 'ability-lab' })).json() as { table: WebTable };
+    expect(table.mode).toBe('ability-lab');
+    if (table.packet.kind !== 'decision') throw new Error('Expected decision');
+    const before = table;
+    const peek = { tableId: table.id, command: { type: 'useAbility', ability: 'peek', targetSeatIndex: 1,
+      decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex } };
+    const peeked = await post('/api/action', peek);
+    expect(peeked.status).toBe(200);
+    table = (await peeked.json() as { table: WebTable }).table;
+    if (table.packet.kind !== 'decision' || !table.packet.abilities) throw new Error('Expected private intel');
+    expect(table.packet.abilities.charges.peek).toBe(0);
+    expect(table.packet.abilities.knowledge).toHaveLength(1);
+    expect(table.view).toEqual(before.view);
+    expect(table.view.seats[1]!.cards).toBeNull();
+    expect((await post('/api/action', peek)).status).toBe(409);
+    const spent = await post('/api/action', { ...peek, command: { ...peek.command, expectedPacketIndex: table.packet.packetIndex } });
+    expect(await spent.json()).toMatchObject({ rejection: 'ability-spent' });
+    const restored = await fetch(`${origin}/api/bootstrap`, { headers: { cookie } });
+    expect((await restored.json() as { table: WebTable }).table).toEqual(table);
+    expect((await (await fetch(`${origin}/api/bootstrap`)).json() as { table: unknown }).table).toBeNull();
+    const finish = await post('/api/action', { tableId: table.id, command: { type: 'act', intent: { type: 'fold' },
+      decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex } });
+    table = (await finish.json() as { table: WebTable }).table;
+    expect(table.packet.kind).toBe('hand-result');
+    expect(table.packet.privateEventsSinceLastPacket).toEqual([]);
+    expect('abilities' in table.packet).toBe(false);
+    const next = await post('/api/continue', { tableId: table.id, expectedPacketIndex: table.packet.packetIndex });
+    table = (await next.json() as { table: WebTable }).table;
+    if (table.packet.kind !== 'decision' || !table.packet.abilities) throw new Error('Expected next decision');
+    expect(table.packet.abilities.knowledge).toEqual([]);
+    expect(table.packet.abilities.charges.peek).toBe(0);
+  });
+  it('does not permit a forged mode on action to enable peek in a classic table', async () => {
+    const { table } = await (await post('/api/table', { players: 2 })).json() as { table: WebTable };
+    expect(table.mode).toBe('classic');
+    if (table.packet.kind !== 'decision') throw new Error('Expected decision');
+    const response = await post('/api/action', { tableId: table.id, mode: 'ability-lab', command: {
+      type: 'useAbility', ability: 'peek', targetSeatIndex: 1,
+      decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex,
+    } });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ rejection: 'wrong-mode', table });
   });
   it.each([2, 6])('creates a %i-seat table and restores only its public view', async (players) => {
     const response = await post('/api/table', { players });
     expect(response.status).toBe(200);
     expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toMatch(/^holdem_session_\d+=/);
     const { table } = await response.json() as { table: WebTable };
     expect(table.roster).toHaveLength(players);
     expect(table.view.seats).toHaveLength(players);

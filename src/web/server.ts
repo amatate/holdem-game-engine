@@ -79,8 +79,10 @@ export function createLocalServer() {
       if ((req.headers.origin && req.headers.origin !== origin)
         || req.headers['sec-fetch-site'] === 'cross-site') throw new HttpError(403, '请在本机牌桌页面操作。');
       const path = new URL(req.url ?? '/', origin).pathname;
+      // Cookies are not isolated by TCP port. Keep parallel local servers independent.
+      const cookieName = `holdem_session_${port}`;
       const token = req.headers.cookie?.split(';').map((value) => value.trim())
-        .find((value) => value.startsWith('holdem_session='))?.slice('holdem_session='.length);
+        .find((value) => value.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
       const now = Date.now();
       for (const [key, session] of sessions) {
         if (!session.busy && now - session.touched > 7_200_000) sessions.delete(key);
@@ -102,6 +104,8 @@ export function createLocalServer() {
       if (session?.busy) { json(res, 409, { error: '正在处理上一步，请稍后同步。', table: session.table }); return; }
       if (path === '/api/table') {
         const players = body.players;
+        const mode = body.mode === undefined ? 'classic' : body.mode;
+        if (mode !== 'classic' && mode !== 'ability-lab') throw new HttpError(400, '请选择经典德州或能力实验。');
         if (typeof players !== 'number' || !Number.isSafeInteger(players) || players < 2 || players > 6) {
           throw new HttpError(400, '请选择 2–6 人。');
         }
@@ -110,14 +114,14 @@ export function createLocalServer() {
         try {
           const roster = rosterFor(players);
           const participants = [null, ...selectNpcRoster(players).map((id) => createCharacterParticipant(id))];
-          const step = await openGameSession({ mode: 'classic', config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players },
+          const step = await openGameSession({ mode, config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players },
             seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })), participants,
             humanSeatIndex: 0, runSeed: randomUUID(), invalidAgentActionMode: 'fallback' });
-          const table: WebTable = { id: randomUUID(), roster, packet: step.packet,
+          const table: WebTable = { id: randomUUID(), mode, roster, packet: step.packet,
             view: advanceTableView(null, step.packet, roster) };
           const newToken = token && session ? token : randomUUID();
           sessions.set(newToken, { handle: step.handle, table, touched: now, busy: false });
-          res.setHeader('Set-Cookie', `holdem_session=${newToken}; HttpOnly; SameSite=Strict; Path=/`);
+          res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/`);
           json(res, 200, { table }); return;
         } finally { if (session) session.busy = false; }
       }
@@ -128,7 +132,18 @@ export function createLocalServer() {
         const result = path === '/api/action'
           ? await submitSessionCommand(session.handle, body.command as SessionCommand)
           : await continueAfterHandResult(session.handle, body.expectedPacketIndex as number);
-        if (!result.accepted) { json(res, 409, { error: '操作已过期或不合法，已同步当前牌桌。', table: session.table }); return; }
+        if (!result.accepted) {
+          const messages: Record<string, string> = {
+            'wrong-mode': '经典模式不能使用能力。',
+            'ability-unavailable': '本版仅提供偷看能力。',
+            'ability-spent': '本场偷看次数已用完；开始新的一桌才会恢复。',
+            'invalid-target': '只能偷看仍未弃牌、未淘汰的其他对手。',
+            'target-cards-public': '对手已经亮牌，无需偷看。',
+            'not-human-turn': '请等到轮到你行动时再使用能力。',
+          };
+          json(res, 409, { error: messages[result.rejection] ?? '操作已过期或不合法，已同步当前牌桌。',
+            rejection: result.rejection, table: session.table }); return;
+        }
         const packet = getCurrentPacket(session.handle);
         session.table = { ...session.table, packet, view: advanceTableView(session.table.view, packet, session.table.roster) };
         json(res, 200, { table: session.table });

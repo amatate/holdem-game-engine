@@ -17,7 +17,7 @@ import type {
   TournamentDriverOptions,
 } from '../../src/game/tournament-driver.js';
 import type {
-  ClassicDecisionPacket,
+  DecisionPacket,
   RenderableCommand,
   TurnPacket,
 } from '../../src/game/turn-packet.js';
@@ -76,7 +76,7 @@ function tournamentConfig(playerCount: number): TournamentConfig {
   };
 }
 
-function passiveIntent(packet: Readonly<ClassicDecisionPacket>): ActionIntent {
+function passiveIntent(packet: Readonly<DecisionPacket>): ActionIntent {
   const legal = packet.observation.legalActions;
   if (legal.check) return { type: 'check' };
   if (legal.call !== null) return { type: 'call' };

@@ -35,7 +35,7 @@ type ClassicPrivateEventsAreExactlyEmpty = Assert<Equal<
 const classicPrivateEventsAreExactlyEmpty: ClassicPrivateEventsAreExactlyEmpty = true;
 void classicPrivateEventsAreExactlyEmpty;
 type ClassicUnionPrivateEventsAreExactlyEmpty = Assert<Equal<
-  Extract<TurnPacket, { kind: 'decision' }>['privateEventsSinceLastPacket'],
+  Extract<TurnPacket, { kind: 'decision'; abilities: null }>['privateEventsSinceLastPacket'],
   readonly []
 >>;
 const classicUnionPrivateEventsAreExactlyEmpty: ClassicUnionPrivateEventsAreExactlyEmpty = true;
