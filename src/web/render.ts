@@ -39,7 +39,7 @@ export function renderLobby(rosters: Record<number, SeatIdentity[]>, playerCount
       <div class="table-center"><div class="table-mark">夜 局</div><p class="table-subtitle">NO-LIMIT TEXAS HOLD’EM</p>${board([])}<p class="table-caption">选好人数，即可发牌</p></div>
       ${roster.map((person) => `<article class="seat" data-seat="${person.seatIndex}"><div class="seat-body">${identity(person)}<p class="seat-stack">100 <small>筹码</small></p><p class="seat-style">${escapeHtml(person.style)}</p></div></article>`).join('')}
     </div>
-    <div class="mode-picker"><div><label for="game-mode">今晚的玩法</label><p>${mode === 'classic' ? '只凭牌技，按标准德州规则对局。' : '多一次秘密选择：每场可以偷看一张对手底牌。'}</p></div><select id="game-mode"><option value="classic" ${mode === 'classic' ? 'selected' : ''}>经典德州</option><option value="ability-lab" ${mode === 'ability-lab' ? 'selected' : ''}>能力实验 · 偷看一次</option></select></div>
+    <div class="mode-picker"><div><label for="game-mode">今晚的玩法</label><p>${mode === 'classic' ? '只凭牌技，按标准德州规则对局。' : '偷看、读牌、换牌：每种能力每场一次，每次行动最多用一种。'}</p></div><select id="game-mode"><option value="classic" ${mode === 'classic' ? 'selected' : ''}>经典德州</option><option value="ability-lab" ${mode === 'ability-lab' ? 'selected' : ''}>能力实验 · 三种能力</option></select></div>
     <div class="setup-bar"><div><h1>今晚，几个人？</h1><p>系统安排对手，你只管入座。</p></div>
       <div class="setup-controls"><label for="players">牌桌人数</label><select id="players">${[2, 3, 4, 5, 6].map((count) => `<option value="${count}" ${count === playerCount ? 'selected' : ''}>${count} 人桌</option>`).join('')}</select><button class="button button-primary" data-action="start">入座发牌 <span aria-hidden="true">↗</span></button></div>
     </div><p class="footnote">${mode === 'classic' ? '经典德州' : '能力实验 · 仅你拥有能力'} · 每人 100 筹码 · 初始盲注 1 / 2 · 每 8 手升盲</p>
@@ -94,13 +94,33 @@ function renderAbilityPanel(table: PresentationTable): string {
   const abilities = packet.abilities;
   if (!abilities) return '';
   const name = (seatIndex: number) => escapeHtml(table.roster.find((person) => person.seatIndex === seatIndex)?.name ?? '对手');
-  const spent = abilities.charges.peek === 0;
-  return `<section class="ability-panel" aria-label="偷看能力"><div class="ability-heading"><div><p class="eyebrow">能力实验 / 仅你可见</p><h2>偷看一张</h2></div><span class="ability-charge">本场剩余 ${abilities.charges.peek} / 1</span></div>
-    ${spent ? '<p class="ability-description">本场已使用，下一手不会恢复。你仍需完成正常打牌操作。</p>'
-      : '<p class="ability-description">选择一名对手，随机偷看其一张底牌。每场仅一次，不替代本次打牌。</p>'}
-    ${abilities.availableCommands.length ? `<div class="peek-targets">${abilities.availableCommands.map((command) => `<button class="button button-peek" data-action="peek" data-target-seat="${command.targetSeatIndex}">偷看 ${name(command.targetSeatIndex)}</button>`).join('')}</div>`
-      : !spent ? '<p class="ability-description">当前没有可偷看的对手：已弃牌、已淘汰或已亮牌者不可选。</p>' : ''}
-    ${abilities.knowledge.length ? `<div class="private-intel" role="status" aria-live="polite" aria-label="本手私有情报">${abilities.knowledge.map((entry) => `<div class="intel-card">${cardFace(entry.card)}<div><strong>${name(entry.targetSeatIndex)} 的一张底牌</strong><p>仅你可见 · 对手尚未因此亮牌</p><small>本手结束后清除 · 不会传给 NPC</small></div></div>`).join('')}</div>` : ''}
+  const labels = { peek: '偷看一张', read: '粗略读牌', swap: '更换底牌' };
+  const descriptions = {
+    peek: '随机得知对手的一张底牌，不会让其公开亮牌。',
+    read: '估算对手当前牌力：弱 / 中等 / 强，不保证胜负。',
+    swap: '选自己的一张牌，换成下一张未发出的牌；不可预览或撤销。',
+  };
+  const slots = (['peek', 'read', 'swap'] as const).map((ability) => {
+    const spent = abilities.charges[ability] === 0;
+    const commands = abilities.availableCommands.filter((command) => command.ability === ability);
+    return `<section class="ability-slot ${spent ? 'is-spent' : ''}" aria-label="${labels[ability]}"><div class="ability-slot-heading"><h3>${labels[ability]}</h3><span class="ability-charge">本场剩余 ${abilities.charges[ability]} / 1</span></div>
+      <p class="ability-description">${descriptions[ability]}</p>
+      ${commands.length ? `<div class="peek-targets">${commands.map((command) => command.ability === 'swap'
+        ? `<button class="button button-peek button-swap" data-action="swap" data-hole-index="${command.holeCardIndex}">换掉 ${cardFace(packet.observation.holeCards[command.holeCardIndex], true)}</button>`
+        : `<button class="button button-peek" data-action="${command.ability}" data-target-seat="${command.targetSeatIndex}">${command.ability === 'peek' ? '偷看' : '读牌'} ${name(command.targetSeatIndex)}</button>`).join('')}</div>`
+        : `<p class="ability-state">${spent ? '本场已使用 · 下一手不会恢复' : abilities.usedThisDecision ? '本次行动已锁定' : '当前没有可用目标'}</p>`}
+    </section>`;
+  }).join('');
+  const bands = { weak: '弱', medium: '中等', strong: '强' };
+  const intel = abilities.knowledge.map((entry) => {
+    if (entry.type === 'peek') return `<div class="intel-card">${cardFace(entry.card)}<div><strong>${name(entry.targetSeatIndex)} 的一张底牌</strong><p>仅你可见 · 对手尚未因此亮牌</p></div></div>`;
+    if (entry.type === 'read') return `<div class="intel-card"><span class="strength-band strength-${entry.band}">${bands[entry.band]}</span><div><strong>${name(entry.targetSeatIndex)} · ${STREET_NAMES[entry.street]}时的牌力</strong><p>一次性估算，不随新公共牌更新，也不代表胜负。</p></div></div>`;
+    return `<div class="intel-card"><div class="swap-receipt">${cardFace(entry.oldCard, true)}<span aria-label="换成">→</span>${cardFace(entry.newCard, true)}</div><div><strong>第 ${entry.holeCardIndex + 1} 张底牌已更换</strong><p>旧牌退出本手，本手将按新牌结算。</p></div></div>`;
+  }).join('');
+  return `<section class="ability-panel" aria-label="私有能力"><div class="ability-heading"><div><p class="eyebrow">能力实验 / 仅你可见</p><h2>你的暗手</h2></div><span class="ability-rule">每种每场一次</span></div>
+    <p class="ability-description">${Object.values(abilities.charges).every((remaining) => remaining === 0) ? '本场三种能力均已用完，请继续正常打牌。' : abilities.usedThisDecision ? '本次已使用能力，请完成正常打牌操作；下次轮到你时可用另一种。' : '先用一种能力，或直接打牌。能力不消耗筹码，也不会替你下注。'}</p>
+    <div class="ability-grid">${slots}</div>
+    ${intel ? `<div class="private-intel" role="status" aria-live="polite" aria-label="本手私有情报">${intel}<p class="ability-description">本手结束后清除 · 不会传给 NPC</p></div>` : ''}
   </section>`;
 }
 
@@ -114,13 +134,13 @@ function controls(table: PresentationTable): string {
   }
   const commands = packet.actionPanel.commands;
   const raise = commands.find((command) => command.kind === 'raise-range');
-  return `${renderAbilityPanel(table)}<section class="decision" aria-label="你的操作"><div class="decision-heading"><div><p class="eyebrow">YOUR MOVE</p><h2>轮到你了</h2></div><p class="contestable">${packet.actionPanel.facingBet ? `跟注 ${amount(packet.observation.legalActions.call?.pay ?? 0)} 后，最多可争夺` : '你当前可争夺'} <strong>${amount(packet.actionPanel.heroContestableTotal)}</strong></p></div>
+  return `<section class="decision" aria-label="你的操作"><div class="decision-heading"><div><p class="eyebrow">YOUR MOVE</p><h2>轮到你了</h2></div><p class="contestable">${packet.actionPanel.facingBet ? `跟注 ${amount(packet.observation.legalActions.call?.pay ?? 0)} 后，最多可争夺` : '你当前可争夺'} <strong>${amount(packet.actionPanel.heroContestableTotal)}</strong></p></div>
     <div class="action-row">${commands.filter((command) => command.kind === 'fixed').map((command) => {
       const type = command.intent.type;
       return `<button class="button ${type === 'call' || type === 'check' ? 'button-primary' : type === 'allIn' ? 'button-allin' : 'button-secondary'}" data-action="act" data-intent="${type}">${escapeHtml(command.label)}</button>`;
     }).join('')}</div>
     ${raise ? `<form id="raise-form" class="raise-form"><label for="raise-amount">加注到</label><input id="raise-amount" name="amount" type="number" inputmode="numeric" min="${raise.minimum}" max="${raise.maximum}" step="1" value="${raise.minimum}" required><span class="raise-range">${raise.minimum}–${raise.maximum}</span><button class="button button-raise" type="submit">确认加注</button><small>本轮下注总额，不是额外投入</small></form>` : ''}
-  </section>`;
+  </section>${renderAbilityPanel(table)}`;
 }
 
 export function renderTable(table: WebTable): string {

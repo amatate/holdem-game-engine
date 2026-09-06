@@ -125,6 +125,7 @@ function snapshotEventLog(value: unknown, expectedLength: number): EventSnapshot
       case 'PositionsAssigned':
       case 'DeckPrepared':
       case 'HoleCardsDealt':
+      case 'HoleCardReplaced':
       case 'BettingRoundStarted':
       case 'BettingRoundClosed':
       case 'CardBurned':

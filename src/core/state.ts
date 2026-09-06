@@ -77,6 +77,7 @@ export interface HandState {
   readonly street: Street | null;
   readonly board: readonly Card[];
   readonly burnedCards: readonly Card[];
+  readonly abilityDiscardedCards?: readonly Card[];
   readonly deck: readonly Card[];
   readonly dealCursor: number;
   readonly revealedHoleCardSeats: readonly number[];
@@ -738,6 +739,31 @@ export function reduceDomainEvent(
             : null,
           pendingActors,
         },
+      };
+      break;
+    }
+    case 'HoleCardReplaced': {
+      const hand = state.activeHand;
+      const seat = state.seats.find((candidate) => candidate.seatIndex === event.seat);
+      if (!hand || hand.handId !== event.handId || hand.street === null
+        || hand.phase !== hand.street || hand.currentActorSeat !== event.seat
+        || !seat?.holeCards || seat.status !== 'active' || seat.stack <= 0
+        || hand.revealedHoleCardSeats.includes(event.seat)
+        || (event.holeCardIndex !== 0 && event.holeCardIndex !== 1)) {
+        throw new Error('HoleCardReplaced requires an unrevealed current actor and valid card index');
+      }
+      const replacement = hand.deck[hand.dealCursor];
+      const discarded = seat.holeCards[event.holeCardIndex];
+      if (!replacement || !sameCard(replacement, event.replacementCard)
+        || !sameCard(discarded, event.discardedCard)) {
+        throw new Error('HoleCardReplaced must match the current hole card and next deck card');
+      }
+      const cards: [Card, Card] = [{ ...seat.holeCards[0] }, { ...seat.holeCards[1] }];
+      cards[event.holeCardIndex] = { ...replacement };
+      next = { ...state,
+        seats: replaceSeat(state.seats, event.seat, (current) => ({ ...current, holeCards: cards })),
+        activeHand: { ...hand, dealCursor: hand.dealCursor + 1,
+          abilityDiscardedCards: [...(hand.abilityDiscardedCards ?? []), { ...discarded }] },
       };
       break;
     }

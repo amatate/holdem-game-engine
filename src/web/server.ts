@@ -135,10 +135,13 @@ export function createLocalServer() {
         if (!result.accepted) {
           const messages: Record<string, string> = {
             'wrong-mode': '经典模式不能使用能力。',
-            'ability-unavailable': '本版仅提供偷看能力。',
-            'ability-spent': '本场偷看次数已用完；开始新的一桌才会恢复。',
-            'invalid-target': '只能偷看仍未弃牌、未淘汰的其他对手。',
-            'target-cards-public': '对手已经亮牌，无需偷看。',
+            'ability-unavailable': '当前无法使用这项能力。',
+            'ability-spent': '这项能力本场已用完；开始新的一桌才会恢复。',
+            'ability-already-used-this-decision': '本次已使用一种能力，请先完成正常打牌操作。',
+            'invalid-target': '只能选择仍未弃牌、未淘汰的其他对手。',
+            'target-cards-public': '目标底牌已经公开，不能使用这项能力。',
+            'invalid-hole-card-index': '请选择自己的第一张或第二张底牌。',
+            'deck-exhausted': '没有可供更换的未发出牌；未消耗能力次数。',
             'not-human-turn': '请等到轮到你行动时再使用能力。',
           };
           json(res, 409, { error: messages[result.rejection] ?? '操作已过期或不合法，已同步当前牌桌。',

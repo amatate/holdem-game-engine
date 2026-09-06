@@ -70,6 +70,7 @@ function assertCardAuthority(state: TournamentState): void {
   const dealtBySeat = new Map<number, Card[]>();
   const burns: Card[] = [];
   const board: Card[] = [];
+  const discarded: Card[] = [];
   for (const event of handEvents) {
     if (event.type === 'HoleCardsDealt') {
       for (const deal of event.orderedDeals) {
@@ -78,6 +79,15 @@ function assertCardAuthority(state: TournamentState): void {
         cards.push(deal.card);
         dealtBySeat.set(deal.seat, cards);
       }
+    } else if (event.type === 'HoleCardReplaced') {
+      const cards = dealtBySeat.get(event.seat);
+      if (!cards || (event.holeCardIndex !== 0 && event.holeCardIndex !== 1)
+        || !sameCard(cards[event.holeCardIndex]!, event.discardedCard)) {
+        fail('replacement discard must match current hole-card destination');
+      }
+      discarded.push(event.discardedCard);
+      consumed.push(event.replacementCard);
+      cards[event.holeCardIndex] = event.replacementCard;
     } else if (event.type === 'CardBurned') {
       consumed.push(event.card);
       burns.push(event.card);
@@ -104,6 +114,10 @@ function assertCardAuthority(state: TournamentState): void {
   }
   if (!sameCards(hand.burnedCards, burns) || !sameCards(hand.board, board)) {
     fail('burn and board destinations must match consumed event order');
+  }
+  if (!sameCards(hand.abilityDiscardedCards ?? [], discarded)
+    || (discarded.length === 0 && Object.hasOwn(hand, 'abilityDiscardedCards'))) {
+    fail('ability discard destination must match replacement event order');
   }
 }
 

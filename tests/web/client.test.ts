@@ -56,7 +56,7 @@ it('shows the recovered replacement table when the create response is lost, with
   expect(posts).toBe(1);
 });
 
-it('recovers a lost peek response without reusing the ability or submitting a poker action', async () => {
+it.each(['peek', 'read', 'swap'] as const)('recovers a lost %s response without reusing the ability or submitting a poker action', async (ability) => {
   const roster: SeatIdentity[] = [
     { seatIndex: 0, playerId: '你', name: '你', nickname: '玩家', characterId: 'hero', style: '' },
     { seatIndex: 1, playerId: '林岚', name: '林岚', nickname: '猎手', characterId: 'hunter', style: '' },
@@ -71,7 +71,7 @@ it('recovers a lost peek response without reusing the ability or submitting a po
     innerHTML = ''; textContent = ''; hidden = false;
     setAttribute() {}
     querySelectorAll() { return []; }
-    closest() { return { dataset: { action: 'peek', targetSeat: '1' } }; }
+    closest() { return { dataset: { action: ability, targetSeat: '1', holeIndex: '0' } }; }
   }
   const app = new Surface();
   const surfaces: Record<string, Surface> = { '#app': app, '#notice': new Surface(), '#connection': new Surface(), '#sync': new Surface() };
@@ -96,9 +96,9 @@ it('recovers a lost peek response without reusing the ability or submitting a po
   app.dispatchEvent(new Event('click')); // A fast second click must not become another request.
   await vi.waitFor(() => expect(app.innerHTML).toContain('本手私有情报'));
   expect(commands).toHaveLength(1);
-  expect(commands[0]?.type).toBe('useAbility');
+  expect(commands[0]).toMatchObject({ type: 'useAbility', ability });
   expect(app.innerHTML).toContain('本场剩余 0 / 1');
-  expect(app.innerHTML).not.toContain('data-action="peek"');
+  expect(app.innerHTML).not.toContain(`data-action="${ability}"`);
   expect(current.packet.kind === 'decision' && current.packet.decisionKey)
     .toBe(first.packet.kind === 'decision' && first.packet.decisionKey);
 });

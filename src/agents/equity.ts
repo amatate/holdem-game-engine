@@ -156,6 +156,34 @@ export function estimateEquity(
   }
 
   const input = validateObservation(observation);
+  return sampleKnownHand(input, samples, random);
+}
+
+export interface KnownHandEquityInput {
+  readonly holeCards: readonly [Card, Card];
+  readonly board: readonly Card[];
+  readonly livePlayerCount: number;
+}
+
+/** Samples unknown opponents; never accepts their real cards or the authoritative deck. */
+export function estimateKnownHandEquity(
+  input: KnownHandEquityInput, samples: number, random: RandomSource,
+): EquityEstimate {
+  if (!Number.isSafeInteger(samples) || samples < 1 || samples > MAX_EQUITY_SAMPLES) rejectInput();
+  const heroCards = cloneCardBatch(input.holeCards, 2, 2);
+  const board = cloneCardBatch(input.board, 0, 5);
+  if (![0, 3, 4, 5].includes(board.length) || !Number.isSafeInteger(input.livePlayerCount)
+    || input.livePlayerCount < 2 || input.livePlayerCount > 6) rejectInput();
+  const codes = new Set([...heroCards, ...board].map((card) => card.code));
+  if (codes.size !== heroCards.length + board.length) rejectInput();
+  return sampleKnownHand({
+    heroCards: [heroCards[0]!, heroCards[1]!], board,
+    liveOpponentCount: input.livePlayerCount - 1,
+    unknownDeck: createStandardDeck().filter((card) => !codes.has(card.code)),
+  }, samples, random);
+}
+
+function sampleKnownHand(input: ValidatedEquityInput, samples: number, random: RandomSource): EquityEstimate {
   let wins = 0;
   let ties = 0;
   let losses = 0;

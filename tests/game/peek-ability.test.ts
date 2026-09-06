@@ -4,7 +4,8 @@ import type { OpenGameSessionOptions, SessionCommand, SessionMode } from '../../
 import type { DecisionContext } from '../../src/agents/types.js';
 import type { AbilityDecisionPacket, TurnPacket } from '../../src/game/turn-packet.js';
 import type { TournamentDriver } from '../../src/game/tournament-driver.js';
-import { eligiblePeekTargets } from '../../src/game/peek-ability.js';
+import { eligiblePeekTargets, type AbilityId } from '../../src/game/peek-ability.js';
+import { assertTournamentInvariants } from '../../src/core/invariants.js';
 import { advanceTableView } from '../../src/web/view.js';
 import { renderLobby, renderTable } from '../../src/web/render.js';
 import type { SeatIdentity } from '../../src/web/protocol.js';
@@ -56,13 +57,157 @@ function abilityPacket(packet: TurnPacket): AbilityDecisionPacket {
 }
 beforeEach(() => { captured.drivers = []; captured.failBuild = false; });
 
+function abilityCommand(packet: TurnPacket, ability: AbilityId): SessionCommand {
+  if (packet.kind !== 'decision') throw new Error('Expected decision');
+  const base = { type: 'useAbility' as const, decisionKey: packet.decisionKey, expectedPacketIndex: packet.packetIndex };
+  return ability === 'swap' ? { ...base, ability, holeCardIndex: 1 } : { ...base, ability, targetSeatIndex: 1 };
+}
+
+describe('three-ability session', () => {
+  it.each([2, 3, 4, 5, 6])('uses each ability on a separate decision at a %i-seat table and keeps charges spent next hand', async (players) => {
+    const contexts: DecisionContext[] = [];
+    const base = options();
+    const seats = Array.from({ length: players }, (_, seatIndex) => ({ seatIndex, playerId: 'p' + seatIndex }));
+    const start = await openGameSession({ ...base, config: { ...base.config, maxSeats: players }, seats,
+      participants: seats.map(({ playerId, seatIndex }) => seatIndex === 0 ? null : {
+        playerId, decide: async (context: DecisionContext) => {
+          contexts.push(context);
+          return { action: { type: context.observation.legalActions.check ? 'check' as const : 'call' as const } };
+        },
+      }),
+    });
+    const driver = captured.drivers[0]!;
+    for (const ability of ['peek', 'read', 'swap'] as const) {
+      const before = abilityPacket(getCurrentPacket(start.handle));
+      const authority = structuredClone(driver.getAuthorityState());
+      const command = abilityCommand(before, ability);
+      expect((await submitSessionCommand(start.handle, command)).accepted).toBe(true);
+      const after = abilityPacket(getCurrentPacket(start.handle));
+      expect(after.decisionKey).toBe(before.decisionKey);
+      expect(after.actionPanel).toEqual(before.actionPanel);
+      expect(after.abilities.usedThisDecision).toBe(true);
+      expect(after.abilities.charges[ability]).toBe(0);
+      expect(after.abilities.availableCommands).toEqual([]);
+      expect(after.viewerEventsSinceLastPacket).toEqual([]);
+      expect(await submitSessionCommand(start.handle, command)).toMatchObject({ accepted: false, rejection: 'stale-packet' });
+      if (ability !== 'swap') {
+        expect(driver.getAuthorityState()).toEqual(authority);
+        expect(after.observation).toEqual(before.observation);
+        expect(await submitSessionCommand(start.handle, abilityCommand(after, 'swap')))
+          .toMatchObject({ accepted: false, rejection: 'ability-already-used-this-decision' });
+      } else {
+        expect(after.observation.holeCards).toEqual([before.observation.holeCards[0],
+          authority.activeHand!.deck[authority.activeHand!.dealCursor]]);
+        expect(after.coreEventRange.toVersionExclusive).toBe(authority.version + 1);
+        expect(after.observation.decisionIndex).toBe(before.observation.decisionIndex);
+        assertTournamentInvariants(driver.getAuthorityState());
+      }
+      const invalid = { ...pokerCommand(after, 'check'), intent: { type: 'raiseTo', amount: 0 } } as SessionCommand;
+      expect((await submitSessionCommand(start.handle, invalid)).accepted).toBe(false);
+      expect(getCurrentPacket(start.handle)).toBe(after);
+      await submitSessionCommand(start.handle, pokerCommand(after, after.observation.legalActions.check ? 'check' : 'call'));
+    }
+    const three = abilityPacket(getCurrentPacket(start.handle));
+    expect(three.abilities.charges).toEqual({ peek: 0, read: 0, swap: 0 });
+    expect(three.abilities.knowledge.map((entry) => entry.type)).toEqual(['peek', 'read', 'swap']);
+    expect(three.abilities.knowledge.find((entry) => entry.type === 'read')).toMatchObject({ street: 'flop' });
+    expect(three.observation.street).toBe('river');
+    expect(three.abilities.usedThisDecision).toBe(false);
+    expect(JSON.stringify(contexts)).not.toMatch(/knowledge|charges|abilityDiscardedCards|HoleCardReplaced|privateEvents/);
+    expect(JSON.stringify(three.abilities)).not.toMatch(/equity|deck|sample|runSeed/);
+    const finalCards = three.observation.holeCards;
+    await submitSessionCommand(start.handle, pokerCommand(three, 'check'));
+    const result = getCurrentPacket(start.handle);
+    if (result.kind !== 'hand-result') throw new Error('Expected settlement');
+    expect(result.handResult.seats[0]!.holeCards).toEqual(finalCards);
+    expect(result.privateEventsSinceLastPacket).toEqual([]);
+    expect(result.handResult.seats.reduce((total, seat) => total + seat.finalStack, 0)).toBe(players * 100);
+    assertTournamentInvariants(driver.getAuthorityState());
+    await continueAfterHandResult(start.handle, result.packetIndex);
+    const next = abilityPacket(getCurrentPacket(start.handle));
+    expect(next.abilities.knowledge).toEqual([]);
+    expect(next.abilities.charges).toEqual({ peek: 0, read: 0, swap: 0 });
+  });
+
+  it.each(['read', 'swap'] as const)('rolls back authority and charges on %s packet failure, then allows an identical retry', async (ability) => {
+    const start = await openGameSession(options());
+    const before = structuredClone(captured.drivers[0]!.getAuthorityState());
+    const command = abilityCommand(start.packet, ability);
+    captured.failBuild = true;
+    await expect(submitSessionCommand(start.handle, command)).rejects.toThrow('injected private packet failure');
+    expect(getCurrentPacket(start.handle)).toBe(start.packet);
+    expect(captured.drivers[0]!.getAuthorityState()).toEqual(before);
+    captured.failBuild = false;
+    expect((await submitSessionCommand(start.handle, command)).accepted).toBe(true);
+    const clean = await openGameSession(options());
+    await submitSessionCommand(clean.handle, abilityCommand(clean.packet, ability));
+    expect(getCurrentPacket(start.handle)).toEqual(getCurrentPacket(clean.handle));
+  });
+
+  it('shows the final swapped pair even if the human folds without public reveal', async () => {
+    const start = await openGameSession(options());
+    const viewBefore = advanceTableView(null, start.packet, roster);
+    await submitSessionCommand(start.handle, abilityCommand(start.packet, 'swap'));
+    const swapped = abilityPacket(getCurrentPacket(start.handle));
+    const view = advanceTableView(viewBefore, swapped, roster);
+    expect(view.holeCards).toEqual(swapped.observation.holeCards);
+    expect(view.log).toEqual(viewBefore.log);
+    const html = renderTable({ id: 'swap', mode: 'ability-lab', roster, packet: swapped, view });
+    expect(html).toContain('第 2 张底牌已更换');
+    expect(html).toContain('旧牌退出本手');
+    await submitSessionCommand(start.handle, pokerCommand(swapped, 'fold'));
+    const result = getCurrentPacket(start.handle);
+    if (result.kind !== 'hand-result') throw new Error('Expected settlement');
+    expect(result.handResult.seats[0]!.holeCards).toEqual(swapped.observation.holeCards);
+    expect(result.handResult.seats[1]!.holeCards).toBeNull();
+    expect(result.privateEventsSinceLastPacket).toEqual([]);
+  });
+
+  it('rejects every ability in classic mode and invalid swap indices without mutation', async () => {
+    const classic = await openGameSession(options('classic'));
+    for (const ability of ['peek', 'read', 'swap'] as const) {
+      expect(await submitSessionCommand(classic.handle, abilityCommand(classic.packet, ability)))
+        .toMatchObject({ accepted: false, rejection: 'wrong-mode' });
+    }
+    const lab = await openGameSession(options());
+    for (const index of [-1, 2, 0.5, NaN]) {
+      expect(await submitSessionCommand(lab.handle, { ...abilityCommand(lab.packet, 'swap'), holeCardIndex: index } as SessionCommand))
+        .toMatchObject({ accepted: false, rejection: 'invalid-hole-card-index' });
+      expect(getCurrentPacket(lab.handle)).toBe(lab.packet);
+    }
+    expect(await submitSessionCommand(lab.handle, { ...abilityCommand(lab.packet, 'read'), targetSeatIndex: 0 } as SessionCommand))
+      .toMatchObject({ accepted: false, rejection: 'invalid-target' });
+    expect(getCurrentPacket(lab.handle)).toBe(lab.packet);
+  });
+
+  it('keeps read-only play identical to classic, including NPC observation and randomness', async () => {
+    const aContexts: DecisionContext[] = [], bContexts: DecisionContext[] = [];
+    const a = await openGameSession(options('classic', aContexts));
+    const b = await openGameSession(options('ability-lab', bContexts));
+    await submitSessionCommand(b.handle, abilityCommand(b.packet, 'read'));
+    for (let guard = 0; guard < 10; guard++) {
+      const p = getCurrentPacket(a.handle), q = getCurrentPacket(b.handle);
+      if (p.kind !== 'decision' || q.kind !== 'decision') break;
+      const type = p.observation.legalActions.check ? 'check' : 'call';
+      await submitSessionCommand(a.handle, pokerCommand(p, type));
+      await submitSessionCommand(b.handle, pokerCommand(q, type));
+      expect(captured.drivers[1]!.getAuthorityState()).toEqual(captured.drivers[0]!.getAuthorityState());
+    }
+    expect(bContexts.map((context) => [context.observation, context.random.seedHash]))
+      .toEqual(aContexts.map((context) => [context.observation, context.random.seedHash]));
+  });
+});
+
 describe('one-shot private peek', () => {
   it('reveals exactly one real card without advancing poker, exposes no authority, and rejects duplicate clicks', async () => {
     const start = await openGameSession(options());
     const before = abilityPacket(start.packet);
     const state = structuredClone(captured.drivers[0]!.getAuthorityState());
     expect(before.abilities.charges.peek).toBe(1);
-    expect(before.abilities.availableCommands).toEqual([{ ability: 'peek', targetSeatIndex: 1 }]);
+    expect(before.abilities.availableCommands).toEqual([
+      { ability: 'peek', targetSeatIndex: 1 }, { ability: 'read', targetSeatIndex: 1 },
+      { ability: 'swap', holeCardIndex: 0 }, { ability: 'swap', holeCardIndex: 1 },
+    ]);
     const command = peekCommand(before);
     const result = await submitSessionCommand(start.handle, command);
     expect(result.accepted).toBe(true);
@@ -78,6 +223,7 @@ describe('one-shot private peek', () => {
     expect(after.abilities.charges.peek).toBe(0);
     expect(after.abilities.availableCommands).toEqual([]);
     const known = after.abilities.knowledge[0]!;
+    if (known.type !== 'peek') throw new Error('Expected peek');
     expect(state.seats[1]!.holeCards).toContainEqual(known.card);
     expect(Object.isFrozen(known.card)).toBe(true);
     expect(JSON.stringify(after)).not.toMatch(/runSeed|deck|burnedCards|seedHash|private-peek-equivalence/);
@@ -95,7 +241,7 @@ describe('one-shot private peek', () => {
     expect(abilityPacket(start.packet).abilities.charges.peek).toBe(1);
   });
 
-  it('blocks classic mode, unavailable abilities, stale decisions and non-decision use', async () => {
+  it('blocks classic mode, stale decisions and non-decision use', async () => {
     const classic = await openGameSession(options('classic'));
     expect(await submitSessionCommand(classic.handle, peekCommand(classic.packet)))
       .toMatchObject({ accepted: false, rejection: 'wrong-mode' });
@@ -104,8 +250,6 @@ describe('one-shot private peek', () => {
     const peek = peekCommand(lab.packet);
     expect(await submitSessionCommand(lab.handle, { ...peek, decisionKey: 'old' }))
       .toMatchObject({ accepted: false, rejection: 'stale-decision' });
-    expect(await submitSessionCommand(lab.handle, { ...peek, ability: 'read' } as SessionCommand))
-      .toMatchObject({ accepted: false, rejection: 'ability-unavailable' });
     expect(getCurrentPacket(lab.handle)).toBe(lab.packet);
     await submitSessionCommand(lab.handle, pokerCommand(lab.packet, 'fold'));
     expect(await submitSessionCommand(lab.handle, { ...peek, expectedPacketIndex: getCurrentPacket(lab.handle).packetIndex }))

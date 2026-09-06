@@ -75,6 +75,9 @@ function validateEventStream(envelope: ReplayEnvelopeV1): GameStartedEvent {
     throw new ReplayHeaderError('replay must contain exactly one GameStarted event');
   }
   for (const [index, event] of envelope.events.entries()) {
+    if (event.type === 'HoleCardReplaced') {
+      throw new ReplayHeaderError('classic replay cannot contain ability replacements');
+    }
     if (event.schemaVersion !== EVENT_SCHEMA_VERSION || event.eventIndex !== index) {
       throw new ReplayHeaderError('replay events require supported schema and contiguous indices');
     }

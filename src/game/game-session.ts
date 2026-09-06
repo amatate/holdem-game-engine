@@ -4,7 +4,9 @@ import type { TournamentConfig } from '../core/config.js';
 import type { Participant } from './participant.js';
 import { createSeededRandom } from '../core/random.js';
 import { cloneCanonicalCard } from '../core/cards.js';
-import { createPeekDecisionPacket, eligiblePeekTargets, type PeekState, type PeekKnowledge } from './peek-ability.js';
+import { replaceHoleCard } from '../core/hole-card-replacement.js';
+import { classifyKnownHandStrength } from './ability-strength.js';
+import { createPeekDecisionPacket, type AbilityState, type PrivateAbilityKnowledge } from './peek-ability.js';
 import {
   createTournamentDriver,
   type DriverBoundary,
@@ -34,7 +36,7 @@ const INVALID_HANDLE_MESSAGE = 'Invalid game session handle';
 const INVALID_OPTIONS_MESSAGE = 'Invalid game session options';
 const BUSY_MESSAGE = 'Session operation already in progress';
 
-interface ClassicAggregate {
+interface SessionAggregate {
   readonly driver: TournamentDriver;
   readonly seats: readonly TournamentSeatInput[];
   readonly humanSeatIndex: number;
@@ -42,10 +44,10 @@ interface ClassicAggregate {
   readonly nextPacketIndex: number;
   readonly deliveredCoreVersion: number;
   readonly pendingPacket: Readonly<TurnPacket>;
-  readonly peek: Readonly<PeekState> | null;
+  readonly abilityState: Readonly<AbilityState> | null;
 }
 
-const sessions = new WeakMap<object, ClassicAggregate>();
+const sessions = new WeakMap<object, SessionAggregate>();
 const activeSessionOperations = new WeakSet<object>();
 
 type ProxyDetector = (value: unknown) => boolean;
@@ -81,7 +83,7 @@ function loadProxyDetector(): ProxyDetector | null {
 
 const proxyDetector = loadProxyDetector();
 
-function requireAggregate(handle: GameSessionHandle): ClassicAggregate {
+function requireAggregate(handle: GameSessionHandle): SessionAggregate {
   const aggregate = sessions.get(handle as object);
   if (aggregate === undefined) throw new Error(INVALID_HANDLE_MESSAGE);
   return aggregate;
@@ -443,7 +445,7 @@ function createPacket(
 
 function rejectCommand(
   handle: GameSessionHandle,
-  aggregate: ClassicAggregate,
+  aggregate: SessionAggregate,
   rejection: AbilityRejectionCode | ActionRejectionCode,
 ): SessionCommandResult {
   return Object.freeze({
@@ -526,10 +528,11 @@ function snapshotCommand(value: unknown): SessionCommand | null {
 }
 
 function createCandidate(
-  previous: Omit<ClassicAggregate, 'pendingPacket'>,
+  previous: Omit<SessionAggregate, 'pendingPacket'>,
   prepared: Readonly<PreparedDriverTransition>,
   acceptedCommandIndex: number,
-): ClassicAggregate {
+  notices: readonly PrivateAbilityKnowledge[] = [],
+): SessionAggregate {
   const state = prepared.candidateAuthorityState;
   const classicPacket = createPacket(
     state,
@@ -539,16 +542,29 @@ function createCandidate(
     previous.nextPacketIndex,
     previous.deliveredCoreVersion,
   );
-  const peek: PeekState | null = previous.peek === null ? null : Object.freeze({
-    remaining: previous.peek.remaining,
+  const abilityState: AbilityState | null = previous.abilityState === null ? null : Object.freeze({
+    charges: previous.abilityState.charges,
+    usedThisDecision: notices.length > 0,
     knowledge: Object.freeze(classicPacket.kind === 'decision'
-      ? previous.peek.knowledge.filter((entry) => entry.handNumber === state.handNumber) : []),
+      ? previous.abilityState.knowledge.filter((entry) => entry.handNumber === state.handNumber) : []),
   });
-  const packet = classicPacket.kind === 'decision' && peek !== null
-    ? createPeekDecisionPacket(classicPacket, state, previous.humanSeatIndex, peek) : classicPacket;
+  let packet: Readonly<TurnPacket> = classicPacket.kind === 'decision' && abilityState !== null
+    ? createPeekDecisionPacket(classicPacket, state, previous.humanSeatIndex, abilityState, notices) : classicPacket;
+  // Folded human cards are not publicly revealed. Preserve their final (possibly swapped)
+  // pair in the private settlement, without filling any hidden opponent row.
+  if (packet.kind === 'hand-result' && state.activeHand?.abilityDiscardedCards?.length) {
+    const ownCards = state.seats.find((seat) => seat.seatIndex === previous.humanSeatIndex)?.holeCards;
+    if (ownCards) packet = Object.freeze({ ...packet,
+      handResult: Object.freeze({ ...packet.handResult,
+        seats: Object.freeze(packet.handResult.seats.map((seat) => seat.seatIndex !== previous.humanSeatIndex
+          ? seat : Object.freeze({ ...seat, holeCards: Object.freeze(ownCards.map((card) =>
+            Object.freeze(cloneCanonicalCard(card)))) as unknown as typeof ownCards }))),
+      }),
+    });
+  }
   return Object.freeze({
     ...previous,
-    peek,
+    abilityState,
     acceptedCommandIndex,
     nextPacketIndex: previous.nextPacketIndex + 1,
     deliveredCoreVersion: state.version,
@@ -558,9 +574,9 @@ function createCandidate(
 
 function commitSessionCandidate(
   handle: object,
-  previous: ClassicAggregate | undefined,
+  previous: SessionAggregate | undefined,
   prepared: Readonly<PreparedDriverTransition>,
-  candidate: ClassicAggregate,
+  candidate: SessionAggregate,
   step: Readonly<SessionStep>,
 ): Readonly<SessionStep> {
   if (sessions.get(handle) !== previous) throw new Error('Session candidate is stale');
@@ -602,7 +618,9 @@ export async function openGameSession(
       acceptedCommandIndex: 0,
       nextPacketIndex: 0,
       deliveredCoreVersion: 0,
-      peek: snapshot.mode === 'classic' ? null : Object.freeze({ remaining: 1, knowledge: Object.freeze([]) }),
+      abilityState: snapshot.mode === 'classic' ? null : Object.freeze({
+        charges: Object.freeze({ peek: 1, read: 1, swap: 1 }), usedThisDecision: false, knowledge: Object.freeze([]),
+      }),
     }, prepared, 0);
     const step = Object.freeze({ handle, packet: candidate.pendingPacket });
     return commitSessionCandidate(handle as object, undefined, prepared, candidate, step);
@@ -618,51 +636,98 @@ export function getCurrentPacket(handle: GameSessionHandle): Readonly<TurnPacket
   return requireAggregate(handle).pendingPacket;
 }
 
-function usePeek(
-  handle: GameSessionHandle, previous: ClassicAggregate,
+async function useAbility(
+  handle: GameSessionHandle, previous: SessionAggregate,
   command: Extract<SessionCommand, { type: 'useAbility' }>,
-): SessionCommandResult {
-  if (command.ability !== 'peek') return rejectCommand(handle, previous, 'ability-unavailable');
-  const peek = previous.peek!;
-  if (peek.remaining === 0) return rejectCommand(handle, previous, 'ability-spent');
+): Promise<SessionCommandResult> {
+  const abilityState = previous.abilityState!;
+  if (abilityState.charges[command.ability] === 0) return rejectCommand(handle, previous, 'ability-spent');
+  if (abilityState.usedThisDecision) return rejectCommand(handle, previous, 'ability-already-used-this-decision');
   const state = previous.driver.getAuthorityState();
-  const target = state.seats.find((seat) => seat.seatIndex === command.targetSeatIndex);
-  if (!Number.isSafeInteger(command.targetSeatIndex) || !target
-    || target.seatIndex === previous.humanSeatIndex
-    || (target.status !== 'active' && target.status !== 'all-in') || !target.holeCards) {
-    return rejectCommand(handle, previous, 'invalid-target');
-  }
-  if (state.activeHand?.revealedHoleCardSeats.includes(target.seatIndex)) {
-    return rejectCommand(handle, previous, 'target-cards-public');
-  }
-  if (!eligiblePeekTargets(state, previous.humanSeatIndex).includes(target.seatIndex)) {
+  const hand = state.activeHand;
+  const boundary = previous.driver.getBoundary();
+  if (!hand || boundary.kind !== 'decision' || hand.currentActorSeat !== previous.humanSeatIndex) {
     return rejectCommand(handle, previous, 'not-human-turn');
   }
-  // A fresh independent fork makes retries reproducible without advancing poker/NPC RNG.
-  const random = createSeededRandom(state.runSeed).fork(`ability/peek/${state.handNumber}/${previous.acceptedCommandIndex}`);
-  const card = target.holeCards[random.nextUint32() % 2]!;
-  const notice: PeekKnowledge = Object.freeze({
-    type: 'peek', handNumber: state.handNumber, targetSeatIndex: target.seatIndex,
-    card: Object.freeze(cloneCanonicalCard(card)),
-  });
-  const nextPeek: PeekState = Object.freeze({ remaining: 0, knowledge: Object.freeze([notice]) });
-  const boundary = previous.driver.getBoundary();
-  if (boundary.kind !== 'decision') return rejectCommand(handle, previous, 'not-human-turn');
-  const basePacket = createClassicDecisionPacket({
-    state, boundary, humanSeatIndex: previous.humanSeatIndex,
-    packetIndex: previous.nextPacketIndex, fromCoreVersion: previous.deliveredCoreVersion,
-  });
-  const packet = createPeekDecisionPacket(basePacket, state, previous.humanSeatIndex, nextPeek, [notice]);
-  const candidate: ClassicAggregate = Object.freeze({
-    ...previous, peek: nextPeek, pendingPacket: packet,
-    nextPacketIndex: previous.nextPacketIndex + 1,
-    acceptedCommandIndex: previous.acceptedCommandIndex + 1,
-  });
-  const result: SessionCommandResult = Object.freeze({ accepted: true, step: Object.freeze({ handle, packet }) });
-  // All fallible work precedes this single commit; no core transition or betting action.
-  if (sessions.get(handle as object) !== previous) throw new Error('Session candidate is stale');
-  sessions.set(handle as object, candidate);
-  return result;
+  let notice: PrivateAbilityKnowledge;
+  let prepared: Readonly<PreparedDriverTransition> | undefined;
+  try {
+    if (command.ability === 'swap') {
+      if (command.holeCardIndex !== 0 && command.holeCardIndex !== 1) {
+        return rejectCommand(handle, previous, 'invalid-hole-card-index');
+      }
+      if (hand.revealedHoleCardSeats.includes(previous.humanSeatIndex)) {
+        return rejectCommand(handle, previous, 'target-cards-public');
+      }
+      const nextCard = hand.deck[hand.dealCursor];
+      if (!nextCard) return rejectCommand(handle, previous, 'deck-exhausted');
+      const oldCard = state.seats.find((seat) => seat.seatIndex === previous.humanSeatIndex)!.holeCards![command.holeCardIndex];
+      notice = Object.freeze({
+        type: 'swap', handNumber: state.handNumber, holeCardIndex: command.holeCardIndex,
+        oldCard: Object.freeze(cloneCanonicalCard(oldCard)), newCard: Object.freeze(cloneCanonicalCard(nextCard)),
+      });
+      prepared = await previous.driver.prepareAuthorityTransition(
+        replaceHoleCard(state, previous.humanSeatIndex, command.holeCardIndex),
+        'ability-swap', previous.acceptedCommandIndex,
+      );
+    } else {
+      const target = state.seats.find((seat) => seat.seatIndex === command.targetSeatIndex);
+      if (!Number.isSafeInteger(command.targetSeatIndex) || !target
+        || target.seatIndex === previous.humanSeatIndex
+        || (target.status !== 'active' && target.status !== 'all-in') || !target.holeCards) {
+        return rejectCommand(handle, previous, 'invalid-target');
+      }
+      if (hand.revealedHoleCardSeats.includes(target.seatIndex)) {
+        return rejectCommand(handle, previous, 'target-cards-public');
+      }
+      // Independent forks do not advance dealing or NPC randomness, even after a failed delivery.
+      const random = createSeededRandom(state.runSeed)
+        .fork(`ability/${command.ability}/${state.handNumber}/${previous.acceptedCommandIndex}`);
+      notice = command.ability === 'peek'
+        ? Object.freeze({
+            type: 'peek', handNumber: state.handNumber, targetSeatIndex: target.seatIndex,
+            card: Object.freeze(cloneCanonicalCard(target.holeCards[random.nextUint32() % 2]!)),
+          })
+        : Object.freeze({
+            type: 'read', handNumber: state.handNumber, targetSeatIndex: target.seatIndex,
+            street: hand.street!, band: classifyKnownHandStrength({
+              holeCards: target.holeCards, board: hand.board,
+              livePlayerCount: state.seats.filter((seat) => seat.status === 'active' || seat.status === 'all-in').length,
+            }, random),
+          });
+    }
+    const nextAbilities: AbilityState = Object.freeze({
+      charges: Object.freeze({ ...abilityState.charges, [command.ability]: 0 }),
+      usedThisDecision: true, knowledge: Object.freeze([...abilityState.knowledge, notice]),
+    });
+    let candidate: SessionAggregate;
+    if (prepared) {
+      candidate = createCandidate({ ...previous, abilityState: nextAbilities }, prepared,
+        previous.acceptedCommandIndex + 1, [notice]);
+    } else {
+      const basePacket = createClassicDecisionPacket({
+        state, boundary, humanSeatIndex: previous.humanSeatIndex,
+        packetIndex: previous.nextPacketIndex, fromCoreVersion: previous.deliveredCoreVersion,
+      });
+      const packet = createPeekDecisionPacket(basePacket, state, previous.humanSeatIndex, nextAbilities, [notice]);
+      candidate = Object.freeze({ ...previous, abilityState: nextAbilities, pendingPacket: packet,
+        nextPacketIndex: previous.nextPacketIndex + 1,
+        acceptedCommandIndex: previous.acceptedCommandIndex + 1,
+      });
+    }
+    const step = Object.freeze({ handle, packet: candidate.pendingPacket });
+    const result = Object.freeze({ accepted: true as const, step });
+    // All fallible projection/freezing is complete before committing either core or charges.
+    if (prepared) commitSessionCandidate(handle as object, previous, prepared, candidate, step);
+    else {
+      if (sessions.get(handle as object) !== previous) throw new Error('Session candidate is stale');
+      sessions.set(handle as object, candidate);
+    }
+    return result;
+  } catch (error) {
+    if (prepared) previous.driver.discardPreparedTransition(prepared);
+    throw error;
+  }
 }
 
 export async function submitSessionCommand(
@@ -675,7 +740,7 @@ export async function submitSessionCommand(
   try {
     const snapshot = snapshotCommand(command);
     if (snapshot === null) return rejectCommand(handle, previous, 'malformed-command');
-    if (snapshot.type === 'useAbility' && previous.peek === null) return rejectCommand(handle, previous, 'wrong-mode');
+    if (snapshot.type === 'useAbility' && previous.abilityState === null) return rejectCommand(handle, previous, 'wrong-mode');
     if (previous.pendingPacket.kind !== 'decision') {
       return rejectCommand(handle, previous, 'not-human-turn');
     }
@@ -685,7 +750,7 @@ export async function submitSessionCommand(
     if (snapshot.decisionKey !== previous.pendingPacket.decisionKey) {
       return rejectCommand(handle, previous, 'stale-decision');
     }
-    if (snapshot.type === 'useAbility') return usePeek(handle, previous, snapshot);
+    if (snapshot.type === 'useAbility') return await useAbility(handle, previous, snapshot);
     let prepared: Readonly<PreparedDriverTransition> | undefined;
     try {
       prepared = await previous.driver.preparePausedAction(

@@ -64,6 +64,8 @@ export type {
   TurnPacket,
 } from './game/turn-packet.js';
 export type { PeekKnowledge, PeekAbilityPanel } from './game/peek-ability.js';
+export type { AbilityPanel, AbilityId, AbilityCommandView, PrivateAbilityKnowledge, ReadKnowledge, SwapKnowledge } from './game/peek-ability.js';
+export type { StrengthBand } from './game/ability-strength.js';
 export type {
   HandResultPot,
   HandResultSummary,

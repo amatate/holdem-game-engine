@@ -12,7 +12,7 @@ import {
   type HandResultSummary,
 } from './hand-result.js';
 import type { DriverBoundary } from './tournament-driver.js';
-import type { PeekKnowledge, PeekAbilityPanel } from './peek-ability.js';
+import type { PrivateAbilityKnowledge, AbilityPanel } from './peek-ability.js';
 
 const INVALID_TURN_PACKET_MESSAGE = 'Invalid turn packet data';
 
@@ -73,8 +73,8 @@ export type GameResultPacket = Readonly<PacketBase & {
 }>;
 
 export type AbilityDecisionPacket = Readonly<Omit<ClassicDecisionPacket, 'abilities' | 'privateEventsSinceLastPacket'> & {
-  abilities: Readonly<PeekAbilityPanel>;
-  privateEventsSinceLastPacket: readonly PeekKnowledge[];
+  abilities: Readonly<AbilityPanel>;
+  privateEventsSinceLastPacket: readonly PrivateAbilityKnowledge[];
 }>;
 
 export type DecisionPacket = ClassicDecisionPacket | AbilityDecisionPacket;

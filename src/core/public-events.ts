@@ -257,6 +257,7 @@ function projectOneEvent(
       };
     }
     case 'DeckPrepared':
+    case 'HoleCardReplaced':
       return null;
     case 'HoleCardsDealt': {
       if (viewerSeatIndex === null) return null;

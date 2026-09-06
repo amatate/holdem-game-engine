@@ -3,6 +3,7 @@ import { renderLobby, renderTable, renderPlaybackFrame } from './render.js';
 import { buildPlaybackFrames, PlaybackClock, type PlaybackFrame } from './playback.js';
 import { installTableReadTool, type TableToolContext } from './agent-tools.js';
 import type { ActionIntent } from '../core/legal-actions.js';
+import type { AbilityCommandView } from '../game/peek-ability.js';
 import type { SessionMode } from '../game/session-types.js';
 
 const app = document.querySelector<HTMLElement>('#app')!;
@@ -175,12 +176,15 @@ async function act(intent: ActionIntent): Promise<void> {
     decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex, intent } });
 }
 
-async function peek(targetSeatIndex: number): Promise<void> {
+async function useAbility(selection: AbilityCommandView): Promise<void> {
   const table = state.table;
   if (busy || choosingTable || !table || table.mode !== 'ability-lab' || table.packet.kind !== 'decision') return;
-  if (!table.packet.abilities?.availableCommands.some((command) => command.targetSeatIndex === targetSeatIndex)) return;
-  await mutate('/api/action', { tableId: table.id, command: { type: 'useAbility', ability: 'peek',
-    decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex, targetSeatIndex } });
+  if (!table.packet.abilities?.availableCommands.some((command) => command.ability === selection.ability
+    && (command.ability === 'swap' && selection.ability === 'swap'
+      ? command.holeCardIndex === selection.holeCardIndex
+      : command.ability !== 'swap' && selection.ability !== 'swap' && command.targetSeatIndex === selection.targetSeatIndex))) return;
+  await mutate('/api/action', { tableId: table.id, command: { type: 'useAbility', ...selection,
+    decisionKey: table.packet.decisionKey, expectedPacketIndex: table.packet.packetIndex } });
 }
 
 app.addEventListener('change', (event) => {
@@ -194,9 +198,15 @@ app.addEventListener('click', (event) => {
   if (!button || busy) return;
   switch (button.dataset.action) {
     case 'start': void mutate('/api/table', { players: count, mode }); break;
-    case 'peek': {
+    case 'peek':
+    case 'read': {
       const target = Number(button.dataset.targetSeat);
-      if (Number.isSafeInteger(target)) void peek(target);
+      if (Number.isSafeInteger(target)) void useAbility({ ability: button.dataset.action, targetSeatIndex: target });
+      break;
+    }
+    case 'swap': {
+      const index = Number(button.dataset.holeIndex);
+      if (index === 0 || index === 1) void useAbility({ ability: 'swap', holeCardIndex: index });
       break;
     }
     case 'new':

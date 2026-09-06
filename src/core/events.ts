@@ -69,6 +69,14 @@ export interface HoleCardsDealtEvent extends HandEventBase {
   readonly orderedDeals: readonly HoleCardDeal[];
 }
 
+export interface HoleCardReplacedEvent extends HandEventBase {
+  readonly type: 'HoleCardReplaced';
+  readonly seat: number;
+  readonly holeCardIndex: 0 | 1;
+  readonly discardedCard: Card;
+  readonly replacementCard: Card;
+}
+
 export interface BettingRoundStartedEvent extends HandEventBase {
   readonly type: 'BettingRoundStarted';
   readonly street: Street;
@@ -169,6 +177,7 @@ export type DomainEvent =
   | BlindPostedEvent
   | DeckPreparedEvent
   | HoleCardsDealtEvent
+  | HoleCardReplacedEvent
   | BettingRoundStartedEvent
   | PlayerActedEvent
   | BettingRoundClosedEvent

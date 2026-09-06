@@ -62,6 +62,10 @@ function sparseArray<T>(length: number, entries: readonly (readonly [number, T])
 }
 
 const EVENTS_BY_TYPE = {
+  HoleCardReplaced: {
+    ...hand, type: 'HoleCardReplaced', seat: 0, holeCardIndex: 0,
+    discardedCard: ah, replacementCard: ad,
+  },
   GameStarted: {
     type: 'GameStarted',
     schemaVersion: 1,

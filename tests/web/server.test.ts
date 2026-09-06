@@ -71,6 +71,41 @@ describe('local browser table', () => {
     expect(table.packet.abilities.knowledge).toEqual([]);
     expect(table.packet.abilities.charges.peek).toBe(0);
   });
+  it.each(['read', 'swap'] as const)('delivers %s through HTTP, restores it on refresh, and rejects same-decision reuse', async (ability) => {
+    let { table } = await (await post('/api/table', { players: 2, mode: 'ability-lab' })).json() as { table: WebTable };
+    if (table.packet.kind !== 'decision') throw new Error('Expected decision');
+    const originalCards = table.view.holeCards;
+    const command = { type: 'useAbility', decisionKey: table.packet.decisionKey,
+      expectedPacketIndex: table.packet.packetIndex, ability,
+      ...(ability === 'read' ? { targetSeatIndex: 1 } : { holeCardIndex: 0 }),
+    };
+    const response = await post('/api/action', { tableId: table.id, command });
+    expect(response.status).toBe(200);
+    table = (await response.json() as { table: WebTable }).table;
+    if (table.packet.kind !== 'decision' || !table.packet.abilities) throw new Error('Expected abilities');
+    expect(table.packet.abilities.charges[ability]).toBe(0);
+    expect(table.packet.abilities.usedThisDecision).toBe(true);
+    expect(table.view.seats[1]!.cards).toBeNull();
+    const receipt = table.packet.abilities.knowledge[0]!;
+    expect(receipt.type).toBe(ability);
+    if (receipt.type === 'read') {
+      expect(Object.keys(receipt).sort()).toEqual(['band', 'handNumber', 'street', 'targetSeatIndex', 'type']);
+      expect(table.view.holeCards).toEqual(originalCards);
+    } else if (receipt.type === 'swap') {
+      expect(table.view.holeCards).toEqual([receipt.newCard, originalCards![1]]);
+      expect(receipt.oldCard).toEqual(originalCards![0]);
+    }
+    const locked = await post('/api/action', { tableId: table.id, command: {
+      type: 'useAbility', ability: 'peek', targetSeatIndex: 1, decisionKey: table.packet.decisionKey,
+      expectedPacketIndex: table.packet.packetIndex,
+    } });
+    expect(locked.status).toBe(409);
+    expect(await locked.json()).toMatchObject({ rejection: 'ability-already-used-this-decision', table });
+    expect((await post('/api/action', { tableId: table.id, command })).status).toBe(409);
+    const restored = await fetch(origin + '/api/bootstrap', { headers: { cookie } });
+    expect((await restored.json() as { table: WebTable }).table).toEqual(table);
+  });
+
   it('does not permit a forged mode on action to enable peek in a classic table', async () => {
     const { table } = await (await post('/api/table', { players: 2 })).json() as { table: WebTable };
     expect(table.mode).toBe('classic');
