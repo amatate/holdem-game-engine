@@ -56,6 +56,7 @@ export function createLocalServer() {
     '/': [new URL('../../src/web/index.html', import.meta.url), 'text/html; charset=utf-8'],
     '/style.css': [new URL('../../src/web/style.css', import.meta.url), 'text/css; charset=utf-8'],
     '/client.js': [new URL('../../dist/web/client.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/playback.js': [new URL('../../dist/web/playback.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/render.js': [new URL('../../dist/web/render.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/view.js': [new URL('../../dist/web/view.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/agent-tools.js': [new URL('../../dist/web/agent-tools.js', import.meta.url), 'text/javascript; charset=utf-8'],

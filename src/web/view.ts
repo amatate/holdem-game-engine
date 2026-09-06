@@ -10,9 +10,9 @@ function actionText(event: Extract<PublicGameEvent, { type: 'playerActed' }>): s
   return `${label} ${event.paid} · 到 ${event.betTo}${event.allIn ? ' · 全下' : ''}`;
 }
 
-// This reducer consumes only viewer-safe packets, never engine authority or RNG state.
-export function advanceTableView(
-  previous: TableView | null, packet: Readonly<TurnPacket>, roster: readonly SeatIdentity[],
+// Apply only events that have reached the screen, without looking at a future packet.
+export function applyPublicEvents(
+  previous: TableView | null, events: readonly PublicGameEvent[], roster: readonly SeatIdentity[],
 ): TableView {
   const view: TableView = previous === null ? {
     handNumber: 0, street: 'preflop', smallBlind: 1, bigBlind: 2,
@@ -21,7 +21,7 @@ export function advanceTableView(
     seats: roster.map(({ seatIndex }) => ({ seatIndex, stack: 0, status: 'active',
       committedStreet: 0, committedHand: 0, cards: null, lastAction: '' })),
   } : structuredClone(previous);
-  for (const event of packet.viewerEventsSinceLastPacket) {
+  for (const event of events) {
     const seat = 'seatIndex' in event ? view.seats.find((item) => item.seatIndex === event.seatIndex) : undefined;
     const name = 'seatIndex' in event ? roster.find((item) => item.seatIndex === event.seatIndex)?.name ?? '玩家' : '';
     switch (event.type) {
@@ -63,6 +63,9 @@ export function advanceTableView(
           if (item.status === 'active') item.lastAction = '';
         });
         break;
+      case 'bettingRoundClosed':
+        view.seats.forEach((item) => { item.committedStreet = 0; });
+        break;
       case 'holeCardsRevealed': if (seat) seat.cards = event.cards; break;
       case 'uncalledBetReturned':
         if (seat) {
@@ -71,6 +74,15 @@ export function advanceTableView(
           view.potTotal -= event.amount;
           view.log.push(`${name} · 未跟注部分退回 ${event.amount}`);
         }
+        break;
+      case 'potAwarded':
+        event.winners.forEach((winner, index) => {
+          const target = view.seats.find((item) => item.seatIndex === winner);
+          const chips = event.amounts[index]!;
+          if (target) target.stack += chips;
+          view.potTotal -= chips;
+          view.log.push(`${roster.find((item) => item.seatIndex === winner)?.name ?? '玩家'} · 获得 ${chips}`);
+        });
         break;
       case 'playerEliminated': if (seat) seat.status = 'eliminated'; break;
       case 'handCompleted':
@@ -82,6 +94,15 @@ export function advanceTableView(
         break;
     }
   }
+  view.log = view.log.slice(-60);
+  return view;
+}
+
+// Reconciliation uses the authoritative public snapshot, only after playback ends.
+export function advanceTableView(
+  previous: TableView | null, packet: Readonly<TurnPacket>, roster: readonly SeatIdentity[],
+): TableView {
+  const view = applyPublicEvents(previous, packet.viewerEventsSinceLastPacket, roster);
   if (packet.kind === 'decision') {
     const o = packet.observation;
     Object.assign(view, { handNumber: o.handNumber, street: o.street, smallBlind: o.smallBlind,

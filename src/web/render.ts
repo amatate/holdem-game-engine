@@ -1,6 +1,7 @@
 import type { Card } from '../core/types.js';
 import type { HandCategory } from '../core/hand-evaluator.js';
 import type { SeatIdentity, WebTable } from './protocol.js';
+import type { PlaybackFrame } from './playback.js';
 import { STREET_NAMES } from './view.js';
 
 const CATEGORIES: Record<HandCategory, string> = {
@@ -43,11 +44,16 @@ export function renderLobby(rosters: Record<number, SeatIdentity[]>, playerCount
   </section>`;
 }
 
-function renderSeat(table: WebTable, person: SeatIdentity): string {
+type PresentationTable = Omit<WebTable, 'packet'> & { packet: WebTable['packet'] | null };
+
+function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: PlaybackFrame): string {
   const seat = table.view.seats.find((item) => item.seatIndex === person.seatIndex)!;
   const hero = person.seatIndex === 0;
-  const current = hero && table.packet.kind === 'decision';
-  const result = table.packet.kind === 'hand-result'
+  const current = hero && table.packet?.kind === 'decision';
+  const event = frame?.event;
+  const acting = event && 'seatIndex' in event && event.seatIndex === person.seatIndex;
+  const awarded = event?.type === 'potAwarded' && event.winners.includes(person.seatIndex);
+  const result = table.packet?.kind === 'hand-result'
     ? table.packet.handResult.seats.find((item) => item.seatIndex === person.seatIndex) : null;
   const badges = [
     table.view.buttonPosition === person.seatIndex ? '<span class="position dealer" title="按钮位">D</span>' : '',
@@ -59,15 +65,15 @@ function renderSeat(table: WebTable, person: SeatIdentity): string {
     : `<div class="seat-cards ${hero ? 'hero-cards' : ''}">${cardFace(cards?.[0] ?? null, !hero)}${cardFace(cards?.[1] ?? null, !hero)}</div>`;
   const status = { active: '', folded: '已弃牌', 'all-in': '已全下', eliminated: '已淘汰' }[seat.status];
   const winnings = result && result.potWon > 0 ? `<span class="won-label">赢得 ${amount(result.potWon)}</span>` : '';
-  return `<article class="seat ${hero ? 'hero' : ''} ${current ? 'is-current' : ''} ${seat.status === 'folded' || seat.status === 'eliminated' ? 'is-out' : ''}" data-seat="${person.seatIndex}" aria-label="${escapeHtml(person.name)}${current ? '，轮到你' : ''}">
+  return `<article class="seat ${hero ? 'hero' : ''} ${current ? 'is-current' : ''} ${acting ? 'is-acting' : ''} ${awarded ? 'is-awarded' : ''} ${seat.status === 'folded' || seat.status === 'eliminated' ? 'is-out' : ''}" data-seat="${person.seatIndex}" aria-label="${escapeHtml(person.name)}${current ? '，轮到你' : ''}">
     ${cardsHtml}<div class="seat-body">${identity(person)}<div class="seat-positions">${badges}</div><p class="seat-stack">${amount(seat.stack)} <small>筹码</small></p>
-    <p class="seat-action">${current ? '轮到你' : escapeHtml(status || seat.lastAction || '等待行动')}</p>${winnings}</div>
-    ${table.packet.kind === 'decision' && seat.committedStreet > 0 ? `<div class="bet-chip"><span aria-hidden="true">◉</span> ${amount(seat.committedStreet)} <small>本轮</small></div>` : ''}
+    <p class="seat-action">${current ? '轮到你' : escapeHtml(acting ? seat.lastAction || status || '亮牌' : status || seat.lastAction || '等待行动')}</p>${winnings}</div>
+    ${(!table.packet || table.packet.kind === 'decision') && seat.committedStreet > 0 ? `<div class="bet-chip"><span aria-hidden="true">◉</span> ${amount(seat.committedStreet)} <small>本轮</small></div>` : ''}
   </article>`;
 }
 
-function settlement(table: WebTable): string {
-  if (table.packet.kind !== 'hand-result') return '';
+function settlement(table: PresentationTable): string {
+  if (table.packet?.kind !== 'hand-result') return '';
   const result = table.packet.handResult;
   const hero = result.seats.find((seat) => seat.seatIndex === 0)!;
   const title = hero.net > 0 ? `本手净赢 ${signed(hero.net)}` : hero.net < 0 ? `本手净输 ${amount(-hero.net)}` : '本手持平';
@@ -79,8 +85,9 @@ function settlement(table: WebTable): string {
   </section>`;
 }
 
-function controls(table: WebTable): string {
+function controls(table: PresentationTable): string {
   const packet = table.packet;
+  if (!packet) return '';
   if (packet.kind === 'hand-result') return settlement(table);
   if (packet.kind === 'game-result') {
     const winner = table.roster.find((person) => person.seatIndex === packet.winnerSeatIndex)!;
@@ -98,12 +105,42 @@ function controls(table: WebTable): string {
 }
 
 export function renderTable(table: WebTable): string {
+  return renderSurface(table);
+}
+
+function frameCaption(frame: PlaybackFrame, roster: readonly SeatIdentity[]): string {
+  const event = frame.event;
+  const name = (index: number) => roster.find((person) => person.seatIndex === index)?.name ?? '玩家';
+  switch (event.type) {
+    case 'handStarted':
+    case 'positionsAssigned': return `第 ${frame.view.handNumber} 手 · 准备发牌`;
+    case 'blindPosted':
+    case 'playerActed': return `${name(event.seatIndex)} · ${frame.view.seats.find((seat) => seat.seatIndex === event.seatIndex)?.lastAction ?? ''}`;
+    case 'ownHoleCardsDealt': return '你的底牌已发出';
+    case 'communityCardsDealt': return `${STREET_NAMES[event.street]} · ${event.cards.map((card) => card.code.slice(0, -1) + SUITS[card.suit]).join(' ')}`;
+    case 'holeCardsRevealed': return `${name(event.seatIndex)} · ${event.reason === 'all-in' ? '全下亮牌' : '摊牌'}`;
+    case 'showdownStarted': return '开始摊牌';
+    case 'handEvaluated': return `${name(event.seatIndex)} · ${CATEGORIES[event.category]}`;
+    case 'uncalledBetReturned': return `${name(event.seatIndex)} · 未跟注部分退回 ${amount(event.amount)}`;
+    case 'potAwarded': return event.winners.map((winner, index) => `${name(winner)} 获得 ${amount(event.amounts[index]!)}`).join(' · ');
+    default: return '牌局进行中';
+  }
+}
+
+export function renderPlaybackFrame(frame: PlaybackFrame, roster: SeatIdentity[], step: number, total: number): string {
+  const evaluated = frame.event.type === 'handEvaluated'
+    ? `<div class="playback-best-five"><span>最佳五张</span>${frame.event.bestFive.map((card) => cardFace(card, true)).join('')}</div>` : '';
+  const panel = `<section class="decision playback-status" role="status" aria-live="polite"><p class="eyebrow">正在播放 · ${step} / ${total}</p><h2>${escapeHtml(frameCaption(frame, roster))}</h2>${evaluated}<p class="playback-hint">轮到你时会自动停下 · 可在上方调速或跳过</p></section>`;
+  return renderSurface({ id: '', roster, packet: null, view: frame.view }, panel, frame);
+}
+
+function renderSurface(table: PresentationTable, playbackPanel = '', frame?: PlaybackFrame): string {
   const view = table.view;
-  const settled = table.packet.kind !== 'decision';
-  const pot = table.packet.kind === 'hand-result'
+  const settled = table.packet !== null && table.packet.kind !== 'decision';
+  const pot = table.packet?.kind === 'hand-result'
     ? table.packet.handResult.pots.reduce((sum, item) => sum + item.amount, 0) : view.potTotal;
   return `<div class="table-toolbar"><div><span class="live-dot" aria-hidden="true"></span> ${table.roster.length} 人桌 <span class="separator">/</span> 第 ${view.handNumber} 手 <span class="separator">/</span> ${settled ? '结算' : STREET_NAMES[view.street]}</div><div class="blind-label">盲注 <strong>${view.smallBlind} / ${view.bigBlind}</strong></div><button class="text-button" data-action="new">重新开桌</button></div>
-    <div class="game-layout"><div class="play-column"><section class="arena" data-count="${table.roster.length}" aria-label="德州牌桌"><div class="felt"></div><div class="table-center"><div class="pot-display"><span>${settled ? '本手总底池 · 已结算' : '当前桌面投入'}</span><strong>${amount(pot)}</strong></div>${board(view.board)}<p class="table-caption">${settled ? '查看下方结算，再继续下一手' : `${STREET_NAMES[view.street]} · ${view.board.length === 0 ? '等待翻牌' : `${view.board.length} 张公共牌`}`}</p></div>${table.roster.map((person) => renderSeat(table, person)).join('')}</section>${controls(table)}</div>
+    <div class="game-layout"><div class="play-column"><section class="arena" data-count="${table.roster.length}" aria-label="德州牌桌"><div class="felt"></div><div class="table-center"><div class="pot-display"><span>${settled ? '本手总底池 · 已结算' : '当前桌面投入'}</span><strong>${amount(pot)}</strong></div>${board(view.board)}<p class="table-caption">${frame ? escapeHtml(frameCaption(frame, table.roster)) : settled ? '查看下方结算，再继续下一手' : `${STREET_NAMES[view.street]} · ${view.board.length === 0 ? '等待翻牌' : `${view.board.length} 张公共牌`}`}</p></div>${table.roster.map((person) => renderSeat(table, person, frame)).join('')}</section>${playbackPanel || controls(table)}</div>
       <aside class="table-aside"><section class="opponents"><h2>这一桌的人</h2>${table.roster.filter((person) => person.seatIndex !== 0).map((person) => `<div class="opponent">${identity(person)}<p>${escapeHtml(person.style)}</p></div>`).join('')}<p class="aside-note">风格是倾向，不是每一手的答案。</p></section><details class="history" open><summary>本手记录 <span>${view.log.length}</span></summary><ol>${view.log.slice(-14).reverse().map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ol></details></aside>
     </div>`;
 }
