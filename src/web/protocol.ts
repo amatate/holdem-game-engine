@@ -2,6 +2,10 @@ import type { Street, PlayerHandStatus } from '../core/state.js';
 import type { Card } from '../core/types.js';
 import type { TurnPacket } from '../game/turn-packet.js';
 import type { SessionMode } from '../game/session-types.js';
+import type { LivingView } from '../game/living-table.js';
+import type { TutorialView } from '../game/tutorial.js';
+
+export type TableExperience = 'free' | 'living' | 'tutorial';
 
 export interface SeatIdentity {
   seatIndex: number;
@@ -43,6 +47,9 @@ export interface WebTable {
   roster: SeatIdentity[];
   packet: Readonly<TurnPacket>;
   view: TableView;
+  experience?: TableExperience;
+  living?: LivingView | null;
+  tutorial?: TutorialView | null;
 }
 
 export interface Bootstrap {

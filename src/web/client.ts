@@ -14,6 +14,8 @@ let count = 4;
 let mode: SessionMode = 'classic';
 let busy = false;
 let choosingTable = false;
+let talkMuted = false;
+try { talkMuted = localStorage.getItem('holdem.talk-muted') === 'true'; } catch { /* Optional preference. */ }
 const clock = new PlaybackClock();
 const speedControl = document.querySelector<HTMLSelectElement>('#playback-speed');
 const skipControl = document.querySelector<HTMLButtonElement>('#playback-skip');
@@ -34,10 +36,12 @@ window.addEventListener('pagehide', () => { toolLifecycle.abort(); clock.skip();
 
 function draw(): void {
   app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount, state.table.mode)
-    : state.table && !choosingTable ? renderTable(state.table) : renderLobby(state.rosters, count, mode);
+    : state.table && !choosingTable ? renderTable(state.table, talkMuted)
+      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode)}`;
   const label = document.querySelector('#mode-label');
   const visibleMode = state.table && !choosingTable ? state.table.mode : mode;
-  if (label) label.textContent = visibleMode === 'ability-lab' ? '能力实验' : '经典德州';
+  if (label) label.textContent = state.table && !choosingTable && state.table.experience === 'tutorial' ? '新手教学'
+    : `${state.table && !choosingTable && state.table.experience === 'living' ? '活牌桌 · ' : ''}${visibleMode === 'ability-lab' ? '能力实验' : '经典德州'}`;
   lock(busy);
 }
 function lock(value: boolean): void {
@@ -198,6 +202,27 @@ app.addEventListener('click', (event) => {
   if (!button || busy) return;
   switch (button.dataset.action) {
     case 'start': void mutate('/api/table', { players: count, mode }); break;
+    case 'tutorial-start': void mutate('/api/table', { players: 2, mode: 'classic', experience: 'tutorial' }); break;
+    case 'living-start': void mutate('/api/table', { players: 4, mode, experience: 'living' }); break;
+    case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free' }); break;
+    case 'home': choosingTable = true; message(''); draw(); break;
+    case 'resume': choosingTable = false; message(''); draw(); break;
+    case 'toggle-talk':
+      talkMuted = !talkMuted;
+      try { localStorage.setItem('holdem.talk-muted', String(talkMuted)); } catch { /* Optional preference. */ }
+      draw(); break;
+    case 'reply':
+      if (state.table?.living) void mutate('/api/reply', { tableId: state.table.id,
+        expectedPacketIndex: state.table.packet.packetIndex, revision: state.table.living.revision,
+        promptId: button.dataset.prompt, choice: button.dataset.choice });
+      break;
+    case 'lesson-answer':
+    case 'lesson-next':
+    case 'lesson-restart':
+      if (state.table?.tutorial) void mutate('/api/lesson', { tableId: state.table.id,
+        expectedPacketIndex: state.table.packet.packetIndex, revision: state.table.tutorial.revision,
+        operation: button.dataset.action.slice(7), answer: button.dataset.answer });
+      break;
     case 'peek':
     case 'read': {
       const target = Number(button.dataset.targetSeat);

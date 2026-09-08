@@ -6,9 +6,12 @@ import { CHARACTERS, type CharacterId } from '../agents/characters.js';
 import { DEFAULT_TOURNAMENT_CONFIG } from '../cli/index.js';
 import { continueAfterHandResult, getCurrentPacket, openGameSession, submitSessionCommand } from '../game/game-session.js';
 import { createCharacterParticipant, selectNpcRoster } from '../game/roster.js';
-import type { GameSessionHandle, SessionCommand } from '../game/session-types.js';
-import type { SeatIdentity, WebTable } from './protocol.js';
+import type { GameSessionHandle, SessionCommand, SessionMode } from '../game/session-types.js';
+import type { SeatIdentity, WebTable, TableExperience } from './protocol.js';
 import { advanceTableView } from './view.js';
+import { LivingParticipant } from '../agents/table-memory.js';
+import { LivingTable } from '../game/living-table.js';
+import { newTutorial, tutorialView, tutorialAllows, answerTutorial, tutorialCoach, type TutorialState } from '../game/tutorial.js';
 
 const STYLES: Record<CharacterId, string> = {
   rock: '少入局 · 守住筹码', hunter: '重视位置 · 主动施压', maniac: '宽范围 · 大胆进攻',
@@ -47,7 +50,34 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   return body as Record<string, unknown>;
 }
 
-interface LocalSession { handle: GameSessionHandle; table: WebTable; touched: number; busy: boolean }
+interface LocalSession {
+  handle: GameSessionHandle; table: WebTable; touched: number; busy: boolean;
+  living: LivingTable | null; tutorial: TutorialState | null;
+}
+
+async function openLocalTable(players: number, mode: SessionMode, experience: TableExperience, lesson = 0): Promise<LocalSession> {
+  const living = experience === 'living' ? new LivingTable() : null;
+  const tutorial = experience === 'tutorial' ? newTutorial(lesson) : null;
+  const roster = tutorial ? [rosterFor(2)[0]!, { seatIndex: 1, playerId: '莫叔（教学）', name: '莫叔',
+    nickname: '教学陪练', style: '按课程配合 · 不代表正式 NPC 强度', characterId: 'calling-station' }] : rosterFor(players);
+  const participants = tutorial ? [null, tutorialCoach(lesson, roster[1]!.playerId)]
+    : [null, ...selectNpcRoster(players).map((id, index) => living
+      ? new LivingParticipant(id, living.memory, () => living.mood(index + 1)) : createCharacterParticipant(id))];
+  const step = await openGameSession({ mode, config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players,
+    ...(tutorial ? { initialButtonSeat: 0 } : {}) },
+    seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })), participants,
+    humanSeatIndex: 0, runSeed: tutorial ? `night-school-v1-lesson-${lesson}` : randomUUID(), invalidAgentActionMode: 'fallback' });
+  living?.ingest(step.packet.packetIndex, step.packet.viewerEventsSinceLastPacket);
+  const table: WebTable = { id: randomUUID(), mode, experience, roster, packet: step.packet,
+    view: advanceTableView(null, step.packet, roster), living: living?.view() ?? null,
+    tutorial: tutorial ? tutorialView(tutorial, step.packet) : null };
+  return { handle: step.handle, table, living, tutorial, touched: Date.now(), busy: false };
+}
+
+function refreshPresentation(session: LocalSession): void {
+  session.table = { ...session.table, living: session.living?.view() ?? null,
+    tutorial: session.tutorial ? tutorialView(session.tutorial, session.table.packet) : null };
+}
 
 export function createLocalServer() {
   const sessions = new Map<string, LocalSession>();
@@ -60,6 +90,7 @@ export function createLocalServer() {
     '/render.js': [new URL('../../dist/web/render.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/view.js': [new URL('../../dist/web/view.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/agent-tools.js': [new URL('../../dist/web/agent-tools.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/experience-render.js': [new URL('../../dist/web/experience-render.js', import.meta.url), 'text/javascript; charset=utf-8'],
   };
   const server = createServer((req, res) => { void handleRequest(req, res); });
   server.requestTimeout = 15_000;
@@ -97,38 +128,74 @@ export function createLocalServer() {
         res.writeHead(200, { 'Content-Type': file[1] }); res.end(content); return;
       }
       if (req.method !== 'POST') throw new HttpError(405, '不支持此请求方式。');
-      if (!['/api/table', '/api/action', '/api/continue'].includes(path)) throw new HttpError(404, '没有这个操作。');
+      if (!['/api/table', '/api/action', '/api/continue', '/api/reply', '/api/lesson'].includes(path)) throw new HttpError(404, '没有这个操作。');
       const body = await readBody(req);
       // A different tab may replace the table while this request body is arriving.
       session = token ? sessions.get(token) : undefined;
       if (session?.busy) { json(res, 409, { error: '正在处理上一步，请稍后同步。', table: session.table }); return; }
       if (path === '/api/table') {
-        const players = body.players;
+        const experience = body.experience ?? 'free';
+        if (experience !== 'free' && experience !== 'living' && experience !== 'tutorial') throw new HttpError(400, '请选择自由牌桌、活牌桌或教学。');
+        const players = experience === 'tutorial' ? 2 : experience === 'living' ? 4 : body.players;
         const mode = body.mode === undefined ? 'classic' : body.mode;
         if (mode !== 'classic' && mode !== 'ability-lab') throw new HttpError(400, '请选择经典德州或能力实验。');
+        if (experience === 'tutorial' && mode !== 'classic') throw new HttpError(400, '新手教学使用经典规则，不启用能力。');
         if (typeof players !== 'number' || !Number.isSafeInteger(players) || players < 2 || players > 6) {
           throw new HttpError(400, '请选择 2–6 人。');
         }
         if (!session && sessions.size >= 32) throw new HttpError(503, '本地牌桌已满，请关闭闲置会话后重试。');
         if (session) session.busy = true;
         try {
-          const roster = rosterFor(players);
-          const participants = [null, ...selectNpcRoster(players).map((id) => createCharacterParticipant(id))];
-          const step = await openGameSession({ mode, config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players },
-            seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })), participants,
-            humanSeatIndex: 0, runSeed: randomUUID(), invalidAgentActionMode: 'fallback' });
-          const table: WebTable = { id: randomUUID(), mode, roster, packet: step.packet,
-            view: advanceTableView(null, step.packet, roster) };
+          const opened = await openLocalTable(players, mode, experience);
           const newToken = token && session ? token : randomUUID();
-          sessions.set(newToken, { handle: step.handle, table, touched: now, busy: false });
+          sessions.set(newToken, opened);
           res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/`);
-          json(res, 200, { table }); return;
+          json(res, 200, { table: opened.table }); return;
         } finally { if (session) session.busy = false; }
       }
       if (!session) throw new HttpError(401, '牌桌已关闭或过期，请重新开桌。');
       if (body.tableId !== session.table.id) { json(res, 409, { error: '牌桌已更新，已同步当前牌桌。', table: session.table }); return; }
       session.busy = true;
       try {
+        if (path === '/api/reply' || path === '/api/lesson') {
+          const revision = path === '/api/reply' ? session.table.living?.revision : session.tutorial?.revision;
+          if (revision === undefined || body.revision !== revision || body.expectedPacketIndex !== session.table.packet.packetIndex) {
+            json(res, 409, { error: '这个提示已经变化，已同步当前进度。', table: session.table }); return;
+          }
+          if (path === '/api/reply') {
+            if (typeof body.promptId !== 'string' || typeof body.choice !== 'string'
+              || !session.living?.reply(body.promptId, body.choice, body.revision as number)) {
+              json(res, 409, { error: '这段对话已回答或选项无效。', table: session.table }); return;
+            }
+          } else {
+            const tutorial = session.tutorial!;
+            if (body.operation === 'answer') {
+              if (typeof body.answer !== 'string' || !answerTutorial(tutorial, session.table.packet, body.answer)) {
+                json(res, 409, { error: '请先完成这一手，再回答当前问题。', table: session.table }); return;
+              }
+            } else if (body.operation === 'restart' || (body.operation === 'next' && tutorial.solved && !tutorial.complete)) {
+              const opened = await openLocalTable(2, 'classic', 'tutorial', tutorial.lesson + (body.operation === 'next' ? 1 : 0));
+              sessions.set(token!, opened);
+              json(res, 200, { table: opened.table }); return;
+            } else {
+              json(res, 409, { error: '先回答本关问题，再进入下一关。', table: session.table }); return;
+            }
+          }
+          refreshPresentation(session);
+          json(res, 200, { table: session.table }); return;
+        }
+        if (session.living?.view().ended) {
+          json(res, 409, { error: '序章已结束，可以回应离桌对话或返回主页。', table: session.table }); return;
+        }
+        if (session.tutorial) {
+          const command = body.command as SessionCommand | undefined;
+          if (path === '/api/continue' || command?.type !== 'act'
+            || !tutorialAllows(session.tutorial, session.table.packet, command.intent)) {
+            json(res, 409, { error: session.table.packet.kind === 'decision'
+              ? `这是引导练习，未扣筹码。${tutorialView(session.tutorial, session.table.packet).hint}`
+              : '这一手已结束，请完成课后问题；也可以重试本关。', table: session.table }); return;
+          }
+        }
         const result = path === '/api/action'
           ? await submitSessionCommand(session.handle, body.command as SessionCommand)
           : await continueAfterHandResult(session.handle, body.expectedPacketIndex as number);
@@ -149,6 +216,9 @@ export function createLocalServer() {
         }
         const packet = getCurrentPacket(session.handle);
         session.table = { ...session.table, packet, view: advanceTableView(session.table.view, packet, session.table.roster) };
+        session.living?.ingest(packet.packetIndex, packet.viewerEventsSinceLastPacket);
+        if (session.tutorial) session.tutorial.revision++;
+        refreshPresentation(session);
         json(res, 200, { table: session.table });
       } finally { session.busy = false; }
     } catch (error) {
