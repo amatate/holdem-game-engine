@@ -50,6 +50,7 @@ export function buildPlaybackFrames(
 
 function feedbackHold(line?: TableLine, memory?: MemoryNotice): number {
   // Virtual milliseconds: follows speed changes and skip just like cards and chips.
+  if (line?.kind === 'observation') return Math.max(memory ? 2600 : 1800, Math.min(2800, line.text.length * 70));
   return line ? Math.min(4200, Math.max(2400, line.text.length * 85)) : memory ? 2600 : 0;
 }
 

@@ -3,9 +3,13 @@ import type { PublicGameEvent, PublicActionEvent } from '../core/public-events.j
 import { tablePerson, type TablePerson } from './table-personas.js';
 
 export interface EventAnchor { packetIndex: number; eventIndex: number }
-export interface TableLine extends EventAnchor { id: number; hand: number; speaker: string; seatIndex: number | null; text: string }
+export interface TableLine extends EventAnchor {
+  id: number; hand: number; speaker: string; seatIndex: number | null; text: string;
+  kind?: 'speech' | 'observation';
+}
 export interface MemoryNotice extends EventAnchor {
   id: number; hand: number; seatIndex: number; speaker: string; title: string; fact: string; inference: string;
+  kind?: 'action' | 'pressure' | 'showdown' | 'big-pot';
 }
 export interface CharacterNote {
   seatIndex: number; name: string; about: string; mood: string; relationship: string;
@@ -16,6 +20,7 @@ export interface LivingView {
   revision: number; hand: number; limit: number | null; ended: boolean; story: boolean; chapter: string;
   protagonist: string; lines: TableLine[]; notes: CharacterNote[]; prompt: StoryPrompt | null;
   ending: string | null; memories: MemoryNotice[];
+  recap?: { hand: number; text: string } | null;
 }
 
 const STORY_PEOPLE: TablePerson[] = [
@@ -54,6 +59,12 @@ export class LivingTable {
   #memories: MemoryNotice[] = [];
   #nextMemory = 1;
   #counts = 0;
+  #observed = new Set<string>();
+  #keyKinds = new Set<string>();
+  #recap: { hand: number; text: string } | null = null;
+  #bigBlind = 2;
+  #paid = new Map<number, number>();
+  #shown = new Set<number>();
   #cooldowns = new Map<string, number>();
   #moods = new Map<number, number>();
   #relations = new Map<number, number>();
@@ -74,16 +85,46 @@ export class LivingTable {
 
   #say(speaker: string, text: string, key: string, important = false): void {
     if (!important && (this.#counts >= 2 || this.#hand - (this.#cooldowns.get(key) ?? -10) < 2)) return;
-    this.#lines.push({ id: this.#nextLine++, hand: this.#hand, speaker, text,
+    this.#lines.push({ id: this.#nextLine++, hand: this.#hand, speaker, text, kind: 'speech',
       seatIndex: this.#people.find((person) => person.name === speaker)?.seatIndex ?? null,
       packetIndex: this.#packet, eventIndex: this.#eventIndex });
-    this.#lines = this.#lines.slice(-16);
+    this.#lines = this.#lines.slice(-32);
     this.#cooldowns.set(key, this.#hand);
     if (!important) this.#counts++;
   }
 
+  #observeAction(event: Extract<PublicGameEvent, { type: 'playerActed' }>): void {
+    const person = this.#people.find((person) => person.seatIndex === event.seatIndex);
+    if (!person || this.#out.has(person.seatIndex) || this.#observed.size >= 2) return;
+    const raises = this.#actions.filter((action) => action.type === 'playerActed' && action.seatIndex === person.seatIndex && (action.kind === 'raise' || action.kind === 'bet')).length;
+    const key = `${person.seatIndex}-${raises >= 2 && (event.kind === 'raise' || event.kind === 'bet') ? 'pressure' : 'action'}`;
+    if (this.#observed.has(key)) return;
+    this.#observed.add(key);
+    const text = event.kind === 'check' ? '轻敲桌面，过牌。'
+      : event.kind === 'fold' ? '把牌扣下，退出这一手的争夺。'
+      : event.allIn ? `把剩余 ${event.paid} 筹码全部推入，本轮到 ${event.betTo}。`
+      : event.kind === 'call' ? `补入 ${event.paid} 筹码跟注，本轮到 ${event.betTo}。`
+      : `${raises > 1 ? `本手第 ${raises} 次提高价格，` : '把筹码推入桌面，'}本轮${event.kind === 'bet' ? '下注' : '加注'}到 ${event.betTo}。`;
+    this.#lines.push({ id: this.#nextLine++, hand: this.#hand, kind: 'observation', speaker: person.name,
+      seatIndex: person.seatIndex, text, packetIndex: this.#packet, eventIndex: this.#eventIndex });
+    this.#lines = this.#lines.slice(-32);
+  }
+
+  #keyMemory(kind: 'pressure' | 'showdown' | 'big-pot', title: string, fact: string): void {
+    // At most one significant encounter beyond the first-action fact in each hand.
+    if (this.#keyKinds.size) return;
+    const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
+    const person = active.find((person) => person.characterId === 'hunter') ?? active[0];
+    if (!person) return;
+    this.#keyKinds.add(kind);
+    this.#memories.push({ id: this.#nextMemory++, hand: this.#hand, kind, seatIndex: person.seatIndex, speaker: person.name,
+      title: `${person.name}记住了${title}`, fact, inference: '这是公开交锋，不代表知道你的意图或下一手的牌。',
+      packetIndex: this.#packet, eventIndex: this.#eventIndex });
+    this.#memories = this.#memories.slice(-16);
+  }
+
   #remember(event: Extract<PublicGameEvent, { type: 'playerActed' }>): void {
-    if (event.seatIndex !== 0 || this.#memories.at(-1)?.hand === this.#hand) return;
+    if (event.seatIndex !== 0 || this.#memories.some((notice) => notice.hand === this.#hand && notice.kind === 'action')) return;
     const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
     const observer = active.find((person) => person.characterId === 'hunter') ?? active[0];
     if (!observer) return;
@@ -92,11 +133,11 @@ export class LivingTable {
     const action = labels[event.kind];
     const detail = event.kind === 'fold' || event.kind === 'check' ? action
       : `${action}，实际投入 ${event.paid}，本轮到 ${event.betTo}${event.allIn ? '（全下）' : ''}`;
-    this.#memories.push({ id: this.#nextMemory++, hand: this.#hand, seatIndex: observer.seatIndex, speaker: observer.name,
+    this.#memories.push({ id: this.#nextMemory++, hand: this.#hand, kind: 'action', seatIndex: observer.seatIndex, speaker: observer.name,
       title: `${observer.name}记下了你的${action}`,
       fact: `第 ${this.#hand} 手，你${detail}。近 ${stats.hands} 手，你有 ${stats.aggressiveHands} 手主动下注／加注、${stats.folds} 次弃牌。`,
       inference: inference(stats), packetIndex: this.#packet, eventIndex: this.#eventIndex });
-    this.#memories = this.#memories.slice(-8);
+    this.#memories = this.#memories.slice(-16);
   }
 
   ingest(packetIndex: number, events: readonly PublicGameEvent[]): void {
@@ -105,8 +146,10 @@ export class LivingTable {
     for (const [eventIndex, event] of events.entries()) {
       this.#eventIndex = eventIndex;
       switch (event.type) {
+        case 'gameStarted': this.#stacks = Array(event.maxSeats).fill(event.startingStack); break;
         case 'handStarted': {
           this.#hand = event.handNumber; this.#actions = []; this.#counts = 0;
+          this.#bigBlind = event.bigBlind; this.#observed.clear(); this.#keyKinds.clear(); this.#shown.clear(); this.#paid.clear(); this.#recap = null;
           this.#visibleMemory.observe(this.#hand, []);
           this.#memories = this.#memories.filter((notice) => notice.hand >= this.#hand - 7);
           for (const [seat, mood] of this.#moods) this.#moods.set(seat, mood * 0.5);
@@ -120,17 +163,25 @@ export class LivingTable {
           }
           break;
         }
-        case 'blindPosted': this.#actions.push(event); this.#visibleMemory.observe(this.#hand, this.#actions); break;
+        case 'blindPosted':
+          this.#actions.push(event); this.#visibleMemory.observe(this.#hand, this.#actions);
+          this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) + event.amount); break;
+        case 'uncalledBetReturned': this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) - event.amount); break;
+        case 'holeCardsRevealed': this.#shown.add(event.seatIndex); break;
         case 'playerActed': {
           this.#actions.push(event);
+          this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) + event.paid);
           this.#visibleMemory.observe(this.#hand, this.#actions);
           this.#remember(event);
+          this.#observeAction(event);
           const aggression = event.kind === 'bet' || event.kind === 'raise';
           const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
           const lan = active.find((person) => person.characterId === 'hunter');
           const mo = active.find((person) => person.characterId === 'calling-station');
           const kai = active.find((person) => person.characterId === 'maniac');
           if (event.seatIndex === 0 && aggression && active.length) {
+            const raises = this.#actions.filter((action) => action.type === 'playerActed' && action.seatIndex === 0 && (action.kind === 'bet' || action.kind === 'raise')).length;
+            if (raises >= 2) this.#keyMemory('pressure', '这次连续施压', `第 ${this.#hand} 手，你第 ${raises} 次主动下注／加注，本轮到 ${event.betTo}。`);
             const observer = lan ?? active[0]!;
             const stats = this.#visibleMemory.evidence(0, this.#hand);
             this.#say(observer.name, stats.hands >= 3 && stats.aggressiveHands >= 2
@@ -155,15 +206,31 @@ export class LivingTable {
           const labels: Record<string, string> = { 'high-card': '高牌', 'one-pair': '一对', 'two-pair': '两对',
             'three-of-a-kind': '三条', straight: '顺子', flush: '同花', 'full-house': '葫芦', 'four-of-a-kind': '四条', 'straight-flush': '同花顺' };
           // handEvaluated is projected only when that seat's cards are public.
-          this.#lastResult.set(event.seatIndex, `第 ${this.#hand} 手公开摊牌：${labels[event.category]}。`);
+          if (this.#shown.has(event.seatIndex)) {
+            this.#lastResult.set(event.seatIndex, `第 ${this.#hand} 手公开摊牌：${labels[event.category]}。`);
+            this.memory.recordShowdown(this.#hand, event.seatIndex, event.category);
+            if (event.seatIndex === 0 && this.#actions.some((action) => action.type === 'playerActed' && action.seatIndex === 0 && (action.kind === 'bet' || action.kind === 'raise'))) {
+              this.#keyMemory('showdown', '这次公开摊牌', `第 ${this.#hand} 手，你曾主动下注／加注，最后公开牌型是${labels[event.category]}。不能仅凭结果断定先前的下注意图。`);
+            }
+          }
           break;
         }
         case 'playerEliminated': this.#out.add(event.seatIndex); break;
         case 'handCompleted': {
           let reacted = false;
+          const rival = this.#people.filter((person) => (this.#paid.get(person.seatIndex) ?? 0) > 0)
+            .sort((a, b) => (this.#paid.get(b.seatIndex) ?? 0) - (this.#paid.get(a.seatIndex) ?? 0))[0];
+          const heroNet = (event.finalStacks.find((seat) => seat.seatIndex === 0)?.stack ?? this.#stacks[0]!) - this.#stacks[0]!;
+          const invested = this.#paid.get(0) ?? 0;
+          const exchange = rival ? `你本手实际投入 ${invested}，${rival.name}实际投入 ${this.#paid.get(rival.seatIndex)}（均已扣除未跟注退回）。` : `你本手实际投入 ${invested}（已扣除退回）。`;
+          this.#recap = { hand: this.#hand, text: `${exchange}你本手${heroNet > 0 ? `净赢 ${heroNet}` : heroNet < 0 ? `净输 ${-heroNet}` : '持平'}。只复述公开结果，不推断未亮底牌。` };
+          if (rival && invested >= this.#bigBlind * 10 && (this.#paid.get(rival.seatIndex) ?? 0) >= this.#bigBlind * 10) {
+            this.#keyMemory('big-pot', '这次大底池交锋', `第 ${this.#hand} 手：${this.#recap.text}`);
+          }
           for (const seat of event.finalStacks) {
             const net = seat.stack - (this.#stacks[seat.seatIndex] ?? 100);
-            if (Math.abs(net) >= 20 && seat.seatIndex > 0) {
+            this.memory.recordOutcome(this.#hand, seat.seatIndex, net, this.#bigBlind);
+            if (Math.abs(net) >= this.#bigBlind * 10 && seat.seatIndex > 0) {
               this.#moods.set(seat.seatIndex, Math.sign(net));
               const person = this.#people.find((person) => person.seatIndex === seat.seatIndex);
               // A single result reaction has its own slot; incidental banter cannot swallow it.
@@ -219,6 +286,7 @@ export class LivingTable {
       protagonist: last === 'warm' ? '你这次选择了给人留台阶' : last === 'direct' ? '你这次选择了直接追问' : last === 'quiet' ? '你这次选择了先听' : '你的态度，还由你决定',
       lines: this.#lines.map((line) => ({ ...line })),
       memories: this.#memories.map((notice) => ({ ...notice })),
+      recap: this.#recap ? { ...this.#recap } : null,
       notes: this.#people.map((person) => {
         const stats = this.#visibleMemory.evidence(person.seatIndex);
         return { seatIndex: person.seatIndex, name: person.name, about: person.about,

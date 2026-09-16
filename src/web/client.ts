@@ -128,7 +128,8 @@ async function play(previous: WebTable | null, next: WebTable): Promise<void> {
     || next.packet.coreEventRange.fromVersionInclusive !== previous.packet.coreEventRange.toVersionExclusive)) return;
   if (!sameTable && !next.packet.viewerEventsSinceLastPacket.some((event) => event.type === 'gameStarted')) return;
   const frames = buildPlaybackFrames(sameTable ? previous.view : null, next.packet.viewerEventsSinceLastPacket, next.roster,
-    next.living ? { packetIndex: next.packet.packetIndex, lines: talkMuted ? [] : next.living.lines, memories: next.living.memories ?? [] } : undefined);
+    next.living ? { packetIndex: next.packet.packetIndex,
+      lines: next.living.lines.filter((line) => !talkMuted || line.kind === 'observation'), memories: next.living.memories ?? [] } : undefined);
   if (!frames.length) return;
   playing = true; clock.start(); frameCount = frames.length;
   try {

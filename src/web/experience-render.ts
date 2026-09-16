@@ -33,26 +33,29 @@ export function renderStory(table: WebTable, h: Escape): string {
 }
 
 function memoryCard(notice: MemoryNotice, h: Escape): string {
-  return `<article class="memory-notice" data-memory-id="${notice.id}"><div><span class="memory-label">记住了你</span><strong>${h(notice.title)}</strong><small>第 ${notice.hand} 手</small></div><p>${h(notice.fact)}</p><p class="memory-inference"><span class="note-label">推测</span>${h(notice.inference)}</p></article>`;
+  return `<article class="memory-notice" data-memory-id="${notice.id}"><div><span class="memory-label">${notice.kind && notice.kind !== 'action' ? '关键交锋' : '记住了你'}</span><strong>${h(notice.title)}</strong><small>第 ${notice.hand} 手</small></div><p>${h(notice.fact)}</p><p class="memory-inference"><span class="note-label">${notice.kind && notice.kind !== 'action' ? '边界' : '推测'}</span>${h(notice.inference)}</p></article>`;
 }
 
 function talkLine(line: TableLine, h: Escape): string {
-  return `<p class="pulse-line"><strong>${h(line.speaker)}</strong><span>“${h(line.text)}”</span><small>第 ${line.hand} 手</small></p>`;
+  const observed = line.kind === 'observation';
+  return `<p class="pulse-line ${observed ? 'pulse-observation' : ''}"><small class="line-kind">${observed ? '观察' : '发言'}</small><strong>${h(line.speaker)}</strong><span>${observed ? h(line.text) : `“${h(line.text)}”`}</span><small>第 ${line.hand} 手</small></p>`;
 }
 
 /** Only render feedback already visible on the current timeline, not final NPC notes. */
-export function renderPulse(living: Pick<LivingView, 'lines' | 'memories'> | null | undefined, h: Escape,
+export function renderPulse(living: Pick<LivingView, 'lines' | 'memories' | 'recap'> | null | undefined, h: Escape,
   muted = false, playback = false): string {
   if (!living) return '';
   // An older local server can still serve these rebuilt static files on another port.
   // Keep its current table readable; new social tables require the updated server.
   const memories = living.memories ?? [];
-  const line = living.lines.at(-1);
+  const visibleLines = living.lines.filter((line) => !muted || line.kind === 'observation');
+  const line = visibleLines.at(-1);
   const memory = memories.at(-1);
   return `<section class="table-pulse" aria-label="桌边动态"><div class="pulse-heading"><h2>桌边动态</h2><span>${playback ? '随行动发生' : '人物记忆已开启 · 最近八手'}</span>${!playback ? `<button class="text-button" data-action="toggle-talk" aria-pressed="${muted}">${muted ? '展开闲聊' : '收起闲聊'}</button>` : ''}</div>
-    ${!muted && line ? talkLine(line, h) : muted ? '<p class="muted-talk">闲聊已收起；观察、记忆和牌局不受影响。</p>' : ''}
+    ${muted ? '<p class="muted-talk">闲聊已收起；观察、记忆和牌局不受影响。</p>' : ''}${line ? talkLine(line, h) : ''}
     ${memory ? memoryCard(memory, h) : !playback ? '<p class="memory-empty">等你第一次行动，会在这里留下“谁记住了你”的公开依据。</p>' : ''}
-    ${!playback ? `<details class="pulse-history"><summary>回看桌边记录 · ${memories.length} 条记忆${muted ? '' : ` / ${living.lines.length} 句闲聊`}</summary><p class="aside-note">这是公开动作的记录，不是读心，也不保证对方下一次一定针对你。重开牌桌或重启服务会清除。</p>${memories.slice().reverse().map((notice) => memoryCard(notice, h)).join('')}${!muted ? `<div aria-label="桌边短句">${living.lines.slice().reverse().map((item) => talkLine(item, h)).join('')}</div>` : ''}</details>` : ''}
+    ${!playback && living.recap ? `<div class="encounter-recap" aria-label="本手交锋回顾"><strong>本手交锋 · 第 ${living.recap.hand} 手</strong><p>${h(living.recap.text)}</p></div>` : ''}
+    ${!playback ? `<details class="pulse-history"><summary>回看桌边记录 · ${memories.length} 条记忆 / ${visibleLines.length} 条${muted ? '观察' : '发言与观察'}</summary><p class="aside-note">发言是人物说的话；观察是已发生的可见动作，不是读心。重开牌桌或重启服务会清除。</p>${memories.slice().reverse().map((notice) => memoryCard(notice, h)).join('')}<div aria-label="桌边短句">${visibleLines.slice().reverse().map((item) => talkLine(item, h)).join('')}</div></details>` : ''}
   </section>`;
 }
 

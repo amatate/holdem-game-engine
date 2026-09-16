@@ -115,7 +115,8 @@ describe('living table expression', () => {
     const table = new LivingTable(); table.ingest(0, [start(1)]);
     table.ingest(1, [action(), action(), action(), action(2), action(2)]);
     expect(table.view().lines.filter((line) => line.speaker === '林岚')).toHaveLength(2); // intro + event
-    expect(table.view().lines).toHaveLength(5); // three intro lines + two incidental lines
+    expect(table.view().lines.filter((line) => line.kind !== 'observation')).toHaveLength(5); // intro + incidental speech
+    expect(table.view().lines.filter((line) => line.kind === 'observation').length).toBeLessThanOrEqual(2);
     table.ingest(2, [finish(), start(2), action()]);
     expect(table.view().lines.filter((line) => line.text.includes('这个价'))).toHaveLength(1);
   });
@@ -143,5 +144,56 @@ describe('living table expression', () => {
     table.ingest(1, [start(2)]); expect(table.mood(1)).toBe(0.5);
     table.ingest(2, [{ type: 'playerEliminated', seatIndex: 0 }, finish([0, 200, 100, 100])]);
     expect(table.view()).toMatchObject({ ended: true, prompt: { id: 'ending' } });
+  });
+
+  it('keeps visible gestures factual, anchored, rate limited and independent of hidden cards', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false },
+      action(2, 'call'), action(3), action(1, 'fold')]);
+    const gestures = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(gestures).toHaveLength(2);
+    expect(gestures[0]).toMatchObject({ speaker: '林岚', seatIndex: 1, text: '轻敲桌面，过牌。', packetIndex: 0, eventIndex: 1 });
+    expect(gestures[1]?.text).toBe('补入 4 筹码跟注，本轮到 4。');
+    const before = table.view(); table.ingest(0, [action(3)]);
+    expect(table.view()).toEqual(before);
+    table.ingest(1, [start(2), action(1, 'fold')]);
+    expect(table.view().lines.at(-1)?.text).toContain('把牌扣下');
+  });
+
+  it('adds one important encounter after the first action without repeatedly recording the same pressure', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), action(0, 'call'), action(), action(), action()]);
+    expect(table.view().memories).toHaveLength(2);
+    expect(table.view().memories[1]).toMatchObject({ kind: 'pressure', packetIndex: 0, eventIndex: 3 });
+    expect(table.view().memories[1]?.fact).toContain('第 2 次');
+    expect(table.memory.keyEvidence(0, 1).pressureHands).toBe(0);
+    expect(table.memory.keyEvidence(0, 2).pressureHands).toBe(1);
+  });
+
+  it('records only publicly revealed showdowns, without calling a high-card bet a proven bluff', () => {
+    const table = new LivingTable({ story: false });
+    const evaluated: PublicGameEvent = { type: 'handEvaluated', seatIndex: 0, category: 'high-card',
+      bestFive: [parseCard('As'), parseCard('Jh'), parseCard('9c'), parseCard('7s'), parseCard('4h')] };
+    table.ingest(0, [start(1), action(), evaluated]);
+    expect(table.view().memories.some((notice) => notice.kind === 'showdown')).toBe(false);
+    expect(table.memory.keyEvidence(0, 2).shownHighCardAggression).toBe(0);
+    table.ingest(1, [{ type: 'holeCardsRevealed', seatIndex: 0, reason: 'showdown', cards: [parseCard('As'), parseCard('Jh')] }, evaluated]);
+    expect(table.view().memories.at(-1)?.fact).toContain('不能仅凭结果断定先前的下注意图');
+    expect(table.memory.keyEvidence(0, 2).shownHighCardAggression).toBe(1);
+    expect(table.view().memories.at(-1)?.fact).not.toContain('As');
+  });
+
+  it('backs a large-pot memory and recap with actual investments, refunds and final public stacks', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), { type: 'playerActed', seatIndex: 0, kind: 'raise', paid: 50, betTo: 50, allIn: false },
+      { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 40, betTo: 40, allIn: true },
+      { type: 'uncalledBetReturned', seatIndex: 0, amount: 10 }]);
+    expect(table.memory.lastSignificantOutcome(1, 2)).toBeNull();
+    table.ingest(1, [finish([140, 60, 100, 100])]);
+    expect(table.view().memories.at(-1)?.kind).toBe('big-pot');
+    expect(table.view().recap?.text).toContain('你本手实际投入 40，林岚实际投入 40');
+    expect(table.view().recap?.text).toContain('净赢 40');
+    expect(table.memory.lastSignificantOutcome(1, 2)).toEqual({ hand: 1, net: -40, bigBlind: 2 });
+    table.ingest(2, [start(2)]); expect(table.view().recap).toBeNull();
   });
 });

@@ -77,7 +77,7 @@ function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: Play
     ${cardsHtml}<div class="seat-body">${identity(person)}<div class="seat-positions">${badges}</div><p class="seat-stack">${amount(seat.stack)} <small>筹码</small></p>
     <p class="seat-action">${current ? '轮到你' : escapeHtml(acting ? seat.lastAction || status || '亮牌' : status || seat.lastAction || '等待行动')}</p>${winnings}</div>
     ${(!table.packet || table.packet.kind === 'decision') && seat.committedStreet > 0 ? `<div class="bet-chip"><span aria-hidden="true">◉</span> ${amount(seat.committedStreet)} <small>本轮</small></div>` : ''}
-    ${speaking ? `<div class="seat-bubble ${topSeat ? 'speech-top' : ''}" aria-label="${escapeHtml(person.name)}说"><span>${escapeHtml(frame!.line!.text)}</span></div>` : remembered ? '<span class="seat-memory-tag">记下了你的动作</span>' : ''}
+    ${speaking ? `<div class="seat-bubble ${frame!.line!.kind === 'observation' ? 'bubble-observation' : 'bubble-speech'} ${topSeat ? 'speech-top' : ''}" role="status" aria-label="${escapeHtml(person.name)} · ${frame!.line!.kind === 'observation' ? '观察到的动作' : '发言'}"><small class="bubble-kind">${frame!.line!.kind === 'observation' ? '观察' : '发言'}</small><span>${escapeHtml(frame!.line!.text)}</span></div>` : remembered ? '<span class="seat-memory-tag">记下了你的动作</span>' : ''}
   </article>`;
 }
 
