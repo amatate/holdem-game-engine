@@ -53,6 +53,23 @@ describe('tutorial and living HTTP experiences', () => {
     const { table } = await post('/api/table', { players: 2 });
     expect(table.experience).toBe('free'); expect(table.living).toBeNull(); expect(table.tutorial).toBeNull();
   });
+  it.each([2, 3, 4, 5, 6])('enables optional social play for a %i-seat free table without a story', async (players) => {
+    const { status, table } = await post('/api/table', { players, socialEnabled: true, mode: players % 2 ? 'ability-lab' : 'classic' });
+    expect(status).toBe(200); expect(table.experience).toBe('free'); expect(table.roster).toHaveLength(players);
+    expect(table.living).toMatchObject({ story: false, limit: null, ended: false, prompt: null });
+    expect(table.living!.notes.map((person) => person.name)).toEqual(table.roster.slice(1).map((person) => person.name));
+    expect(renderTable(table)).toContain('桌边动态'); expect(renderTable(table)).not.toContain('aria-label="桌边故事"');
+    expect(await restored()).toEqual(table);
+    const reply = await post('/api/reply', { tableId: table.id, expectedPacketIndex: table.packet.packetIndex,
+      revision: table.living!.revision, promptId: 'opening', choice: 'warm' });
+    expect(reply.status).toBe(409); expect(reply.table).toEqual(table);
+  });
+  it('validates the switch, keeps off-mode unchanged, and leaves story/teaching selection independent', async () => {
+    expect((await post('/api/table', { players: 4, socialEnabled: 'true' })).status).toBe(400);
+    expect((await post('/api/table', { players: 4, socialEnabled: false })).table.living).toBeNull();
+    expect((await post('/api/table', { experience: 'living', socialEnabled: false })).table.living?.story).toBe(true);
+    expect((await post('/api/table', { experience: 'tutorial', socialEnabled: true })).table.living).toBeNull();
+  });
   it('teaches all three real-engine lessons, rejects mistakes and recovers refreshes', async () => {
     let { table } = await post('/api/table', { experience: 'tutorial' });
     expect(table.mode).toBe('classic'); expect(table.roster).toHaveLength(2);

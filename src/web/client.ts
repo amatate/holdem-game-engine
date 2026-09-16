@@ -15,7 +15,9 @@ let mode: SessionMode = 'classic';
 let busy = false;
 let choosingTable = false;
 let talkMuted = false;
+let socialEnabled = true;
 try { talkMuted = localStorage.getItem('holdem.talk-muted') === 'true'; } catch { /* Optional preference. */ }
+try { socialEnabled = localStorage.getItem('holdem.social-enabled') !== 'false'; } catch { /* Optional preference. */ }
 const clock = new PlaybackClock();
 const speedControl = document.querySelector<HTMLSelectElement>('#playback-speed');
 const skipControl = document.querySelector<HTMLButtonElement>('#playback-skip');
@@ -37,11 +39,11 @@ window.addEventListener('pagehide', () => { toolLifecycle.abort(); clock.skip();
 function draw(): void {
   app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount, state.table.mode)
     : state.table && !choosingTable ? renderTable(state.table, talkMuted)
-      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode)}`;
+      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode, socialEnabled)}`;
   const label = document.querySelector('#mode-label');
   const visibleMode = state.table && !choosingTable ? state.table.mode : mode;
   if (label) label.textContent = state.table && !choosingTable && state.table.experience === 'tutorial' ? '新手教学'
-    : `${state.table && !choosingTable && state.table.experience === 'living' ? '活牌桌 · ' : ''}${visibleMode === 'ability-lab' ? '能力实验' : '经典德州'}`;
+    : `${state.table && !choosingTable && state.table.living ? state.table.experience === 'living' ? '剧情序章 · ' : '人物互动 · ' : ''}${visibleMode === 'ability-lab' ? '能力实验' : '经典德州'}`;
   lock(busy);
 }
 function lock(value: boolean): void {
@@ -69,6 +71,10 @@ function animateFrame(current: PlaybackFrame): void {
     animations.push(animation);
   };
   const event = current.event;
+  for (const bubble of app.querySelectorAll('.seat-bubble')) {
+    animate(bubble, [{ opacity: 0, transform: 'translateY(6px) scale(.97)' }, { opacity: 1, transform: 'translateY(0) scale(1)' }], 240);
+  }
+  if (current.reactionOnly) return;
   const cardSelector = event.type === 'communityCardsDealt' ? '.board .card'
     : event.type === 'ownHoleCardsDealt' ? '.seat:not(.is-out) .seat-cards .card'
     : event.type === 'holeCardsRevealed' ? `[data-seat="${event.seatIndex}"] .seat-cards .card` : null;
@@ -121,7 +127,8 @@ async function play(previous: WebTable | null, next: WebTable): Promise<void> {
   if (sameTable && (next.packet.packetIndex !== previous.packet.packetIndex + 1
     || next.packet.coreEventRange.fromVersionInclusive !== previous.packet.coreEventRange.toVersionExclusive)) return;
   if (!sameTable && !next.packet.viewerEventsSinceLastPacket.some((event) => event.type === 'gameStarted')) return;
-  const frames = buildPlaybackFrames(sameTable ? previous.view : null, next.packet.viewerEventsSinceLastPacket, next.roster);
+  const frames = buildPlaybackFrames(sameTable ? previous.view : null, next.packet.viewerEventsSinceLastPacket, next.roster,
+    next.living ? { packetIndex: next.packet.packetIndex, lines: talkMuted ? [] : next.living.lines, memories: next.living.memories ?? [] } : undefined);
   if (!frames.length) return;
   playing = true; clock.start(); frameCount = frames.length;
   try {
@@ -196,15 +203,20 @@ app.addEventListener('change', (event) => {
   if (target instanceof HTMLSelectElement && target.id === 'players') { count = Number(target.value); draw(); }
   if (target instanceof HTMLSelectElement && target.id === 'game-mode'
     && (target.value === 'classic' || target.value === 'ability-lab')) { mode = target.value; draw(); }
+  if (target instanceof HTMLInputElement && target.id === 'social-enabled') {
+    socialEnabled = target.checked;
+    try { localStorage.setItem('holdem.social-enabled', String(socialEnabled)); } catch { /* Optional preference. */ }
+    draw();
+  }
 });
 app.addEventListener('click', (event) => {
   const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
   if (!button || busy) return;
   switch (button.dataset.action) {
-    case 'start': void mutate('/api/table', { players: count, mode }); break;
+    case 'start': void mutate('/api/table', { players: count, mode, socialEnabled }); break;
     case 'tutorial-start': void mutate('/api/table', { players: 2, mode: 'classic', experience: 'tutorial' }); break;
     case 'living-start': void mutate('/api/table', { players: 4, mode, experience: 'living' }); break;
-    case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free' }); break;
+    case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free', socialEnabled }); break;
     case 'home': choosingTable = true; message(''); draw(); break;
     case 'resume': choosingTable = false; message(''); draw(); break;
     case 'toggle-talk':

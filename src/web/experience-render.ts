@@ -1,12 +1,13 @@
 import type { WebTable } from './protocol.js';
+import type { LivingView, MemoryNotice, TableLine } from '../game/living-table.js';
 
 type Escape = (value: unknown) => string;
 
 export function renderEntrances(): string {
   return `<section class="entrance-strip" aria-label="选择游玩方式">
     <article class="entrance lesson-entrance"><p class="eyebrow">第一次来牌桌？</p><h2>莫叔教你打三手</h2><p>从跟注、过牌到自己做决定。没有基础也能入座。</p><button class="button button-primary" data-action="tutorial-start">开始新手教学 →</button><small>三关 · 配合练习的对手 · 可随时退出</small></article>
-    <article class="entrance story-entrance"><p class="eyebrow">活牌桌 v1 · 短序章</p><h2>这一桌，会记得你</h2><p>林岚看动作，阿凯要面子，莫叔留台阶。旧牌室里，还有一段没说完的往事。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 使用下方选定的经典／能力规则</small></article>
-  </section><div class="free-table-heading"><h2>或，自由开一桌</h2><p>经典德州与能力实验都在这里，人数由你选。</p></div>`;
+    <article class="entrance story-entrance"><p class="eyebrow">独立剧情 · 短序章</p><h2>留一张椅子</h2><p>林岚看动作，阿凯要面子，莫叔留台阶。旧牌室里，还有一段没说完的往事。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 自带人物互动 · 使用下方选定的规则</small></article>
+  </section><div class="free-table-heading"><h2>或，自由开一桌</h2><p>2–6 人 · 可开启人物记忆与闲聊 · 不限六手</p></div>`;
 }
 
 export function renderGuide(table: WebTable, h: Escape): string {
@@ -20,15 +21,38 @@ export function renderGuide(table: WebTable, h: Escape): string {
   </section>`;
 }
 
-export function renderStory(table: WebTable, h: Escape, muted: boolean): string {
+export function renderStory(table: WebTable, h: Escape): string {
   const living = table.living;
-  if (!living) return '';
+  if (!living || living.story === false || table.experience !== 'living') return '';
   const prompt = living.prompt;
-  return `<section class="story-note" aria-label="桌边故事"><div class="story-heading"><p class="eyebrow">${h(living.chapter)} · ${Math.min(living.hand, living.limit)} / ${living.limit} 手</p><button class="text-button" data-action="toggle-talk" aria-pressed="${muted}">${muted ? '展开闲聊' : '收起闲聊'}</button></div>
+  return `<section class="story-note" aria-label="桌边故事"><div class="story-heading"><p class="eyebrow">${h(living.chapter)} · ${Math.min(living.hand, living.limit ?? 6)} / ${living.limit} 手</p></div>
     <p class="protagonist">${h(living.protagonist)}</p>
     ${prompt ? `<div class="story-prompt"><h2>${h(prompt.title)}</h2><p>${h(prompt.text)}</p><div class="reply-choices">${prompt.choices.map((choice) => `<button class="button button-secondary" data-action="reply" data-prompt="${h(prompt.id)}" data-choice="${h(choice.id)}">${h(choice.text)}</button>`).join('')}</div><small>${living.ended ? '回应不影响结算，也可以直接回到主页。' : '回应不等于下注，也可以直接继续打牌。'}</small></div>` : ''}
-    ${!muted ? `<ol class="table-talk" aria-label="桌边短句">${living.lines.slice(-4).map((line) => `<li><span>${h(line.speaker)}<small>第 ${line.hand} 手</small></span><p>${h(line.text)}</p></li>`).join('')}</ol>` : '<p class="muted-talk">闲聊已收起；观察、记忆和牌局不受影响。</p>'}
     ${living.ended ? `<div class="story-ending"><h2>这一夜，先到这里</h2><p>${h(living.ending)}</p><p>下面仍保留最后一手真实结算。序章不是整场锦标赛，剩余筹码没有重新分配。</p><button class="button button-primary" data-action="home">回到主页 →</button></div>` : ''}
+  </section>`;
+}
+
+function memoryCard(notice: MemoryNotice, h: Escape): string {
+  return `<article class="memory-notice" data-memory-id="${notice.id}"><div><span class="memory-label">记住了你</span><strong>${h(notice.title)}</strong><small>第 ${notice.hand} 手</small></div><p>${h(notice.fact)}</p><p class="memory-inference"><span class="note-label">推测</span>${h(notice.inference)}</p></article>`;
+}
+
+function talkLine(line: TableLine, h: Escape): string {
+  return `<p class="pulse-line"><strong>${h(line.speaker)}</strong><span>“${h(line.text)}”</span><small>第 ${line.hand} 手</small></p>`;
+}
+
+/** Only render feedback already visible on the current timeline, not final NPC notes. */
+export function renderPulse(living: Pick<LivingView, 'lines' | 'memories'> | null | undefined, h: Escape,
+  muted = false, playback = false): string {
+  if (!living) return '';
+  // An older local server can still serve these rebuilt static files on another port.
+  // Keep its current table readable; new social tables require the updated server.
+  const memories = living.memories ?? [];
+  const line = living.lines.at(-1);
+  const memory = memories.at(-1);
+  return `<section class="table-pulse" aria-label="桌边动态"><div class="pulse-heading"><h2>桌边动态</h2><span>${playback ? '随行动发生' : '人物记忆已开启 · 最近八手'}</span>${!playback ? `<button class="text-button" data-action="toggle-talk" aria-pressed="${muted}">${muted ? '展开闲聊' : '收起闲聊'}</button>` : ''}</div>
+    ${!muted && line ? talkLine(line, h) : muted ? '<p class="muted-talk">闲聊已收起；观察、记忆和牌局不受影响。</p>' : ''}
+    ${memory ? memoryCard(memory, h) : !playback ? '<p class="memory-empty">等你第一次行动，会在这里留下“谁记住了你”的公开依据。</p>' : ''}
+    ${!playback ? `<details class="pulse-history"><summary>回看桌边记录 · ${memories.length} 条记忆${muted ? '' : ` / ${living.lines.length} 句闲聊`}</summary><p class="aside-note">这是公开动作的记录，不是读心，也不保证对方下一次一定针对你。重开牌桌或重启服务会清除。</p>${memories.slice().reverse().map((notice) => memoryCard(notice, h)).join('')}${!muted ? `<div aria-label="桌边短句">${living.lines.slice().reverse().map((item) => talkLine(item, h)).join('')}</div>` : ''}</details>` : ''}
   </section>`;
 }
 

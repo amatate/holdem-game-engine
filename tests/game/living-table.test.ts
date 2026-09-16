@@ -8,6 +8,7 @@ import { createSeededRandom } from '../../src/core/random.js';
 import type { PublicActionEvent, PublicGameEvent } from '../../src/core/public-events.js';
 import { openGameSession } from '../../src/game/game-session.js';
 import { DEFAULT_TOURNAMENT_CONFIG } from '../../src/cli/index.js';
+import { selectNpcRoster } from '../../src/game/roster.js';
 
 const action = (seatIndex = 0, kind: 'fold' | 'raise' | 'call' = 'raise'): PublicActionEvent =>
   ({ type: 'playerActed', seatIndex, kind, paid: kind === 'fold' ? 0 : 4, betTo: 4, allIn: false });
@@ -58,6 +59,49 @@ describe('public table memory', () => {
 });
 
 describe('living table expression', () => {
+  it.each([2, 3, 4, 5, 6])('uses only the actual %i-player roster for speech and observations', (count) => {
+    const people = selectNpcRoster(count).map((characterId, index) => ({ characterId, seatIndex: index + 1 }));
+    const table = new LivingTable({ story: false, people });
+    table.ingest(0, [start(1), action(), action(0, 'fold'), action(2)]);
+    const view = table.view();
+    expect(view.notes.map((person) => person.name)).toEqual(people.map((person) => CHARACTERS[person.characterId].displayName));
+    for (const line of view.lines) expect(view.notes.some((person) => person.name === line.speaker && person.seatIndex === line.seatIndex)).toBe(true);
+    expect(view.memories[0]?.speaker).toBe(view.notes.find((person) => person.name === '林岚')?.name ?? view.notes[0]?.name);
+    expect(view.prompt).toBeNull(); expect(view.limit).toBeNull(); expect(view.story).toBe(false);
+    expect(table.reply('opening', 'warm', view.revision)).toBe(false);
+  });
+  it('keeps free social tables playing after six hands and after hero elimination', () => {
+    const table = new LivingTable({ story: false });
+    for (let hand = 1; hand <= 10; hand++) table.ingest(hand, [start(hand), action(), finish()]);
+    expect(table.view()).toMatchObject({ ended: false, prompt: null, ending: null, hand: 10 });
+    expect(table.view().memories).toHaveLength(8);
+    expect(table.view().memories[0]?.hand).toBe(3);
+    table.ingest(11, [{ type: 'playerEliminated', seatIndex: 0 }, finish([0, 200, 100, 100])]);
+    expect(table.view().ended).toBe(false);
+  });
+  it('anchors memory to the observed action without consuming chatter quota or later NPC prefixes', () => {
+    const table = new LivingTable();
+    table.ingest(0, [start(1), action(2)]); // Kai and Mo have used both incidental slots.
+    table.memory.observe(1, [action(2), action(0, 'call'), action(), action()]); // Already computed later decisions.
+    table.ingest(1, [action(0, 'call'), action()]);
+    const memory = table.view().memories[0]!;
+    expect(memory).toMatchObject({ packetIndex: 1, eventIndex: 0, hand: 1, title: '林岚记下了你的跟注' });
+    expect(memory.fact).toContain('0 手主动下注／加注');
+    expect(memory.inference).toContain('至少观察三手');
+    expect(table.view().memories).toHaveLength(1); // One fact cue per hand, despite repeated actions.
+    table.ingest(1, [action()]);
+    expect(table.view().memories).toEqual([memory]);
+    table.ingest(2, [finish([70, 130, 100, 100])]);
+    expect(table.view().lines.at(-1)?.text).toBe('先把这一手收好，下一手重新算。');
+  });
+  it('waits for three observed hands for an impression and never assigns it to an absent player', () => {
+    const table = new LivingTable({ story: false });
+    for (let hand = 1; hand <= 3; hand++) table.ingest(hand, [start(hand), action()]);
+    expect(table.view().memories.at(-1)?.inference).toContain('样本较少');
+    table.ingest(4, [{ type: 'playerEliminated', seatIndex: 1 }, start(4), action(0, 'fold')]);
+    expect(table.view().memories.at(-1)?.speaker).toBe('阿凯');
+    expect(table.view().lines.filter((line) => line.hand === 4).some((line) => line.speaker === '林岚')).toBe(false);
+  });
   it('ignores private cards and does not re-ingest packets on refresh', () => {
     const left = new LivingTable(); const right = new LivingTable();
     left.ingest(0, [start(1), { type: 'ownHoleCardsDealt', cards: [parseCard('As'), parseCard('Ah')] }, action()]);

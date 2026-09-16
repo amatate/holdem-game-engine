@@ -55,11 +55,12 @@ interface LocalSession {
   living: LivingTable | null; tutorial: TutorialState | null;
 }
 
-async function openLocalTable(players: number, mode: SessionMode, experience: TableExperience, lesson = 0): Promise<LocalSession> {
-  const living = experience === 'living' ? new LivingTable() : null;
+async function openLocalTable(players: number, mode: SessionMode, experience: TableExperience, lesson = 0, socialEnabled = false): Promise<LocalSession> {
   const tutorial = experience === 'tutorial' ? newTutorial(lesson) : null;
   const roster = tutorial ? [rosterFor(2)[0]!, { seatIndex: 1, playerId: '莫叔（教学）', name: '莫叔',
     nickname: '教学陪练', style: '按课程配合 · 不代表正式 NPC 强度', characterId: 'calling-station' }] : rosterFor(players);
+  const living = !tutorial && (experience === 'living' || socialEnabled) ? new LivingTable({ story: experience === 'living',
+    people: roster.filter((person) => person.seatIndex !== 0).map((person) => ({ seatIndex: person.seatIndex, characterId: person.characterId as CharacterId })) }) : null;
   const participants = tutorial ? [null, tutorialCoach(lesson, roster[1]!.playerId)]
     : [null, ...selectNpcRoster(players).map((id, index) => living
       ? new LivingParticipant(id, living.memory, () => living.mood(index + 1)) : createCharacterParticipant(id))];
@@ -140,13 +141,14 @@ export function createLocalServer() {
         const mode = body.mode === undefined ? 'classic' : body.mode;
         if (mode !== 'classic' && mode !== 'ability-lab') throw new HttpError(400, '请选择经典德州或能力实验。');
         if (experience === 'tutorial' && mode !== 'classic') throw new HttpError(400, '新手教学使用经典规则，不启用能力。');
+        if (body.socialEnabled !== undefined && typeof body.socialEnabled !== 'boolean') throw new HttpError(400, '人物互动选项必须为开启或关闭。');
         if (typeof players !== 'number' || !Number.isSafeInteger(players) || players < 2 || players > 6) {
           throw new HttpError(400, '请选择 2–6 人。');
         }
         if (!session && sessions.size >= 32) throw new HttpError(503, '本地牌桌已满，请关闭闲置会话后重试。');
         if (session) session.busy = true;
         try {
-          const opened = await openLocalTable(players, mode, experience);
+          const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true);
           const newToken = token && session ? token : randomUUID();
           sessions.set(newToken, opened);
           res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/`);

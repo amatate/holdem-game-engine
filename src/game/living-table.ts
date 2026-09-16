@@ -1,22 +1,25 @@
 import { TableMemory, type ActionEvidence } from '../agents/table-memory.js';
 import type { PublicGameEvent, PublicActionEvent } from '../core/public-events.js';
+import { tablePerson, type TablePerson } from './table-personas.js';
 
-export interface TableLine { id: number; hand: number; speaker: string; text: string }
+export interface EventAnchor { packetIndex: number; eventIndex: number }
+export interface TableLine extends EventAnchor { id: number; hand: number; speaker: string; seatIndex: number | null; text: string }
+export interface MemoryNotice extends EventAnchor {
+  id: number; hand: number; seatIndex: number; speaker: string; title: string; fact: string; inference: string;
+}
 export interface CharacterNote {
   seatIndex: number; name: string; about: string; mood: string; relationship: string;
   fact: string; inference: string;
 }
 export interface StoryPrompt { id: string; title: string; text: string; choices: { id: string; text: string }[] }
 export interface LivingView {
-  revision: number; hand: number; limit: number; ended: boolean; chapter: string;
+  revision: number; hand: number; limit: number | null; ended: boolean; story: boolean; chapter: string;
   protagonist: string; lines: TableLine[]; notes: CharacterNote[]; prompt: StoryPrompt | null;
-  ending: string | null;
+  ending: string | null; memories: MemoryNotice[];
 }
 
-const PEOPLE = [
-  { seatIndex: 1, name: '林岚', about: '习惯把筹码排齐。想看懂别人，不愿轻易承认自己看错。' },
-  { seatIndex: 2, name: '阿凯', about: '嘴上只说输赢，其实更在意这一桌有没有人把他当回事。' },
-  { seatIndex: 3, name: '莫叔', about: '今晚的东道主，总给人留台阶。提到旧牌局时，却常常停顿。' },
+const STORY_PEOPLE: TablePerson[] = [
+  { seatIndex: 1, characterId: 'hunter' }, { seatIndex: 2, characterId: 'maniac' }, { seatIndex: 3, characterId: 'calling-station' },
 ];
 const CHOICES = [
   { id: 'quiet', text: '先听，不追问' },
@@ -36,12 +39,20 @@ function inference(stats: ActionEvidence): string {
 /** White-listed public event consumer. Never accepts TurnPacket/observations/private ability state. */
 export class LivingTable {
   readonly memory = new TableMemory();
+  // NPC decisions may already have filled memory with a later prefix of this packet.
+  // Expression evidence advances separately so a reaction can never quote future actions.
+  readonly #visibleMemory = new TableMemory();
+  readonly #people: ReturnType<typeof tablePerson>[];
+  readonly #story: boolean;
   #revision = 0;
   #hand = 0;
   #packet = -1;
+  #eventIndex = -1;
   #actions: PublicActionEvent[] = [];
   #lines: TableLine[] = [];
   #nextLine = 1;
+  #memories: MemoryNotice[] = [];
+  #nextMemory = 1;
   #counts = 0;
   #cooldowns = new Map<string, number>();
   #moods = new Map<number, number>();
@@ -54,47 +65,89 @@ export class LivingTable {
   #ended = false;
   #out = new Set<number>();
 
+  constructor(options: { story?: boolean; people?: readonly TablePerson[] } = {}) {
+    this.#story = options.story ?? true;
+    this.#people = (options.people ?? STORY_PEOPLE).map(tablePerson);
+  }
+
   mood(seat: number): number { return this.#moods.get(seat) ?? 0; }
 
   #say(speaker: string, text: string, key: string, important = false): void {
     if (!important && (this.#counts >= 2 || this.#hand - (this.#cooldowns.get(key) ?? -10) < 2)) return;
-    this.#lines.push({ id: this.#nextLine++, hand: this.#hand, speaker, text });
+    this.#lines.push({ id: this.#nextLine++, hand: this.#hand, speaker, text,
+      seatIndex: this.#people.find((person) => person.name === speaker)?.seatIndex ?? null,
+      packetIndex: this.#packet, eventIndex: this.#eventIndex });
     this.#lines = this.#lines.slice(-16);
     this.#cooldowns.set(key, this.#hand);
     if (!important) this.#counts++;
   }
 
+  #remember(event: Extract<PublicGameEvent, { type: 'playerActed' }>): void {
+    if (event.seatIndex !== 0 || this.#memories.at(-1)?.hand === this.#hand) return;
+    const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
+    const observer = active.find((person) => person.characterId === 'hunter') ?? active[0];
+    if (!observer) return;
+    const labels = { fold: '弃牌', check: '过牌', call: '跟注', bet: '下注', raise: '加注' };
+    const stats = this.#visibleMemory.evidence(0);
+    const action = labels[event.kind];
+    const detail = event.kind === 'fold' || event.kind === 'check' ? action
+      : `${action}，实际投入 ${event.paid}，本轮到 ${event.betTo}${event.allIn ? '（全下）' : ''}`;
+    this.#memories.push({ id: this.#nextMemory++, hand: this.#hand, seatIndex: observer.seatIndex, speaker: observer.name,
+      title: `${observer.name}记下了你的${action}`,
+      fact: `第 ${this.#hand} 手，你${detail}。近 ${stats.hands} 手，你有 ${stats.aggressiveHands} 手主动下注／加注、${stats.folds} 次弃牌。`,
+      inference: inference(stats), packetIndex: this.#packet, eventIndex: this.#eventIndex });
+    this.#memories = this.#memories.slice(-8);
+  }
+
   ingest(packetIndex: number, events: readonly PublicGameEvent[]): void {
     if (packetIndex <= this.#packet) return;
     this.#packet = packetIndex;
-    for (const event of events) {
+    for (const [eventIndex, event] of events.entries()) {
+      this.#eventIndex = eventIndex;
       switch (event.type) {
         case 'handStarted': {
           this.#hand = event.handNumber; this.#actions = []; this.#counts = 0;
+          this.#visibleMemory.observe(this.#hand, []);
+          this.#memories = this.#memories.filter((notice) => notice.hand >= this.#hand - 7);
           for (const [seat, mood] of this.#moods) this.#moods.set(seat, mood * 0.5);
-          if (this.#hand === 1) {
+          if (this.#hand === 1 && this.#story) {
             this.#say('莫叔', '先坐。今晚不谈输赢以外的债，只用这盒练习筹码。', 'hello', true);
             this.#say('阿凯', '那也得认真打。林岚，可别又说只是随便玩玩。', 'hello-kai', true);
             this.#say('林岚', '我看的是人，不只看结果。', 'hello-lan', true);
+          } else if (this.#hand === 1) {
+            const host = this.#people[0];
+            if (host) this.#say(host.name, host.hello, 'hello', true);
           }
           break;
         }
-        case 'blindPosted': this.#actions.push(event); break;
+        case 'blindPosted': this.#actions.push(event); this.#visibleMemory.observe(this.#hand, this.#actions); break;
         case 'playerActed': {
           this.#actions.push(event);
+          this.#visibleMemory.observe(this.#hand, this.#actions);
+          this.#remember(event);
           const aggression = event.kind === 'bet' || event.kind === 'raise';
-          if (event.seatIndex === 0 && aggression) {
-            const stats = this.memory.evidence(0, this.#hand);
-            if (!this.#out.has(1)) this.#say('林岚', stats.hands >= 3 && stats.aggressiveHands >= 2
+          const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
+          const lan = active.find((person) => person.characterId === 'hunter');
+          const mo = active.find((person) => person.characterId === 'calling-station');
+          const kai = active.find((person) => person.characterId === 'maniac');
+          if (event.seatIndex === 0 && aggression && active.length) {
+            const observer = lan ?? active[0]!;
+            const stats = this.#visibleMemory.evidence(0, this.#hand);
+            this.#say(observer.name, stats.hands >= 3 && stats.aggressiveHands >= 2
               ? `前面 ${stats.hands} 手，你有 ${stats.aggressiveHands} 手主动加过价。我记着，但还不能下结论。`
-              : '这个价我看见了。牌还没翻完，先不急着给你下判断。', 'hero-raise');
+              : observer.raise, 'hero-raise');
           }
-          if (event.seatIndex === 2 && aggression && !this.#out.has(3)) {
+          if (kai && mo && event.seatIndex === kai.seatIndex && aggression) {
             this.#say('莫叔', '阿凯，筹码推慢一点，人家看得清。', 'kai-raise');
             this.#say('阿凯', '知道了。我是想让这一桌认真一点。', 'kai-answer');
           }
-          if (event.seatIndex === 0 && event.kind === 'fold' && !this.#out.has(3)) {
-            this.#say('莫叔', '不想跟就收牌，下一手还是你的位子。', 'hero-fold');
+          if (event.seatIndex === 0 && event.kind === 'fold' && active.length) {
+            const observer = mo ?? active[0]!;
+            this.#say(observer.name, observer.fold, 'hero-fold');
+          }
+          if (event.seatIndex === 0 && event.kind === 'call' && active.length) {
+            const observer = active[(this.#hand - 1) % active.length]!;
+            this.#say(observer.name, observer.call, 'hero-call');
           }
           break;
         }
@@ -107,28 +160,31 @@ export class LivingTable {
         }
         case 'playerEliminated': this.#out.add(event.seatIndex); break;
         case 'handCompleted': {
+          let reacted = false;
           for (const seat of event.finalStacks) {
             const net = seat.stack - (this.#stacks[seat.seatIndex] ?? 100);
             if (Math.abs(net) >= 20 && seat.seatIndex > 0) {
               this.#moods.set(seat.seatIndex, Math.sign(net));
-              const name = PEOPLE.find((person) => person.seatIndex === seat.seatIndex)?.name ?? '莫叔';
-              const lines = seat.seatIndex === 1 ? ['这次判断偏了。下一手我会重新看。', '先把这一手收好，下一手重新算。']
-                : seat.seatIndex === 2 ? ['这手认了。别把我当成只会乱推的。', '看见没？这一手总该算我打得认真了。']
-                : ['没关系，我还记得刚才怎么打的。', '收下了。来，手先放松，下一把再说。'];
-              this.#say(name, lines[net > 0 ? 1 : 0]!, `result-${seat.seatIndex}`);
+              const person = this.#people.find((person) => person.seatIndex === seat.seatIndex);
+              // A single result reaction has its own slot; incidental banter cannot swallow it.
+              if (person && !reacted) {
+                this.#say(person.name, net > 0 ? person.win : person.loss, `result-${seat.seatIndex}`, true);
+                reacted = true;
+              }
             }
             this.#stacks[seat.seatIndex] = seat.stack;
           }
-          if (this.#hand >= 3) this.#stage = 'middle';
-          if (this.#hand >= 6 || this.#stacks[0] === 0 || event.finalStacks.filter((seat) => seat.stack > 0).length <= 1) {
+          if (this.#story && this.#hand >= 3) this.#stage = 'middle';
+          if (this.#story && (this.#hand >= 6 || this.#stacks[0] === 0 || event.finalStacks.filter((seat) => seat.stack > 0).length <= 1)) {
             this.#stage = 'ending'; this.#ended = true;
           }
           break;
         }
-        case 'gameCompleted': this.#stage = 'ending'; this.#ended = true; break;
+        case 'gameCompleted': if (this.#story) { this.#stage = 'ending'; this.#ended = true; } break;
         // In particular: ownHoleCardsDealt, peek/read/swap and private traces are not consumed.
       }
     }
+    this.#eventIndex = -1;
     this.memory.observe(this.#hand, this.#actions);
     this.#revision++;
   }
@@ -158,18 +214,21 @@ export class LivingTable {
       ending: '莫叔合上筹码盒：“今天就到这里。那晚最后离桌的人，没有拿走筹码。”这次见面不是资格赛；无论输赢，这条线索都为你留下。',
     };
     const last = this.#choices.at(-1);
-    return { revision: this.#revision, hand: this.#hand, limit: 6, ended: this.#ended, chapter: titles[this.#stage],
+    return { revision: this.#revision, hand: this.#hand, limit: this.#story ? 6 : null, ended: this.#ended,
+      story: this.#story, chapter: this.#story ? titles[this.#stage] : '自由牌桌 · 人物互动',
       protagonist: last === 'warm' ? '你这次选择了给人留台阶' : last === 'direct' ? '你这次选择了直接追问' : last === 'quiet' ? '你这次选择了先听' : '你的态度，还由你决定',
       lines: this.#lines.map((line) => ({ ...line })),
-      notes: PEOPLE.map((person) => {
-        const stats = this.memory.evidence(person.seatIndex);
-        return { ...person, mood: this.#out.has(person.seatIndex) ? '已收起筹码，留在桌边' : this.mood(person.seatIndex) > 0.2 ? '刚赢下一笔，语气松了些'
+      memories: this.#memories.map((notice) => ({ ...notice })),
+      notes: this.#people.map((person) => {
+        const stats = this.#visibleMemory.evidence(person.seatIndex);
+        return { seatIndex: person.seatIndex, name: person.name, about: person.about,
+        mood: this.#out.has(person.seatIndex) ? '已收起筹码，留在桌边' : this.mood(person.seatIndex) > 0.2 ? '刚赢下一笔，语气松了些'
           : this.mood(person.seatIndex) < -0.2 ? '刚输掉一笔，话收住了些' : '暂时平静',
         relationship: (this.#relations.get(person.seatIndex) ?? 0) > 0 ? '愿意多说一点' : (this.#relations.get(person.seatIndex) ?? 0) < 0 ? '对你的追问更谨慎' : '还在相互认识',
         fact: `近 ${stats.hands} 手可见行动：下注／加注 ${stats.raises} 次，跟注 ${stats.calls} 次，弃牌 ${stats.folds} 次。${this.#lastResult.get(person.seatIndex) ?? ''}`,
         inference: inference(stats) };
       }),
-      prompt: this.#replied.has(this.#stage) ? null : { id: this.#stage, title: titles[this.#stage], text: texts[this.#stage], choices: CHOICES.map((choice) => ({ ...choice })) },
+      prompt: !this.#story || this.#replied.has(this.#stage) ? null : { id: this.#stage, title: titles[this.#stage], text: texts[this.#stage], choices: CHOICES.map((choice) => ({ ...choice })) },
       ending: this.#ended ? (this.#choices.includes('warm') ? '你带走的不是答案，而是下一次来访的邀请。' : this.#choices.includes('direct') ? '这桌人记住了你的问题。旧牌局的答案，留在下一次见面。' : '你记下了停顿、语气和那张旧纸。椅子还为你留着。') : null,
     };
   }
