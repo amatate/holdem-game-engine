@@ -1,0 +1,37 @@
+{
+  "collection": "night-table-core-characters-v1",
+  "status": "visual-review",
+  "generationMode": "builtin-image-gen",
+  "reference": "../concept-01-table.png",
+  "background": "opaque-light-review-sheet",
+  "runtimeReady": false,
+  "assets": [
+    {
+      "characterId": "hunter",
+      "name": "林岚",
+      "file": "lin-lan-turnaround-v1.png",
+      "requestedViews": ["front", "right-facing-profile", "back"],
+      "requestedExpressions": ["neutral", "speaking", "public-result-reaction"]
+    },
+    {
+      "characterId": "maniac",
+      "name": "阿凯",
+      "file": "a-kai-turnaround-v1.png",
+      "requestedViews": ["front", "right-facing-profile", "back"],
+      "requestedExpressions": ["neutral", "speaking", "public-result-reaction"]
+    },
+    {
+      "characterId": "calling-station",
+      "name": "莫叔",
+      "file": "mo-shu-turnaround-v1.png",
+      "requestedViews": ["front", "right-facing-profile", "back"],
+      "requestedExpressions": ["neutral", "speaking", "public-result-reaction"]
+    }
+  ],
+  "nextStage": "Select character appearance, then produce clean transparent half-body portraits for the Phase A table UI.",
+  "constraints": [
+    "Not sliced animation frames or a calibrated sprite atlas",
+    "No gameplay code changes in this character-review batch",
+    "Expressions must not encode unrevealed hole cards or hidden strategy state"
+  ]
+}

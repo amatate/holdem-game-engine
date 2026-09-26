@@ -81,14 +81,18 @@ describe('visible social feedback', () => {
   });
   it('labels observed actions separately from speech and still shows them when chatter is muted', () => {
     const table = new LivingTable({ story: false, people: [{ seatIndex: 1, characterId: 'hunter' }] });
-    table.ingest(0, events);
+    // Routine preflop folds no longer spend observation slots; a quieter postflop
+    // gesture still has a slot independent of speech and important encounters.
+    const observedEvents: PublicGameEvent[] = [...events.slice(0, 3),
+      { type: 'bettingRoundStarted', street: 'flop', actor: 0, currentBetTo: 0 }, ...events.slice(3)];
+    table.ingest(0, observedEvents);
     const living = table.view();
     const observed = living.lines.find((line) => line.kind === 'observation')!;
     expect(observed.text).toContain('把牌扣下');
-    const frames = buildPlaybackFrames(null, events, roster, { packetIndex: 0,
+    const frames = buildPlaybackFrames(null, observedEvents, roster, { packetIndex: 0,
       lines: living.lines.filter((line) => line.kind === 'observation'), memories: living.memories });
     const frame = frames.find((item) => item.line)!;
-    expect(frame.event).toEqual(events[4]);
+    expect(frame.event).toEqual(observedEvents[5]);
     expect(frame.view.seats[1]?.status).toBe('folded');
     const html = renderPlaybackFrame(frame, roster, 1, frames.length);
     expect(html).toContain('bubble-observation'); expect(html).toContain('林岚 · 观察到的动作');
@@ -97,6 +101,6 @@ describe('visible social feedback', () => {
     expect(muted).toContain('把牌扣下'); expect(muted).not.toContain('“这个价');
     expect(muted).toContain('本手交锋'); expect(muted).toContain('已扣除退回');
     expect(muted).toContain('实际投入 0'); expect(muted).toContain('本手持平');
-    expect(buildPlaybackFrames(null, events, roster).some((item) => item.line)).toBe(false);
+    expect(buildPlaybackFrames(null, observedEvents, roster).some((item) => item.line)).toBe(false);
   });
 });

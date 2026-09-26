@@ -1,4 +1,5 @@
-import type { Bootstrap, WebTable } from './protocol.js';
+import type { Bootstrap, WebTable, SaveStatus } from './protocol.js';
+import { requestTable, browserTable } from './transport.js';
 import { renderLobby, renderTable, renderPlaybackFrame } from './render.js';
 import { buildPlaybackFrames, PlaybackClock, type PlaybackFrame } from './playback.js';
 import { installTableReadTool, type TableToolContext } from './agent-tools.js';
@@ -28,6 +29,10 @@ let frame: PlaybackFrame | null = null;
 let frameIndex = 0;
 let frameCount = 0;
 let animations: Animation[] = [];
+// Keep only presentation preferences; never copy cards or commands between renders.
+let displayedTableId: string | null = null;
+let displayedDecisionKey: string | null = null;
+const expandedPanels = new Map<string, boolean>();
 try { clock.setSpeed(Number(localStorage.getItem(speedKey))); } catch { /* Storage may be unavailable. */ }
 if (speedControl) speedControl.value = String(clock.speed);
 const toolLifecycle = installTableReadTool(
@@ -37,22 +42,50 @@ const toolLifecycle = installTableReadTool(
 window.addEventListener('pagehide', () => { toolLifecycle.abort(); clock.skip(); clearAnimations(); }, { once: true });
 
 function draw(): void {
+  const visibleTable = state.table && !choosingTable ? state.table : null;
+  const nextTableId = visibleTable?.id ?? null;
+  const sameTable = displayedTableId === nextTableId;
+  if (!sameTable) expandedPanels.clear();
+  displayedTableId = nextTableId;
+  const nextDecisionKey = !frame && visibleTable?.packet.kind === 'decision' ? visibleTable.packet.decisionKey : null;
+  const oldRaise = app.querySelector<HTMLInputElement>('#raise-amount');
+  const raiseDraft = sameTable && nextDecisionKey && nextDecisionKey === displayedDecisionKey ? oldRaise?.value : undefined;
+  const restoreRaiseFocus = !!oldRaise && document.activeElement === oldRaise;
   app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount, state.table.mode)
     : state.table && !choosingTable ? renderTable(state.table, talkMuted)
-      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode, socialEnabled)}`;
+      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode, socialEnabled, state.save, !!state.table)}`;
+  document.body.classList.toggle('at-table', !!visibleTable);
+  if (!sameTable && visibleTable) window.scrollTo(0, 0);
+  for (const panel of app.querySelectorAll<HTMLDetailsElement>('details[data-panel]')) {
+    const saved = expandedPanels.get(panel.dataset.panel!);
+    if (saved !== undefined) panel.open = saved;
+  }
+  const newRaise = app.querySelector<HTMLInputElement>('#raise-amount');
+  if (raiseDraft !== undefined && newRaise) {
+    newRaise.value = raiseDraft;
+    if (restoreRaiseFocus) newRaise.focus({ preventScroll: true });
+  }
+  displayedDecisionKey = nextDecisionKey;
   const label = document.querySelector('#mode-label');
   const visibleMode = state.table && !choosingTable ? state.table.mode : mode;
   if (label) label.textContent = state.table && !choosingTable && state.table.experience === 'tutorial' ? '新手教学'
     : `${state.table && !choosingTable && state.table.living ? state.table.experience === 'living' ? '剧情序章 · ' : '人物互动 · ' : ''}${visibleMode === 'ability-lab' ? '能力实验' : '经典德州'}`;
   lock(busy);
 }
+app.addEventListener('toggle', (event) => {
+  const panel = event.target;
+  if (panel instanceof HTMLDetailsElement && panel.isConnected && panel.dataset.panel) {
+    expandedPanels.set(panel.dataset.panel, panel.open);
+    if (expandedPanels.size > 64) expandedPanels.delete(expandedPanels.keys().next().value!);
+  }
+}, true);
 function lock(value: boolean): void {
   busy = value;
   app.setAttribute('aria-busy', String(value));
   for (const element of app.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button,input,select')) {
     element.disabled = value;
   }
-  connection.textContent = playing ? '正在播放牌局…' : value ? '正在处理牌局…' : '本地牌桌';
+  connection.textContent = playing ? '正在播放牌局…' : value ? '正在处理牌局…' : browserTable ? '浏览器单机' : '本地牌桌';
   if (skipControl) skipControl.disabled = !playing;
 }
 function message(text: string): void { notice.textContent = text; notice.hidden = text.length === 0; }
@@ -155,8 +188,8 @@ replaceDialog?.addEventListener('close', () => {
 });
 
 async function synchronize(): Promise<void> {
-  const response = await fetch('/api/bootstrap');
-  if (!response.ok) throw new Error('无法连接本地牌桌，请确认服务仍在运行。');
+  const response = await requestTable('/api/bootstrap');
+  if (!response.ok) throw new Error(browserTable ? '浏览器牌桌暂未就绪，请刷新重试。' : '无法连接本地牌桌，请确认服务仍在运行。');
   state = await response.json() as Bootstrap;
 }
 
@@ -165,19 +198,20 @@ async function mutate(path: string, body: unknown): Promise<void> {
   lock(true); message('');
   const previous = state.table;
   try {
-    const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const result = await response.json() as { table?: WebTable; error?: string };
+    const response = await requestTable(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const result = await response.json() as { table?: WebTable; error?: string; save?: SaveStatus };
+    if (result.save || result.table?.save) state.save = result.save ?? result.table!.save!;
     if (result.table) { state.table = result.table; choosingTable = false; }
     if (!response.ok) {
       if (response.status === 401) { state.table = null; choosingTable = false; }
       message(result.error ?? '操作未完成，请同步牌桌后重试。');
     } else if (result.table) {
-      await play(previous, result.table);
+      if (path !== '/api/resume') await play(previous, result.table);
     }
   } catch {
     // Never automatically replay a wager after an uncertain network result.
     try { await synchronize(); choosingTable = false; message('连接曾中断，已同步实际牌局；没有重复提交操作。'); }
-    catch { message('连接中断。恢复服务后点击右上角“同步牌桌”，不要重复下注。'); }
+    catch { message(browserTable ? '浏览器引擎未响应。请刷新页面，从上次结算恢复；不要重复下注。' : '连接中断。恢复服务后点击右上角“同步牌桌”，不要重复下注。'); }
   } finally { lock(false); draw(); }
 }
 
@@ -220,6 +254,9 @@ app.addEventListener('click', (event) => {
     case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free', socialEnabled }); break;
     case 'home': choosingTable = true; message(''); draw(); break;
     case 'resume': choosingTable = false; message(''); draw(); break;
+    case 'restore':
+      if (state.save?.saved) void mutate('/api/resume', { checkpointId: state.save.saved.id });
+      break;
     case 'toggle-talk':
       talkMuted = !talkMuted;
       try { localStorage.setItem('holdem.talk-muted', String(talkMuted)); } catch { /* Optional preference. */ }

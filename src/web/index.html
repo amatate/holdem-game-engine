@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="从三关教学入门德州，与记得你打法的牌手走进夜局短序章，或自由选择经典和能力牌桌。">
-  <meta name="theme-color" content="#101d2b">
+  <meta name="theme-color" content="#1b1730">
   <title>夜局 · 德州扑克</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/pixel-table.css">
   <script type="module" src="/client.js"></script>
 </head>
 <body>
@@ -14,7 +15,7 @@
   <main class="main"><div id="notice" role="status" aria-live="polite" hidden></div>
     <div class="playback-toolbar" aria-label="牌局播放控制"><span class="playback-title">牌桌节奏 <small>轮到你时自动停下</small></span><label for="playback-speed">速度</label><select id="playback-speed"><option value="0.5">0.5× · 慢速</option><option value="1" selected>1× · 标准</option><option value="2">2× · 快速</option><option value="4">4× · 极速</option></select><button id="playback-skip" class="text-button" disabled>跳过本段 →</button></div>
     <div id="app"><p class="loading">正在连接牌桌…</p></div></main>
-  <dialog id="replace-table-dialog" class="replace-dialog" aria-labelledby="replace-title"><h2 id="replace-title">重新选择牌桌？</h2><p>你可以更换模式和人数。点击“入座发牌”后，旧牌局将结束，能力次数重新计算。</p><form method="dialog"><button class="button button-secondary" value="cancel" autofocus>保留当前牌桌</button><button class="button button-primary" value="choose">重新选桌</button></form></dialog>
+  <dialog id="replace-table-dialog" class="replace-dialog" aria-labelledby="replace-title"><h2 id="replace-title">重新选择牌桌？</h2><p>你可以更换模式和人数。开始任一新牌桌后，旧牌局结束，能力次数重新计算。旧存档会保留到新牌桌第一手结算，再被覆盖。</p><form method="dialog"><button class="button button-secondary" value="cancel" autofocus>保留当前牌桌</button><button class="button button-primary" value="choose">重新选桌</button></form></dialog>
   <footer class="footer"><span>NO-LIMIT TEXAS HOLD’EM</span><span>只用虚拟筹码 · 本机运行</span></footer>
 </body>
 </html>

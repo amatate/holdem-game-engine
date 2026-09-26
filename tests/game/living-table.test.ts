@@ -148,16 +148,90 @@ describe('living table expression', () => {
 
   it('keeps visible gestures factual, anchored, rate limited and independent of hidden cards', () => {
     const table = new LivingTable({ story: false });
-    table.ingest(0, [start(1), { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false },
-      action(2, 'call'), action(3), action(1, 'fold')]);
+    table.ingest(0, [start(1), { type: 'bettingRoundStarted', street: 'flop', actor: 1, currentBetTo: 0 },
+      { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'check', paid: 0, betTo: 0, allIn: false },
+      { type: 'playerActed', seatIndex: 3, kind: 'bet', paid: 4, betTo: 4, allIn: false }, action(1, 'fold')]);
     const gestures = table.view().lines.filter((line) => line.kind === 'observation');
-    expect(gestures).toHaveLength(2);
-    expect(gestures[0]).toMatchObject({ speaker: '林岚', seatIndex: 1, text: '轻敲桌面，过牌。', packetIndex: 0, eventIndex: 1 });
-    expect(gestures[1]?.text).toBe('补入 4 筹码跟注，本轮到 4。');
+    expect(gestures).toHaveLength(1); // Quiet actions cannot use the reserved encounter slot.
+    expect(gestures[0]).toMatchObject({ speaker: '林岚', seatIndex: 1, text: '轻敲桌面，过牌。', packetIndex: 0, eventIndex: 2 });
     const before = table.view(); table.ingest(0, [action(3)]);
     expect(table.view()).toEqual(before);
     table.ingest(1, [start(2), action(1, 'fold')]);
+    expect(table.view().lines.filter((line) => line.hand === 2 && line.kind === 'observation')).toHaveLength(0);
+    table.ingest(2, [{ type: 'bettingRoundStarted', street: 'flop', actor: 1, currentBetTo: 0 }, action(1, 'fold')]);
     expect(table.view().lines.at(-1)?.text).toContain('把牌扣下');
+  });
+
+  it('skips routine preflop actions and reserves observations for a reraise and later all-in', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), action(1, 'fold'), action(2, 'call'), action(3)]);
+    expect(table.view().lines.filter((line) => line.kind === 'observation')).toHaveLength(0);
+    table.ingest(1, [{ type: 'playerActed', seatIndex: 2, kind: 'raise', paid: 8, betTo: 12, allIn: false }]);
+    const first = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ seatIndex: 2, packetIndex: 1, eventIndex: 0 });
+    table.ingest(2, [{ type: 'bettingRoundStarted', street: 'flop', actor: 3, currentBetTo: 0 },
+      { type: 'playerActed', seatIndex: 3, kind: 'check', paid: 0, betTo: 0, allIn: false }]);
+    expect(table.view().lines.filter((line) => line.kind === 'observation')).toEqual(first);
+    table.ingest(3, [{ type: 'playerActed', seatIndex: 2, kind: 'bet', paid: 88, betTo: 88, allIn: true },
+      { type: 'playerActed', seatIndex: 3, kind: 'call', paid: 88, betTo: 88, allIn: true }]);
+    const gestures = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(gestures).toHaveLength(2);
+    expect(gestures[0]).toEqual(first[0]); // Previously emitted anchors never move or disappear.
+    expect(gestures[1]).toMatchObject({ seatIndex: 2, packetIndex: 3, eventIndex: 0,
+      text: '把剩余 88 筹码全部推入，本轮到 88。' });
+  });
+
+  it('can show a quiet postflop gesture and then an important action by the same NPC without using hidden cards', () => {
+    const tables = [new LivingTable({ story: false }), new LivingTable({ story: false })];
+    for (const [index, table] of tables.entries()) {
+      table.ingest(0, [start(1), { type: 'ownHoleCardsDealt', cards: index
+        ? [parseCard('As'), parseCard('Ah')] : [parseCard('2s'), parseCard('3h')] },
+      { type: 'bettingRoundStarted', street: 'flop', actor: 1, currentBetTo: 0 },
+      { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false },
+      { type: 'playerActed', seatIndex: 2, kind: 'check', paid: 0, betTo: 0, allIn: false }]);
+      const earlier = table.view().lines.filter((line) => line.kind === 'observation');
+      expect(earlier).toHaveLength(1);
+      table.ingest(1, [{ type: 'playerActed', seatIndex: 0, kind: 'bet', paid: 50, betTo: 50, allIn: false },
+        { type: 'playerActed', seatIndex: 1, kind: 'call', paid: 40, betTo: 40, allIn: true }]);
+      const gestures = table.view().lines.filter((line) => line.kind === 'observation');
+      expect(gestures).toHaveLength(2);
+      expect(gestures[0]).toEqual(earlier[0]);
+      expect(gestures[1]).toMatchObject({ seatIndex: 1, packetIndex: 1, eventIndex: 1,
+        text: '把剩余 40 筹码全部推入，本轮到 40。' });
+    }
+    expect(tables[0]!.view()).toEqual(tables[1]!.view());
+  });
+
+  it('recognizes a large-pot decision from the current public contributions, not a future packet suffix', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), ...[0, 1, 2].map((seatIndex) => ({ type: 'playerActed' as const,
+      seatIndex, kind: 'call' as const, paid: 12, betTo: 12, allIn: false })),
+    { type: 'bettingRoundStarted', street: 'flop', actor: 1, currentBetTo: 0 },
+    { type: 'playerActed', seatIndex: 1, kind: 'check', paid: 0, betTo: 0, allIn: false }]);
+    expect(table.view().lines.filter((line) => line.kind === 'observation')).toHaveLength(1);
+    table.ingest(1, [{ type: 'playerActed', seatIndex: 0, kind: 'bet', paid: 4, betTo: 4, allIn: false }, action(1, 'call')]);
+    const gestures = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(gestures).toHaveLength(2);
+    expect(gestures[1]).toMatchObject({ seatIndex: 1, packetIndex: 1, eventIndex: 1,
+      text: '补入 4 筹码跟注，本轮到 4。' });
+  });
+
+  it('resets same-street pressure at a new betting round and never lets quiet gestures spend both slots', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), action(), action(1, 'call'),
+      { type: 'bettingRoundStarted', street: 'flop', actor: 2, currentBetTo: 0 },
+      { type: 'playerActed', seatIndex: 2, kind: 'bet', paid: 4, betTo: 4, allIn: false }, action(3, 'call'),
+      { type: 'bettingRoundStarted', street: 'turn', actor: 3, currentBetTo: 0 },
+      { type: 'playerActed', seatIndex: 3, kind: 'bet', paid: 4, betTo: 4, allIn: false }]);
+    const earlier = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(earlier).toHaveLength(1);
+    expect(earlier[0]).toMatchObject({ seatIndex: 2, packetIndex: 0, eventIndex: 4 });
+    table.ingest(1, [{ type: 'playerActed', seatIndex: 1, kind: 'raise', paid: 8, betTo: 8, allIn: false }]);
+    const gestures = table.view().lines.filter((line) => line.kind === 'observation');
+    expect(gestures).toHaveLength(2);
+    expect(gestures[1]).toMatchObject({ seatIndex: 1, packetIndex: 1, eventIndex: 0 });
   });
 
   it('adds one important encounter after the first action without repeatedly recording the same pressure', () => {

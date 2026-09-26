@@ -1,5 +1,6 @@
 import { TableMemory, type ActionEvidence } from '../agents/table-memory.js';
 import type { PublicGameEvent, PublicActionEvent } from '../core/public-events.js';
+import type { Street } from '../core/state.js';
 import { tablePerson, type TablePerson } from './table-personas.js';
 
 export interface EventAnchor { packetIndex: number; eventIndex: number }
@@ -60,6 +61,8 @@ export class LivingTable {
   #nextMemory = 1;
   #counts = 0;
   #observed = new Set<string>();
+  #street: Street = 'preflop';
+  #streetRaises = 0;
   #keyKinds = new Set<string>();
   #recap: { hand: number; text: string } | null = null;
   #bigBlind = 2;
@@ -97,7 +100,17 @@ export class LivingTable {
     const person = this.#people.find((person) => person.seatIndex === event.seatIndex);
     if (!person || this.#out.has(person.seatIndex) || this.#observed.size >= 2) return;
     const raises = this.#actions.filter((action) => action.type === 'playerActed' && action.seatIndex === person.seatIndex && (action.kind === 'raise' || action.kind === 'bet')).length;
-    const key = `${person.seatIndex}-${raises >= 2 && (event.kind === 'raise' || event.kind === 'bet') ? 'pressure' : 'action'}`;
+    const aggression = event.kind === 'raise' || event.kind === 'bet';
+    const pressure = aggression && (this.#streetRaises >= 2 || raises >= 2);
+    const pot = [...this.#paid.values()].reduce((sum, paid) => sum + paid, 0);
+    const bigPotDecision = pot >= this.#bigBlind * 20 && (event.paid >= this.#bigBlind * 2
+      || (event.kind === 'fold' && (this.#paid.get(person.seatIndex) ?? 0) >= this.#bigBlind * 5));
+    const important = event.allIn || pressure || event.paid >= this.#bigBlind * 10 || bigPotDecision;
+    // Keep the second slot for a meaningful encounter. Routine preflop actions do
+    // not spend either slot; one quieter postflop gesture can establish presence.
+    // Decisions use only this public prefix, never future events or replacement.
+    if (!important && (this.#street === 'preflop' || this.#observed.size >= 1)) return;
+    const key = `${person.seatIndex}-${event.allIn ? 'all-in' : pressure ? 'pressure' : important ? 'commitment' : 'action'}`;
     if (this.#observed.has(key)) return;
     this.#observed.add(key);
     const text = event.kind === 'check' ? '轻敲桌面，过牌。'
@@ -149,6 +162,7 @@ export class LivingTable {
         case 'gameStarted': this.#stacks = Array(event.maxSeats).fill(event.startingStack); break;
         case 'handStarted': {
           this.#hand = event.handNumber; this.#actions = []; this.#counts = 0;
+          this.#street = 'preflop'; this.#streetRaises = 0;
           this.#bigBlind = event.bigBlind; this.#observed.clear(); this.#keyKinds.clear(); this.#shown.clear(); this.#paid.clear(); this.#recap = null;
           this.#visibleMemory.observe(this.#hand, []);
           this.#memories = this.#memories.filter((notice) => notice.hand >= this.#hand - 7);
@@ -168,8 +182,10 @@ export class LivingTable {
           this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) + event.amount); break;
         case 'uncalledBetReturned': this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) - event.amount); break;
         case 'holeCardsRevealed': this.#shown.add(event.seatIndex); break;
+        case 'bettingRoundStarted': this.#street = event.street; this.#streetRaises = 0; break;
         case 'playerActed': {
           this.#actions.push(event);
+          if (event.kind === 'bet' || event.kind === 'raise') this.#streetRaises++;
           this.#paid.set(event.seatIndex, (this.#paid.get(event.seatIndex) ?? 0) + event.paid);
           this.#visibleMemory.observe(this.#hand, this.#actions);
           this.#remember(event);

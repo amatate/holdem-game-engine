@@ -36,6 +36,19 @@ describe('tutorial and living HTTP experiences', () => {
   async function finishLesson(table: WebTable): Promise<WebTable> {
     let steps = 0;
     while (table.packet.kind === 'decision' && steps++ < 20) {
+      const html = renderTable(table);
+      const dock = html.split('<div class="action-dock">')[1]!.split('<div class="table-tools">')[0]!;
+      expect(html.match(/\bid="coach-hint"/g)).toHaveLength(1);
+      expect(dock).toContain('id="coach-hint"');
+      expect(dock).not.toContain('<details'); // The action hint must not be inside a closed lesson pocket.
+      const guided = [...dock.matchAll(/<button\b[^>]*\bis-guided\b[^>]*>/g)].map(([tag]) => tag);
+      if (table.tutorial!.recommended) {
+        expect(guided).toHaveLength(1);
+        expect(guided[0]).toContain('aria-describedby="coach-hint"');
+      } else expect(guided).toHaveLength(0);
+      const lessonPanel = html.match(/<details\b[^>]*\bclass="table-pocket lesson-pocket"[^>]*>/)?.[0];
+      expect(lessonPanel).toContain(`data-panel="lesson-${table.tutorial!.lesson}-play"`);
+      expect(lessonPanel).not.toMatch(/\sopen(?=\s|>)/);
       const intent = table.tutorial!.recommended ?? (table.packet.observation.legalActions.check ? { type: 'check' } : { type: 'call' });
       const response = await post('/api/action', actionBody(table, intent));
       expect(response.status).toBe(200); table = response.table;
@@ -82,7 +95,16 @@ describe('tutorial and living HTTP experiences', () => {
       expect(table.tutorial?.lesson).toBe(lesson);
       expect(await restored()).toEqual(table);
       table = await finishLesson(table);
-      expect(renderTable(table)).not.toContain('data-action="continue"');
+      const resultHtml = renderTable(table);
+      expect(resultHtml).not.toContain('data-action="continue"');
+      expect(resultHtml).not.toContain('id="coach-hint"');
+      const lessonPanel = resultHtml.match(/<details\b[^>]*\bclass="table-pocket lesson-pocket"[^>]*>/)?.[0];
+      expect(lessonPanel).toContain(`data-panel="lesson-${lesson}-result"`);
+      expect(lessonPanel).toMatch(/\sopen(?=\s|>)/); // The next required action is immediately discoverable.
+      const ledgerPanel = resultHtml.match(/<details\b[^>]*\bclass="settlement-details"[^>]*>/)?.[0];
+      expect(ledgerPanel).toContain('data-panel="settlement-');
+      expect(ledgerPanel).not.toMatch(/\sopen(?=\s|>)/);
+      expect(resultHtml).toContain('class="ledger"'); // The full accounting is collapsed, not discarded.
       expect((await post('/api/continue', { tableId: table.id, expectedPacketIndex: table.packet.packetIndex })).status).toBe(409);
       const badAnswer = ['1', '0', '0'][lesson]!;
       table = (await post('/api/lesson', lessonBody(table, 'answer', badAnswer))).table;

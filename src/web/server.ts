@@ -2,31 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { pathToFileURL } from 'node:url';
-import { CHARACTERS, type CharacterId } from '../agents/characters.js';
-import { DEFAULT_TOURNAMENT_CONFIG } from '../cli/index.js';
-import { continueAfterHandResult, getCurrentPacket, openGameSession, submitSessionCommand } from '../game/game-session.js';
-import { createCharacterParticipant, selectNpcRoster } from '../game/roster.js';
-import type { GameSessionHandle, SessionCommand, SessionMode } from '../game/session-types.js';
-import type { SeatIdentity, WebTable, TableExperience } from './protocol.js';
-import { advanceTableView } from './view.js';
-import { LivingParticipant } from '../agents/table-memory.js';
-import { LivingTable } from '../game/living-table.js';
-import { newTutorial, tutorialView, tutorialAllows, answerTutorial, tutorialCoach, type TutorialState } from '../game/tutorial.js';
+import { continueAfterHandResult, submitSessionCommand } from '../game/game-session.js';
+import type { SessionCommand } from '../game/session-types.js';
+import type { SaveStatus } from './protocol.js';
+import { FileCheckpointStore, engineFingerprint, tableDigest, MAX_COMMANDS,
+  type Checkpoint, type CheckpointStore } from './checkpoints.js';
+import { answerTutorial, tutorialAllows, tutorialView } from '../game/tutorial.js';
+import { rosterFor, openLocalTable, refreshPresentation, advanceSession, type LocalSession } from './table-session.js';
 
-const STYLES: Record<CharacterId, string> = {
-  rock: '少入局 · 守住筹码', hunter: '重视位置 · 主动施压', maniac: '宽范围 · 大胆进攻',
-  'calling-station': '跟得多 · 很少主动加注', 'small-ball': '小底池 · 轻量施压',
-  trapper: '选择慢打 · 等待反击', 'value-bettor': '价值下注 · 尺寸偏大',
-};
 
-function rosterFor(players: number): SeatIdentity[] {
-  return [{ seatIndex: 0, playerId: '你', name: '你', nickname: '玩家', style: '由你决定', characterId: 'hero' },
-    ...selectNpcRoster(players).map((id, index) => {
-      const character = CHARACTERS[id];
-      return { seatIndex: index + 1, playerId: `${character.displayName}“${character.nickname}”`,
-        name: character.displayName, nickname: character.nickname, style: STYLES[id], characterId: id };
-    })];
-}
 
 class HttpError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -50,43 +34,76 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
   return body as Record<string, unknown>;
 }
 
-interface LocalSession {
-  handle: GameSessionHandle; table: WebTable; touched: number; busy: boolean;
-  living: LivingTable | null; tutorial: TutorialState | null;
+
+
+async function restoreCheckpoint(checkpoint: Checkpoint): Promise<LocalSession> {
+  const setup = checkpoint.setup;
+  const deadline = Date.now() + 30_000;
+  const session = await openLocalTable(setup.players, setup.mode, setup.experience, setup.lesson, setup.socialEnabled, setup.runSeed);
+  for (const entry of checkpoint.journal) {
+    if (Date.now() > deadline) throw new Error('Restore time limit');
+    if (entry.type === 'command' || entry.type === 'continue') {
+      const result = entry.type === 'command' ? await submitSessionCommand(session.handle, entry.command)
+        : await continueAfterHandResult(session.handle, entry.packetIndex);
+      if (!result.accepted) throw new Error('Rejected checkpoint command');
+      advanceSession(session);
+    } else if (entry.type === 'reply') {
+      if (!session.living?.reply(entry.promptId, entry.choice, entry.revision)) throw new Error('Invalid saved reply');
+      refreshPresentation(session);
+    } else if (entry.type === 'answer') {
+      if (!session.tutorial || !answerTutorial(session.tutorial, session.table.packet, entry.answer)) throw new Error('Invalid saved answer');
+      refreshPresentation(session);
+    } else throw new Error('Invalid journal entry');
+  }
+  if (session.table.packet.kind === 'decision' || tableDigest(session.table) !== checkpoint.digest) throw new Error('Checkpoint mismatch');
+  session.journal = checkpoint.journal;
+  return session;
 }
 
-async function openLocalTable(players: number, mode: SessionMode, experience: TableExperience, lesson = 0, socialEnabled = false): Promise<LocalSession> {
-  const tutorial = experience === 'tutorial' ? newTutorial(lesson) : null;
-  const roster = tutorial ? [rosterFor(2)[0]!, { seatIndex: 1, playerId: '莫叔（教学）', name: '莫叔',
-    nickname: '教学陪练', style: '按课程配合 · 不代表正式 NPC 强度', characterId: 'calling-station' }] : rosterFor(players);
-  const living = !tutorial && (experience === 'living' || socialEnabled) ? new LivingTable({ story: experience === 'living',
-    people: roster.filter((person) => person.seatIndex !== 0).map((person) => ({ seatIndex: person.seatIndex, characterId: person.characterId as CharacterId })) }) : null;
-  const participants = tutorial ? [null, tutorialCoach(lesson, roster[1]!.playerId)]
-    : [null, ...selectNpcRoster(players).map((id, index) => living
-      ? new LivingParticipant(id, living.memory, () => living.mood(index + 1)) : createCharacterParticipant(id))];
-  const step = await openGameSession({ mode, config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players,
-    ...(tutorial ? { initialButtonSeat: 0 } : {}) },
-    seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })), participants,
-    humanSeatIndex: 0, runSeed: tutorial ? `night-school-v1-lesson-${lesson}` : randomUUID(), invalidAgentActionMode: 'fallback' });
-  living?.ingest(step.packet.packetIndex, step.packet.viewerEventsSinceLastPacket);
-  const table: WebTable = { id: randomUUID(), mode, experience, roster, packet: step.packet,
-    view: advanceTableView(null, step.packet, roster), living: living?.view() ?? null,
-    tutorial: tutorial ? tutorialView(tutorial, step.packet) : null };
-  return { handle: step.handle, table, living, tutorial, touched: Date.now(), busy: false };
-}
-
-function refreshPresentation(session: LocalSession): void {
-  session.table = { ...session.table, living: session.living?.view() ?? null,
-    tutorial: session.tutorial ? tutorialView(session.tutorial, session.table.packet) : null };
-}
-
-export function createLocalServer() {
+export function createLocalServer(options: { checkpointStore?: CheckpointStore } = {}) {
   const sessions = new Map<string, LocalSession>();
+  const pending = new Set<string>();
+  const store = options.checkpointStore;
+  const fingerprint = store ? engineFingerprint() : Promise.resolve('');
+  // Keep startup failures contained; the UI reports persistence errors without rejecting wagers.
+  void fingerprint.catch(() => {});
+  async function savedStatus(token: string | undefined): Promise<SaveStatus> {
+    if (!store || !token) return { enabled: !!store, saved: null, error: null };
+    try {
+      const saved = await store.read(token);
+      if (saved && saved.engine !== await fingerprint) return { enabled: true, saved: null, error: '存档来自不同规则版本，暂不能恢复；原文件已保留。' };
+      return { enabled: true, saved: saved?.summary ?? null, error: null };
+    } catch { return { enabled: true, saved: null, error: '无法读取本地存档；原文件未删除，请检查服务目录和权限。' }; }
+  }
+  async function checkpoint(session: LocalSession, token: string): Promise<void> {
+    if (!store || session.table.packet.kind === 'decision') return;
+    try {
+      if (session.journal.length > MAX_COMMANDS) throw new Error('Checkpoint limit');
+      const summary = { id: randomUUID(), savedAt: new Date().toISOString(), hand: session.table.view.handNumber,
+        heroStack: session.table.view.seats.find((seat) => seat.seatIndex === 0)!.stack,
+        players: session.setup.players, mode: session.setup.mode, experience: session.setup.experience,
+        lesson: session.tutorial?.lesson ?? null,
+        ended: session.table.packet.kind === 'game-result' || session.table.living?.ended === true || session.tutorial?.complete === true };
+      await store.write(token, { format: 1, engine: await fingerprint, setup: session.setup, journal: session.journal,
+        summary, digest: tableDigest(session.table) });
+      session.table.save = { enabled: true, saved: summary, error: null, current: true };
+    } catch {
+      session.table.save = { enabled: true, saved: session.table.save?.saved ?? null, current: session.table.save?.current ?? false,
+        error: session.journal.length > MAX_COMMANDS ? '本场操作超过存档上限，未覆盖上一次存档；可继续打牌，但新进度不再保存。'
+          : '本次结算未能保存；牌局已生效，上一次存档未覆盖。请检查磁盘和目录权限。' };
+    }
+  }
   const rosters = Object.fromEntries([2, 3, 4, 5, 6].map((count) => [count, rosterFor(count)]));
   const staticFiles: Record<string, [URL, string]> = {
     '/': [new URL('../../src/web/index.html', import.meta.url), 'text/html; charset=utf-8'],
     '/style.css': [new URL('../../src/web/style.css', import.meta.url), 'text/css; charset=utf-8'],
+    '/pixel-table.css': [new URL('../../src/web/pixel-table.css', import.meta.url), 'text/css; charset=utf-8'],
+    '/art/room-v1.png': [new URL('../../src/web/art/room-v1.png', import.meta.url), 'image/png'],
+    '/art/hunter-v1.png': [new URL('../../src/web/art/hunter-v1.png', import.meta.url), 'image/png'],
+    '/art/maniac-v1.png': [new URL('../../src/web/art/maniac-v1.png', import.meta.url), 'image/png'],
+    '/art/calling-station-v1.png': [new URL('../../src/web/art/calling-station-v1.png', import.meta.url), 'image/png'],
     '/client.js': [new URL('../../dist/web/client.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/transport.js': [new URL('../../dist/web/transport.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/playback.js': [new URL('../../dist/web/playback.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/render.js': [new URL('../../dist/web/render.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/view.js': [new URL('../../dist/web/view.js', import.meta.url), 'text/javascript; charset=utf-8'],
@@ -113,8 +130,9 @@ export function createLocalServer() {
       const path = new URL(req.url ?? '/', origin).pathname;
       // Cookies are not isolated by TCP port. Keep parallel local servers independent.
       const cookieName = `holdem_session_${port}`;
-      const token = req.headers.cookie?.split(';').map((value) => value.trim())
+      const rawToken = req.headers.cookie?.split(';').map((value) => value.trim())
         .find((value) => value.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+      const token = rawToken && /^[a-f0-9-]{36}$/.test(rawToken) ? rawToken : undefined;
       const now = Date.now();
       for (const [key, session] of sessions) {
         if (!session.busy && now - session.touched > 7_200_000) sessions.delete(key);
@@ -122,18 +140,41 @@ export function createLocalServer() {
       let session = token ? sessions.get(token) : undefined;
       if (session) session.touched = now;
       if (req.method === 'GET') {
-        if (path === '/api/bootstrap') { json(res, 200, { rosters, table: session?.table ?? null }); return; }
+        if (path === '/api/bootstrap') { json(res, 200, { rosters, table: session?.table ?? null,
+          save: session?.table.save ?? await savedStatus(token) }); return; }
         const file = staticFiles[path];
         if (!file) throw new HttpError(404, '没有这个页面。');
         const content = await readFile(file[0]);
+        // These fixed, versioned art files are public and reused on every playback frame.
+        // Keep pages, scripts and all private game responses uncached.
+        if (path.startsWith('/art/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         res.writeHead(200, { 'Content-Type': file[1] }); res.end(content); return;
       }
       if (req.method !== 'POST') throw new HttpError(405, '不支持此请求方式。');
-      if (!['/api/table', '/api/action', '/api/continue', '/api/reply', '/api/lesson'].includes(path)) throw new HttpError(404, '没有这个操作。');
+      if (!['/api/table', '/api/resume', '/api/action', '/api/continue', '/api/reply', '/api/lesson'].includes(path)) throw new HttpError(404, '没有这个操作。');
       const body = await readBody(req);
       // A different tab may replace the table while this request body is arriving.
       session = token ? sessions.get(token) : undefined;
-      if (session?.busy) { json(res, 409, { error: '正在处理上一步，请稍后同步。', table: session.table }); return; }
+      if (session?.busy || (token && pending.has(token))) { json(res, 409, { error: '正在处理上一步，请稍后同步。', table: session?.table }); return; }
+      if (path === '/api/resume') {
+        if (session) { json(res, 409, { error: '已有正在进行的牌桌，已返回当前进度。', table: session.table }); return; }
+        if (!store || !token) throw new HttpError(404, '没有可恢复的本地存档。');
+        if (sessions.size >= 32) throw new HttpError(503, '本地牌桌已满。');
+        pending.add(token);
+        try {
+          const saved = await store.read(token);
+          if (!saved || saved.summary.id !== body.checkpointId) throw new HttpError(409, '存档已变化，请同步后再继续。');
+          if (saved.engine !== await fingerprint) throw new HttpError(409, '规则版本已变化，不能恢复此存档；原文件已保留。');
+          const restored = await restoreCheckpoint(saved);
+          restored.table.save = { enabled: true, saved: saved.summary, error: null, current: true };
+          sessions.set(token, restored);
+          res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=15552000`);
+          json(res, 200, { table: restored.table }); return;
+        } catch (error) {
+          if (error instanceof HttpError) throw error;
+          throw new HttpError(409, '存档恢复校验未通过，未开桌、未修改原存档；请检查版本或同步后重试。');
+        } finally { pending.delete(token); }
+      }
       if (path === '/api/table') {
         const experience = body.experience ?? 'free';
         if (experience !== 'free' && experience !== 'living' && experience !== 'tutorial') throw new HttpError(400, '请选择自由牌桌、活牌桌或教学。');
@@ -147,15 +188,18 @@ export function createLocalServer() {
         }
         if (!session && sessions.size >= 32) throw new HttpError(503, '本地牌桌已满，请关闭闲置会话后重试。');
         if (session) session.busy = true;
+        const newToken = token ?? randomUUID();
+        pending.add(newToken);
         try {
           const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true);
-          const newToken = token && session ? token : randomUUID();
+          opened.table.save = await savedStatus(newToken);
+          await checkpoint(opened, newToken);
           sessions.set(newToken, opened);
-          res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/`);
+          res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/; Max-Age=15552000`);
           json(res, 200, { table: opened.table }); return;
-        } finally { if (session) session.busy = false; }
+        } finally { pending.delete(newToken); if (session) session.busy = false; }
       }
-      if (!session) throw new HttpError(401, '牌桌已关闭或过期，请重新开桌。');
+      if (!session) { json(res, 401, { error: '牌桌已关闭或过期；可从主页恢复上次结算，未完成的一手不保存。', save: await savedStatus(token) }); return; }
       if (body.tableId !== session.table.id) { json(res, 409, { error: '牌桌已更新，已同步当前牌桌。', table: session.table }); return; }
       session.busy = true;
       try {
@@ -169,14 +213,18 @@ export function createLocalServer() {
               || !session.living?.reply(body.promptId, body.choice, body.revision as number)) {
               json(res, 409, { error: '这段对话已回答或选项无效。', table: session.table }); return;
             }
+            session.journal.push({ type: 'reply', promptId: body.promptId, choice: body.choice, revision: body.revision as number });
           } else {
             const tutorial = session.tutorial!;
             if (body.operation === 'answer') {
               if (typeof body.answer !== 'string' || !answerTutorial(tutorial, session.table.packet, body.answer)) {
                 json(res, 409, { error: '请先完成这一手，再回答当前问题。', table: session.table }); return;
               }
+              session.journal.push({ type: 'answer', answer: body.answer });
             } else if (body.operation === 'restart' || (body.operation === 'next' && tutorial.solved && !tutorial.complete)) {
               const opened = await openLocalTable(2, 'classic', 'tutorial', tutorial.lesson + (body.operation === 'next' ? 1 : 0));
+              opened.table.save = { ...(session.table.save ?? await savedStatus(token)), current: false };
+              await checkpoint(opened, token!);
               sessions.set(token!, opened);
               json(res, 200, { table: opened.table }); return;
             } else {
@@ -184,6 +232,7 @@ export function createLocalServer() {
             }
           }
           refreshPresentation(session);
+          await checkpoint(session, token!);
           json(res, 200, { table: session.table }); return;
         }
         if (session.living?.view().ended) {
@@ -216,11 +265,10 @@ export function createLocalServer() {
           json(res, 409, { error: messages[result.rejection] ?? '操作已过期或不合法，已同步当前牌桌。',
             rejection: result.rejection, table: session.table }); return;
         }
-        const packet = getCurrentPacket(session.handle);
-        session.table = { ...session.table, packet, view: advanceTableView(session.table.view, packet, session.table.roster) };
-        session.living?.ingest(packet.packetIndex, packet.viewerEventsSinceLastPacket);
-        if (session.tutorial) session.tutorial.revision++;
-        refreshPresentation(session);
+        session.journal.push(path === '/api/action' ? { type: 'command', command: body.command as SessionCommand }
+          : { type: 'continue', packetIndex: body.expectedPacketIndex as number });
+        advanceSession(session);
+        await checkpoint(session, token!);
         json(res, 200, { table: session.table });
       } finally { session.busy = false; }
     } catch (error) {
@@ -233,9 +281,9 @@ export function createLocalServer() {
 
 const entry = process.argv[1];
 if (entry && import.meta.url === pathToFileURL(entry).href) {
-  const server = createLocalServer();
   const port = Number(process.env.HOLDEM_PORT ?? 4173);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('HOLDEM_PORT must be 1–65535');
+  const server = createLocalServer({ checkpointStore: new FileCheckpointStore(`.holdem-data/${port}`) });
   server.on('error', (error: NodeJS.ErrnoException) => {
     process.stderr.write(error.code === 'EADDRINUSE' ? `端口 ${port} 已被占用，可用 HOLDEM_PORT 指定其他端口。\n` : '本地牌桌启动失败。\n');
     process.exitCode = 1;

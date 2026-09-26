@@ -27,7 +27,7 @@ export function newTutorial(lesson = 0): TutorialState {
 export function tutorialView(state: TutorialState, packet: Readonly<TurnPacket>): TutorialView {
   const lesson = LESSONS[state.lesson]!;
   let recommended: ActionIntent | null = null;
-  let hint = state.lesson === 0 ? '请看下方结算：谁获得底池、组成了哪五张牌。输赢由真实发牌决定。'
+  let hint = state.lesson === 0 ? '请展开结算账单：谁获得底池、组成了哪五张牌。输赢由真实发牌决定。'
     : state.lesson === 1 ? '你只损失本手已投入的筹码，剩余筹码保留。弃牌不是输掉整场。' : '本手结算已列出。注意“赢得底池”包含自己的投入，“净结果”才是本手盈亏。';
   if (packet.kind === 'decision') {
     const observation = packet.observation;

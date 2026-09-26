@@ -3,3 +3,7 @@ node_modules/
 dist/
 coverage/
 *.log
+.holdem-data/
+.pages-dist/
+# Local duplicate art bundle; publish the individual source assets instead.
+docs/design/pixel-night-v1/core-character-turnarounds-v1.zip

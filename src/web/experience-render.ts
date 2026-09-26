@@ -14,9 +14,9 @@ export function renderGuide(table: WebTable, h: Escape): string {
   const lesson = table.tutorial;
   if (!lesson) return '';
   return `<section class="lesson-note" aria-label="新手教学提示"><div class="lesson-top"><span class="lesson-index">${lesson.lesson + 1}<small>/ 3</small></span><div><p class="eyebrow">莫叔的桌边课 · ${lesson.complete ? '教学完成' : lesson.atResult ? '课后问题' : '实战练习'}</p><h2>${h(lesson.title)}</h2></div><button class="text-button" data-action="home">返回主页</button></div>
-    <p class="lesson-objective">${h(lesson.objective)}</p><p class="coach-hint" id="coach-hint">${h(lesson.hint)}</p>
-    ${lesson.atResult ? `<div class="lesson-question"><h3>${h(lesson.question)}</h3>${!lesson.solved ? `<div class="reply-choices">${lesson.answers.map((answer) => `<button class="button button-secondary" data-action="lesson-answer" data-answer="${h(answer.id)}">${h(answer.text)}</button>`).join('')}</div>` : ''}<p role="status">${h(lesson.feedback)}</p></div>` : '<p class="lesson-action-note">在下方操作区亲手试一试。前两关按提示练习；第三关自由选择。</p>'}
-    <details class="rules-pocket"><summary>随手查：怎么比牌？术语是什么意思？</summary><p>你有两张底牌，桌上最多五张公共牌。用其中最佳五张比大小，底牌可用零、一或两张。</p><p>牌型从小到大：高牌 → 一对 → 两对 → 三条 → 顺子 → 同花 → 葫芦 → 四条 → 同花顺。</p><p>同牌型再比组成牌的点数和踢脚牌，最佳五张同值才平分。花色不分大小，A 在 A2345 顺子中可以作最小牌。</p><p>跟注：补齐差额。过牌：当前无需补钱，留在牌局。弃牌：放弃本手底池资格。下注／加注：提高本轮总额。全下：只投入自己剩余筹码。</p><p>小盲／大盲是每手自动投入，按钮 D 每手移动。四轮是翻牌前、翻牌、转牌、河牌，每轮下注重新从零计算。</p><p>短码全下只能赢自己有资格争夺的主池；其他人额外的对等投入进入边池。没有人跟上的部分会退回。</p></details>
+    <p class="lesson-objective">${h(lesson.objective)}</p><p class="coach-hint">${h(lesson.hint)}</p>
+    ${lesson.atResult ? `<div class="lesson-question"><h3>${h(lesson.question)}</h3>${!lesson.solved ? `<div class="reply-choices">${lesson.answers.map((answer) => `<button class="button button-secondary" data-action="lesson-answer" data-answer="${h(answer.id)}">${h(answer.text)}</button>`).join('')}</div>` : ''}<p role="status">${h(lesson.feedback)}</p></div>` : '<p class="lesson-action-note">在牌桌下的行动条亲手试一试。前两关按提示练习；第三关自由选择。</p>'}
+    <details class="rules-pocket" data-panel="rules"><summary>随手查：怎么比牌？术语是什么意思？</summary><p>你有两张底牌，桌上最多五张公共牌。用其中最佳五张比大小，底牌可用零、一或两张。</p><p>牌型从小到大：高牌 → 一对 → 两对 → 三条 → 顺子 → 同花 → 葫芦 → 四条 → 同花顺。</p><p>同牌型再比组成牌的点数和踢脚牌，最佳五张同值才平分。花色不分大小，A 在 A2345 顺子中可以作最小牌。</p><p>跟注：补齐差额。过牌：当前无需补钱，留在牌局。弃牌：放弃本手底池资格。下注／加注：提高本轮总额。全下：只投入自己剩余筹码。</p><p>小盲／大盲是每手自动投入，按钮 D 每手移动。四轮是翻牌前、翻牌、转牌、河牌，每轮下注重新从零计算。</p><p>短码全下只能赢自己有资格争夺的主池；其他人额外的对等投入进入边池。没有人跟上的部分会退回。</p></details>
     <div class="lesson-footer"><button class="text-button" data-action="lesson-restart">重试本关</button>${lesson.complete ? '<button class="button button-primary" data-action="practice-start">学完了，开一桌经典德州 →</button>' : lesson.solved ? '<button class="button button-primary" data-action="lesson-next">进入下一关 →</button>' : ''}</div>
   </section>`;
 }
@@ -28,7 +28,7 @@ export function renderStory(table: WebTable, h: Escape): string {
   return `<section class="story-note" aria-label="桌边故事"><div class="story-heading"><p class="eyebrow">${h(living.chapter)} · ${Math.min(living.hand, living.limit ?? 6)} / ${living.limit} 手</p></div>
     <p class="protagonist">${h(living.protagonist)}</p>
     ${prompt ? `<div class="story-prompt"><h2>${h(prompt.title)}</h2><p>${h(prompt.text)}</p><div class="reply-choices">${prompt.choices.map((choice) => `<button class="button button-secondary" data-action="reply" data-prompt="${h(prompt.id)}" data-choice="${h(choice.id)}">${h(choice.text)}</button>`).join('')}</div><small>${living.ended ? '回应不影响结算，也可以直接回到主页。' : '回应不等于下注，也可以直接继续打牌。'}</small></div>` : ''}
-    ${living.ended ? `<div class="story-ending"><h2>这一夜，先到这里</h2><p>${h(living.ending)}</p><p>下面仍保留最后一手真实结算。序章不是整场锦标赛，剩余筹码没有重新分配。</p><button class="button button-primary" data-action="home">回到主页 →</button></div>` : ''}
+    ${living.ended ? `<div class="story-ending"><h2>这一夜，先到这里</h2><p>${h(living.ending)}</p><p>结算账单仍保留最后一手真实结果。序章不是整场锦标赛，剩余筹码没有重新分配。</p><button class="button button-primary" data-action="home">回到主页 →</button></div>` : ''}
   </section>`;
 }
 
@@ -55,11 +55,11 @@ export function renderPulse(living: Pick<LivingView, 'lines' | 'memories' | 'rec
     ${muted ? '<p class="muted-talk">闲聊已收起；观察、记忆和牌局不受影响。</p>' : ''}${line ? talkLine(line, h) : ''}
     ${memory ? memoryCard(memory, h) : !playback ? '<p class="memory-empty">等你第一次行动，会在这里留下“谁记住了你”的公开依据。</p>' : ''}
     ${!playback && living.recap ? `<div class="encounter-recap" aria-label="本手交锋回顾"><strong>本手交锋 · 第 ${living.recap.hand} 手</strong><p>${h(living.recap.text)}</p></div>` : ''}
-    ${!playback ? `<details class="pulse-history"><summary>回看桌边记录 · ${memories.length} 条记忆 / ${visibleLines.length} 条${muted ? '观察' : '发言与观察'}</summary><p class="aside-note">发言是人物说的话；观察是已发生的可见动作，不是读心。重开牌桌或重启服务会清除。</p>${memories.slice().reverse().map((notice) => memoryCard(notice, h)).join('')}<div aria-label="桌边短句">${visibleLines.slice().reverse().map((item) => talkLine(item, h)).join('')}</div></details>` : ''}
+    ${!playback ? `<details class="pulse-history" data-panel="pulse-history"><summary>回看桌边记录 · ${memories.length} 条记忆 / ${visibleLines.length} 条${muted ? '观察' : '发言与观察'}</summary><p class="aside-note">发言是人物说的话；观察是已发生的可见动作，不是读心。重开牌桌或重启服务会清除。</p>${memories.slice().reverse().map((notice) => memoryCard(notice, h)).join('')}<div aria-label="桌边短句">${visibleLines.slice().reverse().map((item) => talkLine(item, h)).join('')}</div></details>` : ''}
   </section>`;
 }
 
 export function renderObservations(table: WebTable, h: Escape): string {
   if (!table.living) return '';
-  return `<section class="observations" aria-label="本场人物观察"><h2>认得这一桌的人</h2><p class="aside-note">记公开动作，不猜看不见的牌。近期八手窗口；推测不是答案。</p>${table.living.notes.map((person) => `<details class="character-note"><summary>${h(person.name)}<small>${h(person.relationship)}</small></summary><p>${h(person.about)}</p><p class="character-mood">${h(person.mood)}</p><p><span class="note-label">事实</span>${h(person.fact)}</p><p><span class="note-label">推测</span>${h(person.inference)}</p></details>`).join('')}</section>`;
+  return `<section class="observations" aria-label="本场人物观察"><h2>认得这一桌的人</h2><p class="aside-note">记公开动作，不猜看不见的牌。近期八手窗口；推测不是答案。</p>${table.living.notes.map((person) => `<details class="character-note" data-panel="character-${person.seatIndex}"><summary>${h(person.name)}<small>${h(person.relationship)}</small></summary><p>${h(person.about)}</p><p class="character-mood">${h(person.mood)}</p><p><span class="note-label">事实</span>${h(person.fact)}</p><p><span class="note-label">推测</span>${h(person.inference)}</p></details>`).join('')}</section>`;
 }

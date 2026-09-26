@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
+import { DEFAULT_TOURNAMENT_CONFIG } from '../game/default-config.js';
 import type { TournamentConfig } from '../core/config.js';
 import { createCharacterParticipant, selectNpcRoster } from '../game/roster.js';
 import {
@@ -17,22 +18,7 @@ import { playRenderBlocks } from './semantic-pacing.js';
 import { promptForTurnCommand } from './turn-command.js';
 import { renderSessionRejection, renderTurnPacket } from './turn-renderer.js';
 
-export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = Object.freeze({
-  maxSeats: 4,
-  startingStack: 100,
-  handsPerLevel: 8,
-  blindLevels: Object.freeze([
-    Object.freeze({ smallBlind: 1, bigBlind: 2 }),
-    Object.freeze({ smallBlind: 2, bigBlind: 4 }),
-    Object.freeze({ smallBlind: 3, bigBlind: 6 }),
-    Object.freeze({ smallBlind: 5, bigBlind: 10 }),
-    Object.freeze({ smallBlind: 10, bigBlind: 20 }),
-    Object.freeze({ smallBlind: 20, bigBlind: 40 }),
-    Object.freeze({ smallBlind: 40, bigBlind: 80 }),
-    Object.freeze({ smallBlind: 80, bigBlind: 160 }),
-  ]),
-  initialButtonSeat: 0,
-});
+export { DEFAULT_TOURNAMENT_CONFIG } from '../game/default-config.js';
 
 export interface CliPrompt extends PromptIO {
   close(): void | Promise<void>;

@@ -7,6 +7,15 @@ import type { TutorialView } from '../game/tutorial.js';
 
 export type TableExperience = 'free' | 'living' | 'tutorial';
 
+export interface SaveSummary {
+  id: string; savedAt: string; hand: number; heroStack: number; players: number;
+  mode: SessionMode; experience: TableExperience; lesson: number | null; ended: boolean;
+}
+export interface SaveStatus { enabled: boolean; saved: SaveSummary | null; error: string | null; current?: boolean }
+export interface HandRecap {
+  hand: number; net: number; stack: number; text: string; facts: string[];
+}
+
 export interface SeatIdentity {
   seatIndex: number;
   playerId: string;
@@ -50,9 +59,12 @@ export interface WebTable {
   experience?: TableExperience;
   living?: LivingView | null;
   tutorial?: TutorialView | null;
+  save?: SaveStatus;
+  recentHands?: HandRecap[];
 }
 
 export interface Bootstrap {
   rosters: Record<number, SeatIdentity[]>;
   table: WebTable | null;
+  save?: SaveStatus;
 }

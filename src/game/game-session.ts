@@ -50,8 +50,7 @@ interface SessionAggregate {
 const sessions = new WeakMap<object, SessionAggregate>();
 const activeSessionOperations = new WeakSet<object>();
 
-type ProxyDetector = (value: unknown) => boolean;
-
+import { loadProxyDetector } from './proxy-detection.js';
 interface TrustedOpenOptions {
   readonly mode: SessionMode;
   readonly config: TournamentConfig;
@@ -64,22 +63,6 @@ interface TrustedOpenOptions {
   readonly onDiagnostic?: NonNullable<OpenGameSessionOptions['onDiagnostic']>;
 }
 
-function loadProxyDetector(): ProxyDetector | null {
-  const runtime = globalThis as typeof globalThis & {
-    process?: { getBuiltinModule?: (specifier: string) => unknown };
-  };
-  const getBuiltinModule = runtime.process?.getBuiltinModule;
-  if (typeof getBuiltinModule !== 'function') return null;
-  try {
-    const nodeUtil = getBuiltinModule('node:util') as {
-      types?: { isProxy?: (value: unknown) => boolean };
-    };
-    const isProxy = nodeUtil.types?.isProxy;
-    return typeof isProxy === 'function' ? (value) => isProxy(value) : null;
-  } catch {
-    return null;
-  }
-}
 
 const proxyDetector = loadProxyDetector();
 

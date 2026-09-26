@@ -31,6 +31,21 @@ describe('local browser table', () => {
     if (setCookie) cookie = setCookie.split(';')[0]!;
     return response;
   }
+  it('serves only fixed local art assets and never caches game state', async () => {
+    for (const name of ['hunter', 'maniac', 'calling-station', 'room']) {
+      const response = await fetch(`${origin}/art/${name}-v1.png`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/png');
+      expect(response.headers.get('cache-control')).toContain('immutable');
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    }
+    expect((await fetch(`${origin}/pixel-table.css`)).headers.get('content-type')).toContain('text/css');
+    expect((await fetch(`${origin}/api/bootstrap`)).headers.get('cache-control')).toBe('no-store');
+    for (const path of ['/art/unknown.png', '/art/README.md', '/art/..%2F..%2Fpackage.json']) {
+      expect((await fetch(origin + path)).status).toBe(404);
+    }
+  });
   it('rejects invalid counts and foreign origins without creating a game', async () => {
     expect((await post('/api/table', { players: 7 })).status).toBe(400);
     expect((await post('/api/table', { players: 2, mode: 'unknown' })).status).toBe(400);
