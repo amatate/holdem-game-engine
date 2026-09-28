@@ -11,7 +11,7 @@
   <script type="module" src="/client.js"></script>
 </head>
 <body>
-  <header class="topbar"><a class="wordmark" href="/" aria-label="夜局，返回当前牌桌"><span aria-hidden="true">♠</span> 夜局 <small>HOLD’EM</small></a><div class="topbar-right"><span id="mode-label" class="mode-label">经典德州</span><span id="connection">本地牌桌</span><button id="sync" class="text-button">同步牌桌</button></div></header>
+  <header class="topbar"><a class="wordmark" href="/" aria-label="夜局，返回当前牌桌"><span aria-hidden="true">♠</span> 夜局 <small>HOLD’EM</small></a><div class="topbar-right"><label class="language-control" data-no-i18n>语言 / Language <select id="language" aria-label="语言 / Language"><option value="zh-CN">中文</option><option value="en">English</option></select></label><span id="mode-label" class="mode-label">经典德州</span><span id="connection">本地牌桌</span><button id="sync" class="text-button">同步牌桌</button></div></header>
   <main class="main"><div id="notice" role="status" aria-live="polite" hidden></div>
     <div class="playback-toolbar" aria-label="牌局播放控制"><span class="playback-title">牌桌节奏 <small>轮到你时自动停下</small></span><label for="playback-speed">速度</label><select id="playback-speed"><option value="0.5">0.5× · 慢速</option><option value="1" selected>1× · 标准</option><option value="2">2× · 快速</option><option value="4">4× · 极速</option></select><button id="playback-skip" class="text-button" disabled>跳过本段 →</button></div>
     <div id="app"><p class="loading">正在连接牌桌…</p></div></main>

@@ -41,6 +41,12 @@ describe('local browser table', () => {
       expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     }
     expect((await fetch(`${origin}/pixel-table.css`)).headers.get('content-type')).toContain('text/css');
+    for (const file of ['i18n.js', 'i18n-catalog.js']) {
+      const response = await fetch(`${origin}/${file}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('javascript');
+      expect(await response.text()).toContain('EN_MESSAGES');
+    }
     expect((await fetch(`${origin}/api/bootstrap`)).headers.get('cache-control')).toBe('no-store');
     for (const path of ['/art/unknown.png', '/art/README.md', '/art/..%2F..%2Fpackage.json']) {
       expect((await fetch(origin + path)).status).toBe(404);

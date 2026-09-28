@@ -1,8 +1,12 @@
 # Holdem Game Engine
 
+[简体中文](README.md) · [English](README.en.md)
+
 一个用 TypeScript 编写的德州扑克（No-Limit Texas Hold'em，NLHE）规则引擎，提供像素风浏览器单机牌桌和终端玩法。
 
 **[在线试玩：夜局 →](https://amatate.github.io/holdem-game-engine/)** · [部署状态](https://github.com/amatate/holdem-game-engine/actions/workflows/pages.yml)
+
+**[Play in English →](https://amatate.github.io/holdem-game-engine/?lang=en)** · 页面右上角「语言 / Language」可随时切换中英文，覆盖主页、打牌、教学、剧情、NPC 发言与提示。切换不会重开牌局、改变筹码或清空加注输入；偏好保存在当前浏览器。`?lang=en` 和 `?lang=zh` 可分享指定语言的入口。没有指定时，优先使用已保存偏好，再根据浏览器语言选择。
 
 无需下载、登录或 API Key。默认经典德州，也可选三种能力、新手教学、短序章和 2–6 人自由牌桌。线上版在浏览器后台线程运行同一套规则引擎，结算点保存在此浏览器；刷新会回到上次结算，未完成的一手不保存。不是多人联机或云存档，也不提供服务端防窥牌／防篡改能力。
 
@@ -19,6 +23,15 @@
 四人牌桌的真实结算：林岚、阿凯、莫叔采用原创立绘；公开发言和获胜事件驱动表情，未亮牌的对手底牌仍保持隐藏。牌面、筹码和操作是可交互的 DOM，不是背景图片。
 
 ![夜局像素牌桌：真实结算与人物立绘](docs/playtests/screenshots/pixel-table-desktop-settlement.png)
+
+<details>
+<summary>English edition：英文实机牌桌</summary>
+
+2026-09-28 英文版真实对局，保留同一规则、人物立绘和可交互操作。
+
+![English Night Table](docs/screenshots/table-en.png)
+
+</details>
 
 <details>
 <summary>主页：教学、短剧情与自由开桌</summary>
@@ -76,6 +89,7 @@
 - 经典模式固定种子重放：相同种子配合相同行动可复现牌局；能力模式暂不提供保存／导出回放
 - 只向角色 AI 提供其应当看到的信息，不泄露其他玩家底牌
 - 终端通过经典 `GameSession` 接收冻结的决策、单手结算和比赛结果 TurnPacket；终端不读取核心 authority state
+- 浏览器中英文界面（线上与本机版均可切换）；终端输出与底层 API 保持原有中文，不因显示语言改变规则、动作标识或存档数据
 
 原有的公开 `runTournament()` API 保持可用。packet 风格终端是在同一套规则与锦标赛流程之外增加的交互边界，不会要求既有调用方改用 CLI。
 
@@ -211,9 +225,9 @@ npm run build
 
 ## 当前源码的开发范围
 
-当前已经是可在终端和本地浏览器游玩的真实规则原型，不是预先写好的对话脚本。它仍是规则与交互 MVP，暂不包含：
+当前已经是可在终端、本地浏览器及 GitHub Pages 单机版游玩的真实规则原型，不是预先写好的对话脚本。它仍是规则与交互 MVP，暂不包含：
 
-- 线上部署、联机与多人真人对战
+- 联机与多人真人对战
 - 半手存档、跨版本迁移、账号与长期局外成长
 - NPC 能力、怀疑／反制机制、道具、能力升级或肉鸽事件
 - 长期角色学习机制与手动选择 NPC

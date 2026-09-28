@@ -6,6 +6,9 @@ import { installTableReadTool, type TableToolContext } from './agent-tools.js';
 import type { ActionIntent } from '../core/legal-actions.js';
 import type { AbilityCommandView } from '../game/peek-ability.js';
 import type { SessionMode } from '../game/session-types.js';
+import { installLocalization } from './i18n.js';
+
+const localization = installLocalization(document, window);
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const notice = document.querySelector<HTMLElement>('#notice')!;
@@ -87,8 +90,9 @@ function lock(value: boolean): void {
   }
   connection.textContent = playing ? '正在播放牌局…' : value ? '正在处理牌局…' : browserTable ? '浏览器单机' : '本地牌桌';
   if (skipControl) skipControl.disabled = !playing;
+  localization.refresh();
 }
-function message(text: string): void { notice.textContent = text; notice.hidden = text.length === 0; }
+function message(text: string): void { notice.textContent = text; notice.hidden = text.length === 0; localization.refresh(); }
 
 function clearAnimations(): void {
   animations.forEach((animation) => animation.cancel());

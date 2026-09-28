@@ -99,6 +99,8 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
     '/style.css': [new URL('../../src/web/style.css', import.meta.url), 'text/css; charset=utf-8'],
     '/pixel-table.css': [new URL('../../src/web/pixel-table.css', import.meta.url), 'text/css; charset=utf-8'],
     '/art/room-v1.png': [new URL('../../src/web/art/room-v1.png', import.meta.url), 'image/png'],
+    '/i18n.js': [new URL('../../dist/web/i18n.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/i18n-catalog.js': [new URL('../../dist/web/i18n-catalog.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/art/hunter-v1.png': [new URL('../../src/web/art/hunter-v1.png', import.meta.url), 'image/png'],
     '/art/maniac-v1.png': [new URL('../../src/web/art/maniac-v1.png', import.meta.url), 'image/png'],
     '/art/calling-station-v1.png': [new URL('../../src/web/art/calling-station-v1.png', import.meta.url), 'image/png'],

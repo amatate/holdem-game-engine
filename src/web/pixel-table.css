@@ -272,3 +272,28 @@ body { background:var(--night); }
   .pixel-table .button { transition:none; }
   .pixel-table .button:active:not(:disabled) { transform:none; }
 }
+
+/* Language is always reachable, including while action playback is locked. */
+.language-control { display:flex; align-items:center; gap:7px; font-size:11px; white-space:nowrap; }
+.language-control select { padding:5px 7px; background:var(--panel); color:var(--paper); border:1px solid var(--line); border-radius:0; }
+.topbar-right { flex-wrap:wrap; justify-content:flex-end; gap:10px; }
+html[lang="en"] .pixel-table .npc-seat .person { flex-direction:column; gap:0; }
+html[lang="en"] .wordmark { letter-spacing:1px; white-space:nowrap; }
+html[lang="en"] .pixel-table .seat .person strong { font-size:12px; }
+html[lang="en"] .pixel-table .seat .person>span { font-size:9px; }
+html[lang="en"] .button { white-space:normal; }
+html[lang="en"] .ticket-stub>span,html[lang="en"] .ticket-stub small { white-space:normal; text-align:center; overflow-wrap:normal; }
+html[lang="en"] .pixel-table .table-toolbar { gap:12px; }
+@media(max-width:650px) {
+  .topbar,.at-table .topbar { flex-wrap:wrap; gap:5px; padding:6px 12px; }
+  .topbar-right { width:100%; justify-content:space-between; gap:5px; }
+  .language-control { font-size:10px; }
+  .language-control select { font-size:12px; }
+  html[lang="en"] .topbar .wordmark { font-size:20px; }
+  html[lang="en"] .pixel-table .table-toolbar { font-size:10px; gap:6px; flex-wrap:wrap; }
+  html[lang="en"] .pixel-table .seat .person strong { font-size:10px; }
+  html[lang="en"] .pixel-table .seat .person>span { font-size:8px; }
+  html[lang="en"] .pixel-table .arena:is([data-count="5"],[data-count="6"]) .seat .person strong { font-size:9px; }
+  html[lang="en"] .pixel-table .seat-stack { font-size:13px; }
+  html[lang="en"] .pixel-table .decision-actions .button { font-size:12px; padding:8px 5px; }
+}
