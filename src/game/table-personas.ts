@@ -1,50 +1,99 @@
 import { CHARACTERS, type CharacterId } from '../agents/characters.js';
 
-/** Written voices, not hidden strategy traces. Every line must fit publicly visible events. */
-const VOICES: Record<CharacterId, { about: string; hello: string; raise: string; fold: string; call: string; win: string; loss: string }> = {
-  hunter: {
-    about: '习惯把筹码排齐。想看懂别人，不愿轻易承认自己看错。',
-    hello: '我看的是人，不只看结果。慢慢打，我们有时间认识。',
-    raise: '这个价我看见了。牌还没翻完，先不急着给你下判断。',
-    fold: '这次你收手了。我记下动作，不替你猜底牌。',
-    call: '你愿意继续看。好，我也再看一轮。',
-    win: '先把这一手收好，下一手重新算。', loss: '这次判断偏了。下一手我会重新看。',
+export type VoiceMoment = 'hello' | 'raise' | 'fold' | 'call' | 'win' | 'loss';
+interface Voice { about: string; lines: Record<VoiceMoment, readonly [string, ...string[]]> }
+
+/** Character writing lives in docs/character-bible-v1.md. Public reactions only. */
+const VOICES: Record<CharacterId, Voice> = {
+  'hunter': {
+    about: '自由摄影师。平时话不多，熟了会冷不丁开个玩笑。别跟着阿凯叫她“猎手”，她嫌夸张。',
+    lines: {
+      hello: ['林岚。叫名字就行，别跟他们喊外号。'],
+      raise: ['加这么多啊。', '你这一下，倒不犹豫。'],
+      fold: ['不看了？行。', '收得挺干脆。'],
+      call: ['还想看啊。', '行，那接着。'],
+      win: ['这回算我运气好。', '嗯。这一手收下。'],
+      loss: ['行，这手没打好。', '我得缓一下。'],
+    },
   },
-  maniac: {
-    about: '嘴上只说输赢，其实更在意这一桌有没有人把他当回事。',
-    hello: '那就认真打。别因为我话多，就以为我没在看。',
-    raise: '敢把价提起来，好。这一桌有点意思了。', fold: '这次先收？行，下一手别忘了我还在。',
-    call: '跟上来了？好，继续。', win: '看见没？这一手总该算我打得认真了。', loss: '这手认了。别把我当成只会乱推的。',
+  'maniac': {
+    about: '在附近修车店工作，常常第一个到。嘴快，爱接话，输了也会拿自己开涮。',
+    lines: {
+      hello: ['来来来，正好缺个人。'],
+      raise: ['哎哟，这下热闹了。', '好家伙，你也不客气啊。'],
+      fold: ['这就撤啦？行，下把见。', '不陪了是吧。行。'],
+      call: ['还真跟啊。', '嘿，还挺热闹。'],
+      win: ['嘿，这把归我。', '总算让我逮着一回。'],
+      loss: ['……行，你们先别笑。', '白忙活了。'],
+    },
   },
   'calling-station': {
-    about: '总给人留台阶。提到旧牌局时，却常常停顿。',
-    hello: '先坐。只有练习筹码，想清楚再推，不用急。',
-    raise: '价提上来了。大家看清楚，再决定跟不跟。', fold: '不想跟就收牌，下一手还是你的位子。',
-    call: '跟上了，那就一起看后面的牌。', win: '收下了。来，手先放松，下一把再说。', loss: '没关系，我还记得刚才怎么打的。',
+    about: '照看这间旧牌室，以前修过钟表。谁来了都能坐坐；轮到自己打牌，却总舍不得少看一张。',
+    lines: {
+      hello: ['杯子在边上，自己倒。坐吧。'],
+      raise: ['哟，下这么大。', '一下热闹起来了。'],
+      fold: ['行，喝口水。', '歇一手也好，椅子又不跑。'],
+      call: ['你也舍不得扔，是吧。', '都想看后头那张啊。'],
+      win: ['呵呵，收下了。', '还真轮到我了。'],
+      loss: ['唉，又少一摞。', '没留住。下把再看吧。'],
+    },
   },
-  rock: {
-    about: '话不多，筹码总收在手边。决定了才把它们推出去。',
-    hello: '坐稳，别急。看几手再说。', raise: '你提价了。我想一下。', fold: '收得住，也是一种打牌。',
-    call: '嗯，继续看。', win: '这一手收下。', loss: '这笔记住了，下一手。',
+  'rock': {
+    about: '开公交的老周，来得早，话很少。看着不爱搭理人，谁的杯子要倒了，他倒先伸手。',
+    lines: {
+      hello: ['人齐了？那开始吧。'],
+      raise: ['嚯。', '这注不小。'],
+      fold: ['嗯。'],
+      call: ['还看啊。'],
+      win: ['收了。', '行。'],
+      loss: ['没事，接着来。', '输了。下一手。'],
+    },
   },
   'small-ball': {
-    about: '喜欢一小步一小步试探，聊起天来也不把话说满。',
-    hello: '先试几步，熟了再聊。', raise: '你把步子迈大了。这次我得多想一下。', fold: '这一步停在这里，也好。',
-    call: '不急，我们往下看。', win: '一点一点，收好这一笔。', loss: '这一步没走好，先退回来。',
+    about: '在桌游店上班，很会接住别人的玩笑。嘴上说“就一点”，丢了一小摞筹码又真心疼。',
+    lines: {
+      hello: ['我刚下班，先让我坐会儿。'],
+      raise: ['好嘛，又贵了。', '这下可不便宜。'],
+      fold: ['省下了。', '先停这儿，也行。'],
+      call: ['你也想看后面啊。', '还真舍得啊。'],
+      win: ['够我高兴一会儿了。', '这一点也挺好。'],
+      loss: ['我那点筹码啊……', '得，又少一点。'],
+    },
   },
-  trapper: {
-    about: '安静地听完别人说话，偶尔一句反问让桌上慢下来。',
-    hello: '你们先聊，我在听。', raise: '现在把价提起来？我看到了。', fold: '你停了。那就留到下一手。',
-    call: '好，再看一张。', win: '等到了这一手，收下。', loss: '等不来每一次。这个结果我认。',
+  'trapper': {
+    about: '轮班护士，难得有个不用赶时间的晚上。看着不好接近，熟了才知道她也会逗人。',
+    lines: {
+      hello: ['你们聊，我歇一会儿。'],
+      raise: ['嗯？还加？', '哦？忽然这么热闹。'],
+      fold: ['好，留点悬念。', '不陪了？好吧。'],
+      call: ['你也不急。', '那就再坐会儿。'],
+      win: ['谢谢啦。', '那我收下了。'],
+      loss: ['好吧，这回没我的份。', '唉，白坐这么久。'],
+    },
   },
   'value-bettor': {
-    about: '做事讲分量，不喜欢别人把自己的认真当成逞强。',
-    hello: '筹码摆明白，认真打就行。', raise: '这个价有分量。我看清楚了。', fold: '决定收手，就收干净。',
-    call: '好，筹码对齐，接着打。', win: '这一笔收好，下一手照样认真。', loss: '这笔输了，算数。',
+    about: '在后厨做事，讨厌一句话绕三圈。打牌出手重，输了倒不赖账，只是不太会说安慰话。',
+    lines: {
+      hello: ['韩烈。叫老韩也行。'],
+      raise: ['好家伙，下这么多。', '这注够大的。'],
+      fold: ['行，干脆。'],
+      call: ['够痛快。'],
+      win: ['舒服。', '这把打得痛快。'],
+      loss: ['行，这把认了。', '输了就是输了。'],
+    },
   },
 };
 
 export interface TablePerson { seatIndex: number; characterId: CharacterId }
 export function tablePerson(person: TablePerson) {
-  return { ...person, name: CHARACTERS[person.characterId].displayName, ...VOICES[person.characterId] };
+  const voice = VOICES[person.characterId];
+  return { ...person, name: CHARACTERS[person.characterId].displayName, about: voice.about,
+    hello: voice.lines.hello[0], raise: voice.lines.raise[0], fold: voice.lines.fold[0],
+    call: voice.lines.call[0], win: voice.lines.win[0], loss: voice.lines.loss[0] };
+}
+
+/** Counts are presentation-only; never consume engine or policy RNG. */
+export function characterLine(characterId: CharacterId, moment: VoiceMoment, occurrence: number): string {
+  const lines = VOICES[characterId].lines[moment];
+  return lines[occurrence % lines.length]!;
 }

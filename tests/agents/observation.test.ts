@@ -190,6 +190,18 @@ function formedSidePotDecision(): TournamentState {
 }
 
 describe('current-player observation projection', () => {
+  it('labels public action rounds without changing earlier actions on a new street', () => {
+    let state = createStartedState();
+    state = accepted(state, 0, { type: 'call' });
+    state = accepted(state, 1, { type: 'check' });
+    state = advanceAutomaticPhases(state).state;
+    const actor = state.activeHand!.currentActorSeat!;
+    expect(projectObservation(state, actor).street).toBe('flop');
+    state = accepted(state, actor, { type: 'check' });
+    const observation = projectObservation(state, state.activeHand!.currentActorSeat!);
+    expect(observation.actionHistory.filter(e => e.type === 'playerActed').map(e => e.street))
+      .toEqual(['preflop', 'preflop', 'flop']);
+  });
   it('builds every schema field explicitly at the first HU decision', () => {
     const state = createStartedState();
     const observation = projectObservation(state, 0);
@@ -253,7 +265,7 @@ describe('current-player observation projection', () => {
     expect(facingCheck.actionHistory).toEqual([
       { type: 'blindPosted', seatIndex: 0, kind: 'small', amount: 1, allIn: false },
       { type: 'blindPosted', seatIndex: 1, kind: 'big', amount: 2, allIn: false },
-      { type: 'playerActed', seatIndex: 0, kind: 'call', paid: 1, betTo: 2, allIn: false },
+      { type: 'playerActed', street: 'preflop', seatIndex: 0, kind: 'call', paid: 1, betTo: 2, allIn: false },
     ]);
 
     let completed = createStartedState(config(2, 100, 1, 2, 1));

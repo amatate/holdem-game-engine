@@ -1,10 +1,11 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, readdir, unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 
 const out = resolve('.pages-dist');
 await mkdir(join(out, 'art'), { recursive: true });
+await mkdir(join(out, 'audio'), { recursive: true });
 const hash = createHash('sha256');
 // Conservative compatibility fence; never silently replay a save against changed code.
 for (const directory of ['src/core', 'src/agents', 'src/game', 'src/web']) {
@@ -31,12 +32,23 @@ const html = (await readFile('src/web/index.html', 'utf8'))
   .replace('<head>', '<head>\n  <meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; worker-src \'self\'; style-src \'self\'; connect-src \'self\'; img-src \'self\' data:; object-src \'none\'; base-uri \'self\'">');
 if (!html.includes('data-runtime="pages"')) throw new Error('Missing Pages runtime marker');
 await writeFile(join(out, 'index.html'), html);
-for (const file of ['style.css', 'pixel-table.css']) {
+for (const file of ['style.css', 'pixel-table.css', 'deck-skins.css']) {
   let css = (await readFile('src/web/' + file, 'utf8')).replaceAll("url('/art/", "url('./art/");
   if (file === 'pixel-table.css') css += '\n.pages-note{padding:10px 0;color:var(--muted);font-size:12px;line-height:1.7}.at-table .pages-note{display:none}\n';
   await writeFile(join(out, file), css);
 }
-for (const name of ['hunter', 'maniac', 'calling-station', 'room']) await copyFile(`src/web/art/${name}-v1.png`, join(out, 'art', `${name}-v1.png`));
+for (const name of ['hunter', 'maniac', 'calling-station', 'room', 'card-back', 'deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost']) await copyFile(`src/web/art/${name}-v1.png`, join(out, 'art', `${name}-v1.png`));
+for (const name of ['rock', 'small-ball', 'trapper', 'value-bettor']) await copyFile(`src/web/art/${name}-v2.png`, join(out, 'art', `${name}-v2.png`));
+// Only reviewed runtime samples and their provenance; no downloaded archives.
+// Remove only the obsolete generated track; keep its original in the source archive.
+await unlink(join(out, 'audio', 'bebop-chiptune-v1.mp3')).catch((error) => {
+  if (error.code !== 'ENOENT') throw error;
+});
+for (const file of await readdir('src/web/audio')) {
+  if (/^[a-z0-9-]+-v1\.wav$/.test(file) || ['cool-vibes-v1.mp3', 'MUSIC-CREDITS.txt', 'CREDITS.txt', 'LICENSE-casino.txt', 'LICENSE-interface.txt', 'manifest.json'].includes(file)) {
+    await copyFile(join('src/web/audio', file), join(out, 'audio', file));
+  }
+}
 await writeFile(join(out, '.nojekyll'), '');
 await writeFile(join(out, 'build.json'), JSON.stringify({ version, runtime: 'browser-worker' }));
 console.log(`Pages bundle: ${out} (${version.slice(0, 12)})`);

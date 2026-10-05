@@ -6,7 +6,7 @@ type Escape = (value: unknown) => string;
 export function renderEntrances(): string {
   return `<section class="entrance-strip" aria-label="选择游玩方式">
     <article class="entrance lesson-entrance"><p class="eyebrow">第一次来牌桌？</p><h2>莫叔教你打三手</h2><p>从跟注、过牌到自己做决定。没有基础也能入座。</p><button class="button button-primary" data-action="tutorial-start">开始新手教学 →</button><small>三关 · 配合练习的对手 · 可随时退出</small></article>
-    <article class="entrance story-entrance"><p class="eyebrow">独立剧情 · 短序章</p><h2>留一张椅子</h2><p>林岚看动作，阿凯要面子，莫叔留台阶。旧牌室里，还有一段没说完的往事。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 自带人物互动 · 使用下方选定的规则</small></article>
+    <article class="entrance story-entrance"><p class="eyebrow">独立剧情 · 短序章</p><h2>留一张椅子</h2><p>莫叔已经开了灯，阿凯正等人入座。一张旧记分纸，还压在杯底。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 自带人物互动 · 使用下方选定的规则</small></article>
   </section><div class="free-table-heading"><h2>或，自由开一桌</h2><p>2–6 人 · 可开启人物记忆与闲聊 · 不限六手</p></div>`;
 }
 

@@ -139,4 +139,4 @@ it.each(['quiet','warm','direct'])('translates a six-hand story and the %s dialo
     if (!table.living?.ended) table = await post(api, '/api/continue', { tableId:table.id, expectedPacketIndex:table.packet.packetIndex });
   }
   expect(table.living?.ended).toBe(true);
-});
+}, 15_000); // Full six-hand simulations now include public-range inference.

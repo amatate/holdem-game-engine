@@ -35,7 +35,8 @@ export interface PlayerObservationV1 {
   readonly potTotal: number;
   readonly sidePots: readonly PublicPotView[];
   readonly seats: readonly PublicSeatState[];
-  readonly actionHistory: readonly PublicActionEvent[];
+  /** Round labels are public information; optional for legacy/custom observations. */
+  readonly actionHistory: readonly (PublicActionEvent & { readonly street?: Street })[];
   readonly legalActions: LegalActionSet;
 }
 

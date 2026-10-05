@@ -104,7 +104,7 @@ describe('tutorial and living HTTP experiences', () => {
       const ledgerPanel = resultHtml.match(/<details\b[^>]*\bclass="settlement-details"[^>]*>/)?.[0];
       expect(ledgerPanel).toContain('data-panel="settlement-');
       expect(ledgerPanel).not.toMatch(/\sopen(?=\s|>)/);
-      expect(resultHtml).toContain('class="ledger"'); // The full accounting is collapsed, not discarded.
+      expect(resultHtml).toContain('class="settlement-ledger"'); // The full accounting is collapsed, not discarded.
       expect((await post('/api/continue', { tableId: table.id, expectedPacketIndex: table.packet.packetIndex })).status).toBe(409);
       const badAnswer = ['1', '0', '0'][lesson]!;
       table = (await post('/api/lesson', lessonBody(table, 'answer', badAnswer))).table;

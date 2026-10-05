@@ -1,10 +1,14 @@
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 const root = resolve('.pages-dist'), prefix = '/holdem-game-engine/';
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
-const paths = ['index.html', 'client.js', 'browser-worker.js', 'style.css', 'pixel-table.css', 'build.json',
-  ...['hunter', 'maniac', 'calling-station', 'room'].map((n) => `art/${n}-v1.png`)];
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.txt': 'text/plain; charset=utf-8' };
+const paths = ['index.html', 'client.js', 'browser-worker.js', 'style.css', 'pixel-table.css', 'deck-skins.css', 'build.json',
+  ...['hunter', 'maniac', 'calling-station', 'room', 'card-back', 'deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost'].map((n) => `art/${n}-v1.png`),
+  ...['rock', 'small-ball', 'trapper', 'value-bettor'].map((n) => `art/${n}-v2.png`)];
+for (const file of await readdir(resolve(root, 'audio')).catch(() => [])) {
+  if (/^[a-z0-9-]+-v1\.wav$/.test(file) || ['cool-vibes-v1.mp3', 'MUSIC-CREDITS.txt', 'CREDITS.txt', 'LICENSE-casino.txt', 'LICENSE-interface.txt', 'manifest.json'].includes(file)) paths.push('audio/' + file);
+}
 const server = createServer(async (req, res) => {
   if (req.url === '/') { res.writeHead(302, { Location: prefix }); res.end(); return; }
   const pathname = new URL(req.url, 'http://localhost').pathname;

@@ -1,0 +1,248 @@
+{
+  "pack": "pixel-night-expansion-v1",
+  "generatedOn": "2026-09-27",
+  "status": "candidate-assets-not-integrated",
+  "generator": "built-in image_gen",
+  "runtimeUnchanged": true,
+  "frames": [
+    {
+      "index": 0,
+      "state": "neutral"
+    },
+    {
+      "index": 1,
+      "state": "speaking"
+    },
+    {
+      "index": 2,
+      "state": "public-win"
+    }
+  ],
+  "assets": [
+    {
+      "characterId": "rock",
+      "label": "老周「岩石」",
+      "file": "rock-v2.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1822822,
+      "colorType": 6,
+      "cells": [
+        {
+          "transparent": 294541,
+          "nearOpaque": 215169,
+          "bounds": [
+            18,
+            208,
+            492,
+            886
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 295036,
+          "nearOpaque": 214920,
+          "bounds": [
+            20,
+            208,
+            491,
+            887
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 296776,
+          "nearOpaque": 213056,
+          "bounds": [
+            21,
+            208,
+            492,
+            886
+          ],
+          "edgePixels": 0
+        }
+      ],
+      "layout": {
+        "columns": 3,
+        "rows": 1,
+        "cellWidth": 512,
+        "cellHeight": 1024
+      },
+      "generationId": "exec-55ad7e08-1b08-431c-8ace-08b3982413b0.png",
+      "draftGenerationId": "exec-f18a8b92-f4e2-456a-8d45-572daddcd960.png",
+      "notes": "Align per-character visible bounds at integration; no hidden-information expression triggers"
+    },
+    {
+      "characterId": "small-ball",
+      "label": "程墨「小刀」",
+      "file": "small-ball-v2.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1845450,
+      "colorType": 6,
+      "cells": [
+        {
+          "transparent": 293643,
+          "nearOpaque": 213614,
+          "bounds": [
+            41,
+            169,
+            493,
+            892
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 296265,
+          "nearOpaque": 211351,
+          "bounds": [
+            31,
+            169,
+            479,
+            895
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 291177,
+          "nearOpaque": 215275,
+          "bounds": [
+            16,
+            169,
+            474,
+            893
+          ],
+          "edgePixels": 0
+        }
+      ],
+      "layout": {
+        "columns": 3,
+        "rows": 1,
+        "cellWidth": 512,
+        "cellHeight": 1024
+      },
+      "generationId": "exec-feb49148-1a19-448c-b923-2e229fb52f17.png",
+      "draftGenerationId": "exec-81ae870f-2d5c-4593-8d99-2e6e484848c8.png",
+      "notes": "Align per-character visible bounds at integration; no hidden-information expression triggers"
+    },
+    {
+      "characterId": "trapper",
+      "label": "苏蔓「伏蛇」",
+      "file": "trapper-v2.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2071666,
+      "colorType": 6,
+      "cells": [
+        {
+          "transparent": 255776,
+          "nearOpaque": 245282,
+          "bounds": [
+            25,
+            142,
+            496,
+            920
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 255771,
+          "nearOpaque": 244753,
+          "bounds": [
+            17,
+            144,
+            489,
+            919
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 257024,
+          "nearOpaque": 243563,
+          "bounds": [
+            17,
+            142,
+            486,
+            927
+          ],
+          "edgePixels": 0
+        }
+      ],
+      "layout": {
+        "columns": 3,
+        "rows": 1,
+        "cellWidth": 512,
+        "cellHeight": 1024
+      },
+      "generationId": "exec-e07b3102-5d51-4465-91f1-c309605753b1.png",
+      "draftGenerationId": "exec-855c244e-bb32-4ad6-987d-fc49373e802f.png",
+      "notes": "Align per-character visible bounds at integration; no hidden-information expression triggers"
+    },
+    {
+      "characterId": "value-bettor",
+      "label": "韩烈「重锤」",
+      "file": "value-bettor-v2.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1958586,
+      "colorType": 6,
+      "cells": [
+        {
+          "transparent": 284063,
+          "nearOpaque": 224177,
+          "bounds": [
+            18,
+            177,
+            498,
+            886
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 288484,
+          "nearOpaque": 221181,
+          "bounds": [
+            22,
+            175,
+            496,
+            887
+          ],
+          "edgePixels": 0
+        },
+        {
+          "transparent": 288012,
+          "nearOpaque": 221836,
+          "bounds": [
+            17,
+            176,
+            494,
+            888
+          ],
+          "edgePixels": 0
+        }
+      ],
+      "layout": {
+        "columns": 3,
+        "rows": 1,
+        "cellWidth": 512,
+        "cellHeight": 1024
+      },
+      "generationId": "exec-c45a7c87-b229-472d-98d5-a8c80f9880ea.png",
+      "draftGenerationId": "exec-ec2c19dd-fabf-4c87-86ee-9bbd3c117b47.png",
+      "notes": "Align per-character visible bounds at integration; no hidden-information expression triggers"
+    },
+    {
+      "characterId": null,
+      "label": "雨夜牌室入口",
+      "file": "entrance-rain-v1.png",
+      "width": 1659,
+      "height": 948,
+      "bytes": 1994122,
+      "colorType": 2,
+      "layout": "opaque-environment",
+      "generationId": "exec-41e98690-f5a1-41c0-8ca9-621095ac9e1c.png",
+      "draftGenerationId": null,
+      "notes": "Menu background candidate, no baked UI"
+    }
+  ]
+}

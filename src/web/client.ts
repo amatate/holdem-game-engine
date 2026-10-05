@@ -7,8 +7,18 @@ import type { ActionIntent } from '../core/legal-actions.js';
 import type { AbilityCommandView } from '../game/peek-ability.js';
 import type { SessionMode } from '../game/session-types.js';
 import { installLocalization } from './i18n.js';
+import { installSoundControls, frameSound, boundarySound } from './sound.js';
+import type { SoundCue } from './sound-assets.js';
+import { AI_LABELS, isAiDifficulty, type AiDifficulty } from '../agents/difficulty.js';
+import { installCharacterInfo } from './character-info.js';
+import { installMusicControls } from './music.js';
+import { installDeckSkins } from './deck-skins.js';
 
 const localization = installLocalization(document, window);
+const sound = installSoundControls(document, window, () => localization.refresh());
+installMusicControls(document, window, () => localization.refresh());
+const characterInfo = installCharacterInfo(document, window, () => localization.refresh());
+const deckSkins = installDeckSkins(document, window, () => localization.refresh());
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const notice = document.querySelector<HTMLElement>('#notice')!;
@@ -20,6 +30,8 @@ let busy = false;
 let choosingTable = false;
 let talkMuted = false;
 let socialEnabled = true;
+let difficulty: AiDifficulty = 'standard';
+try { const saved = localStorage.getItem('holdem.ai-difficulty'); if (isAiDifficulty(saved)) difficulty = saved; } catch { /* Optional preference. */ }
 try { talkMuted = localStorage.getItem('holdem.talk-muted') === 'true'; } catch { /* Optional preference. */ }
 try { socialEnabled = localStorage.getItem('holdem.social-enabled') !== 'false'; } catch { /* Optional preference. */ }
 const clock = new PlaybackClock();
@@ -45,7 +57,10 @@ const toolLifecycle = installTableReadTool(
 window.addEventListener('pagehide', () => { toolLifecycle.abort(); clock.skip(); clearAnimations(); }, { once: true });
 
 function draw(): void {
+  characterInfo?.close();
   const visibleTable = state.table && !choosingTable ? state.table : null;
+  // Public experience identity only; never the hand, AI intent, or future events.
+  deckSkins?.setSceneDeck(visibleTable?.experience === 'tutorial' ? 'lantern' : visibleTable?.experience === 'living' ? 'blue-hour' : 'night');
   const nextTableId = visibleTable?.id ?? null;
   const sameTable = displayedTableId === nextTableId;
   if (!sameTable) expandedPanels.clear();
@@ -56,7 +71,7 @@ function draw(): void {
   const restoreRaiseFocus = !!oldRaise && document.activeElement === oldRaise;
   app.innerHTML = frame && state.table ? renderPlaybackFrame(frame, state.table.roster, frameIndex, frameCount, state.table.mode)
     : state.table && !choosingTable ? renderTable(state.table, talkMuted)
-      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode, socialEnabled, state.save, !!state.table)}`;
+      : `${state.table ? '<button class="text-button resume-table" data-action="resume">← 返回尚未关闭的牌桌</button>' : ''}${renderLobby(state.rosters, count, mode, socialEnabled, state.save, !!state.table, difficulty)}`;
   document.body.classList.toggle('at-table', !!visibleTable);
   if (!sameTable && visibleTable) window.scrollTo(0, 0);
   for (const panel of app.querySelectorAll<HTMLDetailsElement>('details[data-panel]')) {
@@ -73,6 +88,9 @@ function draw(): void {
   const visibleMode = state.table && !choosingTable ? state.table.mode : mode;
   if (label) label.textContent = state.table && !choosingTable && state.table.experience === 'tutorial' ? '新手教学'
     : `${state.table && !choosingTable && state.table.living ? state.table.experience === 'living' ? '剧情序章 · ' : '人物互动 · ' : ''}${visibleMode === 'ability-lab' ? '能力实验' : '经典德州'}`;
+  if (label && visibleTable?.experience !== 'tutorial' && visibleTable) {
+    label.textContent += ` · ${AI_LABELS[visibleTable.difficulty ?? 'standard']}`;
+  }
   lock(busy);
 }
 app.addEventListener('toggle', (event) => {
@@ -86,7 +104,7 @@ function lock(value: boolean): void {
   busy = value;
   app.setAttribute('aria-busy', String(value));
   for (const element of app.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button,input,select')) {
-    element.disabled = value;
+    element.disabled = value && !element.matches?.('[data-character-info]');
   }
   connection.textContent = playing ? '正在播放牌局…' : value ? '正在处理牌局…' : browserTable ? '浏览器单机' : '本地牌桌';
   if (skipControl) skipControl.disabled = !playing;
@@ -173,6 +191,7 @@ async function play(previous: WebTable | null, next: WebTable): Promise<void> {
     for (const [index, current] of frames.entries()) {
       if (clock.skipped) break;
       clearAnimations(); frame = current; frameIndex = index + 1; draw(); animateFrame(current);
+      sound?.play(frameSound(current));
       await clock.wait(current.holdMs);
     }
   } finally {
@@ -185,7 +204,7 @@ speedControl?.addEventListener('change', () => {
   animations.forEach((animation) => { animation.playbackRate = clock.speed; });
   try { localStorage.setItem(speedKey, String(clock.speed)); } catch { /* Keep the in-memory preference. */ }
 });
-skipControl?.addEventListener('click', () => { clock.skip(); clearAnimations(); });
+skipControl?.addEventListener('click', () => { clock.skip(); clearAnimations(); sound?.stop(); });
 replaceDialog?.addEventListener('close', () => {
   if (replaceDialog.returnValue !== 'choose') return;
   choosingTable = true; message(''); draw();
@@ -201,6 +220,7 @@ async function mutate(path: string, body: unknown): Promise<void> {
   if (busy) return;
   lock(true); message('');
   const previous = state.table;
+  let cue: SoundCue | null = null;
   try {
     const response = await requestTable(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const result = await response.json() as { table?: WebTable; error?: string; save?: SaveStatus };
@@ -210,13 +230,16 @@ async function mutate(path: string, body: unknown): Promise<void> {
       if (response.status === 401) { state.table = null; choosingTable = false; }
       message(result.error ?? '操作未完成，请同步牌桌后重试。');
     } else if (result.table) {
-      if (path !== '/api/resume') await play(previous, result.table);
+      if (path !== '/api/resume') {
+        await play(previous, result.table);
+        cue = boundarySound(previous, result.table);
+      }
     }
   } catch {
     // Never automatically replay a wager after an uncertain network result.
     try { await synchronize(); choosingTable = false; message('连接曾中断，已同步实际牌局；没有重复提交操作。'); }
     catch { message(browserTable ? '浏览器引擎未响应。请刷新页面，从上次结算恢复；不要重复下注。' : '连接中断。恢复服务后点击右上角“同步牌桌”，不要重复下注。'); }
-  } finally { lock(false); draw(); }
+  } finally { lock(false); draw(); sound?.play(cue); }
 }
 
 async function act(intent: ActionIntent): Promise<void> {
@@ -239,6 +262,11 @@ async function useAbility(selection: AbilityCommandView): Promise<void> {
 
 app.addEventListener('change', (event) => {
   const target = event.target;
+  if (target instanceof HTMLSelectElement && target.id === 'ai-difficulty' && isAiDifficulty(target.value)) {
+    difficulty = target.value;
+    try { localStorage.setItem('holdem.ai-difficulty', difficulty); } catch { /* Optional preference. */ }
+    draw();
+  }
   if (target instanceof HTMLSelectElement && target.id === 'players') { count = Number(target.value); draw(); }
   if (target instanceof HTMLSelectElement && target.id === 'game-mode'
     && (target.value === 'classic' || target.value === 'ability-lab')) { mode = target.value; draw(); }
@@ -252,11 +280,11 @@ app.addEventListener('click', (event) => {
   const button = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
   if (!button || busy) return;
   switch (button.dataset.action) {
-    case 'start': void mutate('/api/table', { players: count, mode, socialEnabled }); break;
+    case 'start': void mutate('/api/table', { players: count, mode, socialEnabled, difficulty }); break;
     case 'tutorial-start': void mutate('/api/table', { players: 2, mode: 'classic', experience: 'tutorial' }); break;
-    case 'living-start': void mutate('/api/table', { players: 4, mode, experience: 'living' }); break;
-    case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free', socialEnabled }); break;
-    case 'home': choosingTable = true; message(''); draw(); break;
+    case 'living-start': void mutate('/api/table', { players: 4, mode, experience: 'living', difficulty }); break;
+    case 'practice-start': void mutate('/api/table', { players: 4, mode: 'classic', experience: 'free', socialEnabled, difficulty }); break;
+    case 'home': sound?.stop(); choosingTable = true; message(''); draw(); break;
     case 'resume': choosingTable = false; message(''); draw(); break;
     case 'restore':
       if (state.save?.saved) void mutate('/api/resume', { checkpointId: state.save.saved.id });
@@ -312,7 +340,7 @@ app.addEventListener('submit', (event) => {
   if (Number.isSafeInteger(value)) void act({ type: 'raiseTo', amount: value });
 });
 document.querySelector('#sync')!.addEventListener('click', () => {
-  if (playing) { clock.skip(); return; }
+  if (playing) { clock.skip(); sound?.stop(); return; }
   if (busy) return;
   lock(true);
   void synchronize().then(() => { choosingTable = false; message('已同步当前牌桌。'); })

@@ -9,6 +9,9 @@ import { FileCheckpointStore, engineFingerprint, tableDigest, MAX_COMMANDS,
   type Checkpoint, type CheckpointStore } from './checkpoints.js';
 import { answerTutorial, tutorialAllows, tutorialView } from '../game/tutorial.js';
 import { rosterFor, openLocalTable, refreshPresentation, advanceSession, type LocalSession } from './table-session.js';
+import { SOUND_FILES, AUDIO_CREDIT_FILES } from './sound-assets.js';
+import { isAiDifficulty } from '../agents/difficulty.js';
+import { MUSIC_FILE } from './music.js';
 
 
 
@@ -39,7 +42,7 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 async function restoreCheckpoint(checkpoint: Checkpoint): Promise<LocalSession> {
   const setup = checkpoint.setup;
   const deadline = Date.now() + 30_000;
-  const session = await openLocalTable(setup.players, setup.mode, setup.experience, setup.lesson, setup.socialEnabled, setup.runSeed);
+  const session = await openLocalTable(setup.players, setup.mode, setup.experience, setup.lesson, setup.socialEnabled, setup.runSeed, setup.difficulty);
   for (const entry of checkpoint.journal) {
     if (Date.now() > deadline) throw new Error('Restore time limit');
     if (entry.type === 'command' || entry.type === 'continue') {
@@ -99,11 +102,31 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
     '/style.css': [new URL('../../src/web/style.css', import.meta.url), 'text/css; charset=utf-8'],
     '/pixel-table.css': [new URL('../../src/web/pixel-table.css', import.meta.url), 'text/css; charset=utf-8'],
     '/art/room-v1.png': [new URL('../../src/web/art/room-v1.png', import.meta.url), 'image/png'],
+    '/art/card-back-v1.png': [new URL('../../src/web/art/card-back-v1.png', import.meta.url), 'image/png'],
+    '/poker-cards.js': [new URL('../../dist/web/poker-cards.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/deck-skins.js': [new URL('../../dist/web/deck-skins.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/deck-skins.css': [new URL('../../src/web/deck-skins.css', import.meta.url), 'text/css; charset=utf-8'],
+    ...Object.fromEntries(['deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost'].map(name => [
+      `/art/${name}-v1.png`, [new URL(`../../src/web/art/${name}-v1.png`, import.meta.url), 'image/png'] as [URL, string],
+    ])),
     '/i18n.js': [new URL('../../dist/web/i18n.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/i18n-catalog.js': [new URL('../../dist/web/i18n-catalog.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/sound.js': [new URL('../../dist/web/sound.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/sound-assets.js': [new URL('../../dist/web/sound-assets.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/music.js': [new URL('../../dist/web/music.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/character-info.js': [new URL('../../dist/web/character-info.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/agents/difficulty.js': [new URL('../../dist/agents/difficulty.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/agents/tactics.js': [new URL('../../dist/agents/tactics.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    ...Object.fromEntries([...SOUND_FILES, ...AUDIO_CREDIT_FILES, MUSIC_FILE].map(file => [
+      '/audio/' + file, [new URL('../../src/web/audio/' + file, import.meta.url),
+        file.endsWith('.mp3') ? 'audio/mpeg' : file.endsWith('.wav') ? 'audio/wav' : file.endsWith('.json') ? 'application/json' : 'text/plain; charset=utf-8'] as [URL, string],
+    ])),
     '/art/hunter-v1.png': [new URL('../../src/web/art/hunter-v1.png', import.meta.url), 'image/png'],
     '/art/maniac-v1.png': [new URL('../../src/web/art/maniac-v1.png', import.meta.url), 'image/png'],
     '/art/calling-station-v1.png': [new URL('../../src/web/art/calling-station-v1.png', import.meta.url), 'image/png'],
+    ...Object.fromEntries(['rock', 'small-ball', 'trapper', 'value-bettor'].map(name => [
+      `/art/${name}-v2.png`, [new URL(`../../src/web/art/${name}-v2.png`, import.meta.url), 'image/png'] as [URL, string],
+    ])),
     '/client.js': [new URL('../../dist/web/client.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/transport.js': [new URL('../../dist/web/transport.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/playback.js': [new URL('../../dist/web/playback.js', import.meta.url), 'text/javascript; charset=utf-8'],
@@ -149,7 +172,7 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         const content = await readFile(file[0]);
         // These fixed, versioned art files are public and reused on every playback frame.
         // Keep pages, scripts and all private game responses uncached.
-        if (path.startsWith('/art/')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        if (path.startsWith('/art/') || (path.startsWith('/audio/') && path.endsWith('-v1.wav'))) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         res.writeHead(200, { 'Content-Type': file[1] }); res.end(content); return;
       }
       if (req.method !== 'POST') throw new HttpError(405, '不支持此请求方式。');
@@ -185,6 +208,8 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         if (mode !== 'classic' && mode !== 'ability-lab') throw new HttpError(400, '请选择经典德州或能力实验。');
         if (experience === 'tutorial' && mode !== 'classic') throw new HttpError(400, '新手教学使用经典规则，不启用能力。');
         if (body.socialEnabled !== undefined && typeof body.socialEnabled !== 'boolean') throw new HttpError(400, '人物互动选项必须为开启或关闭。');
+        const difficulty = body.difficulty === undefined ? 'standard' : body.difficulty;
+        if (!isAiDifficulty(difficulty)) throw new HttpError(400, '请选择有效的 AI 强度。');
         if (typeof players !== 'number' || !Number.isSafeInteger(players) || players < 2 || players > 6) {
           throw new HttpError(400, '请选择 2–6 人。');
         }
@@ -193,7 +218,7 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         const newToken = token ?? randomUUID();
         pending.add(newToken);
         try {
-          const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true);
+          const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true, undefined, difficulty);
           opened.table.save = await savedStatus(newToken);
           await checkpoint(opened, newToken);
           sessions.set(newToken, opened);

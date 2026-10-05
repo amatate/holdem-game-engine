@@ -5,6 +5,10 @@ import type { PublicGameEvent } from '../../src/core/public-events.js';
 import type { SeatIdentity } from '../../src/web/protocol.js';
 import { buildPlaybackFrames } from '../../src/web/playback.js';
 import { renderPlaybackFrame } from '../../src/web/render.js';
+import { rosterFor } from '../../src/web/table-session.js';
+import { CHARACTER_IDS } from '../../src/agents/characters.js';
+import { tablePerson, characterLine } from '../../src/game/table-personas.js';
+import { translateText } from '../../src/web/i18n.js';
 
 const roster: SeatIdentity[] = [
   { seatIndex:0, playerId:'你', name:'你', nickname:'玩家', style:'', characterId:'hero' },
@@ -18,6 +22,33 @@ const events: PublicGameEvent[] = [
   { type:'potAwarded', potId:'pot-0', winners:[1], amounts:[10], oddChipRecipients:[] },
 ];
 describe('pixel table public presentation', () => {
+  it.each([2, 3, 4, 5, 6])('gives every NPC on a %i-player table a real portrait', count => {
+    const people = rosterFor(count);
+    const frame = buildPlaybackFrames(null, events, people)[0]!;
+    const html = renderPlaybackFrame(frame, people, 1, 1);
+    expect(html).not.toContain('portrait-fallback');
+    expect(html.match(/class="portrait-atlas"/g)).toHaveLength(count - 1);
+    for (const person of people.slice(1)) {
+      expect(html).toContain(`data-portrait="${person.characterId}"`);
+      expect(person.about).toBeTruthy();
+      expect(html).toContain(`data-character-info="profile-${person.seatIndex}"`);
+      expect(html).toContain(`id="profile-${person.seatIndex}"`);
+    }
+    expect(html).not.toContain('profile-memory'); // Playback cannot peek at end-of-packet notes.
+    expect(html.match(/data-character-info=/g)).toHaveLength(count - 1);
+  });
+  it.each(CHARACTER_IDS)('%s has a distinct concise voice with complete English copy', characterId => {
+    const person = tablePerson({ characterId, seatIndex: 1 });
+    for (const field of ['about', 'hello', 'raise', 'fold', 'call', 'win', 'loss'] as const) {
+      expect(translateText(person[field], 'en')).not.toMatch(/[\p{Script=Han}]/u);
+      if (field !== 'about') expect(person[field].length).toBeLessThanOrEqual(28);
+    }
+    for (const moment of ['hello', 'raise', 'fold', 'call', 'win', 'loss'] as const) {
+      for (let index = 0; index < 4; index++) {
+        expect(translateText(characterLine(characterId, moment, index), 'en')).not.toMatch(/[\p{Script=Han}]/u);
+      }
+    }
+  });
   it('switches expressions only for visible speech and public awards', () => {
     const frames = buildPlaybackFrames(null, events, roster);
     const raised = frames.find(frame => frame.event.type === 'playerActed')!;
@@ -47,7 +78,7 @@ describe('pixel table public presentation', () => {
 
 /** Read-only PNG validation: alpha is checked, not inferred just from an RGBA header. */
 function atlasAlpha(name: string) {
-  const bytes = readFileSync(new URL('../../src/web/art/' + name + '-v1.png', import.meta.url));
+  const bytes = readFileSync(new URL('../../src/web/art/' + name + '.png', import.meta.url));
   const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20);
   expect(bytes[24]).toBe(8); expect(bytes[25]).toBe(6); expect(bytes[28]).toBe(0);
   const chunks: Buffer[] = [];
@@ -77,7 +108,7 @@ function atlasAlpha(name: string) {
   }
   return { width, height, transparent, nearOpaque };
 }
-it.each(['hunter','maniac','calling-station'])('%s has three equal atlas cells and real transparency', name => {
+it.each(['hunter-v1','maniac-v1','calling-station-v1','rock-v2','small-ball-v2','trapper-v2','value-bettor-v2'])('%s has three equal atlas cells and real transparency', name => {
   const atlas = atlasAlpha(name);
   expect(atlas.width).toBe(1536); expect(atlas.height).toBe(1024);
   expect(atlas.width % 3).toBe(0);

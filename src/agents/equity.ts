@@ -1,7 +1,8 @@
 import type { PlayerObservationV1 } from './types.js';
 import { cloneCanonicalCard, createStandardDeck, shuffleDeck } from '../core/cards.js';
-import { compareHandRanks, evaluateBest } from '../core/hand-evaluator.js';
+import { compareHandRanks, evaluateBest, type HandRank } from '../core/hand-evaluator.js';
 import type { Card, RandomSource } from '../core/types.js';
+import { prepareRangeDealer, type OpponentReads } from './opponent-ranges.js';
 
 export interface EquityEstimate {
   readonly equity: number;
@@ -165,6 +166,15 @@ export interface KnownHandEquityInput {
   readonly livePlayerCount: number;
 }
 
+/** Conditions candidate hands on public betting rounds; never accepts actual opponent cards. */
+export function estimateRangeEquity(observation: PlayerObservationV1, samples: number, random: RandomSource,
+  reads?: OpponentReads): EquityEstimate {
+  if (!Number.isSafeInteger(samples) || samples < 1 || samples > MAX_EQUITY_SAMPLES) rejectInput();
+  const input = validateObservation(observation);
+  const deal = prepareRangeDealer(observation, input.unknownDeck, reads);
+  return sampleKnownHand(input, samples, random, deal ?? undefined);
+}
+
 /** Samples unknown opponents; never accepts their real cards or the authoritative deck. */
 export function estimateKnownHandEquity(
   input: KnownHandEquityInput, samples: number, random: RandomSource,
@@ -183,14 +193,17 @@ export function estimateKnownHandEquity(
   }, samples, random);
 }
 
-function sampleKnownHand(input: ValidatedEquityInput, samples: number, random: RandomSource): EquityEstimate {
+function sampleKnownHand(input: ValidatedEquityInput, samples: number, random: RandomSource, deal?: (random: RandomSource) => Card[]): EquityEstimate {
   let wins = 0;
   let ties = 0;
   let losses = 0;
   let equityUnits = 0;
+  // A river board is fixed across samples; avoid re-evaluating identical seven-card hands.
+  const riverHero = input.board.length === 5 ? evaluateBest([...input.heroCards, ...input.board]) : null;
+  const riverOpponents = new Map<string, HandRank>();
 
   for (let sample = 0; sample < samples; sample += 1) {
-    const shuffled = shuffleDeck(input.unknownDeck, random);
+    const shuffled = deal ? deal(random) : shuffleDeck(input.unknownDeck, random);
     const opponentCards: Array<readonly [Card, Card]> = [];
     let cursor = 0;
     for (let opponent = 0; opponent < input.liveOpponentCount; opponent += 1) {
@@ -209,7 +222,7 @@ function sampleKnownHand(input: ValidatedEquityInput, samples: number, random: R
 
     const heroSeven: Card[] = [input.heroCards[0], input.heroCards[1]];
     heroSeven.push(...completedBoard);
-    const heroRank = evaluateBest(heroSeven);
+    const heroRank = riverHero ?? evaluateBest(heroSeven);
     let bestRank = heroRank;
     let heroIsBest = true;
     let winnerCount = 1;
@@ -218,7 +231,13 @@ function sampleKnownHand(input: ValidatedEquityInput, samples: number, random: R
       const holeCards = opponentCards[opponent]!;
       const opponentSeven: Card[] = [holeCards[0], holeCards[1]];
       opponentSeven.push(...completedBoard);
-      const opponentRank = evaluateBest(opponentSeven);
+      const key = holeCards[0].code < holeCards[1].code
+        ? holeCards[0].code + holeCards[1].code : holeCards[1].code + holeCards[0].code;
+      let opponentRank = riverHero ? riverOpponents.get(key) : undefined;
+      if (!opponentRank) {
+        opponentRank = evaluateBest(opponentSeven);
+        if (riverHero) riverOpponents.set(key, opponentRank);
+      }
       const comparison = compareHandRanks(opponentRank, bestRank);
       if (comparison > 0) {
         bestRank = opponentRank;

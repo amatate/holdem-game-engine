@@ -22,6 +22,7 @@ export interface SeatIdentity {
   name: string;
   nickname: string;
   style: string;
+  about?: string;
   characterId: string;
 }
 
@@ -51,6 +52,7 @@ export interface TableView {
 }
 
 export interface WebTable {
+  difficulty?: import('../agents/difficulty.js').AiDifficulty;
   id: string;
   mode: SessionMode;
   roster: SeatIdentity[];

@@ -56,7 +56,8 @@ describe('browser table rendering', () => {
   it('escapes names and offers each allowed player count', () => {
     const unsafe = { ...roster[1]!, name: '<img src=x onerror=alert(1)>' };
     const html = renderLobby({ 2: [roster[0]!, unsafe] }, 2);
-    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('name="<img');
     expect(html).toContain('&lt;img');
     for (const count of [2, 3, 4, 5, 6]) expect(html).toContain(`value="${count}"`);
   });

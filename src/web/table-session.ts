@@ -1,4 +1,5 @@
 import { CHARACTERS, type CharacterId } from '../agents/characters.js';
+import { isAiDifficulty, type AiDifficulty } from '../agents/difficulty.js';
 import { DEFAULT_TOURNAMENT_CONFIG } from '../game/default-config.js';
 import { continueAfterHandResult, getCurrentPacket, openGameSession, submitSessionCommand } from '../game/game-session.js';
 import { createCharacterParticipant, selectNpcRoster } from '../game/roster.js';
@@ -8,13 +9,14 @@ import type { TableSetup, JournalEntry } from './checkpoints.js';
 import { advanceTableView } from './view.js';
 import { LivingParticipant } from '../agents/table-memory.js';
 import { LivingTable } from '../game/living-table.js';
+import { tablePerson } from '../game/table-personas.js';
 import { newTutorial, tutorialView, tutorialAllows, answerTutorial, tutorialCoach, type TutorialState } from '../game/tutorial.js';
 
 
 const STYLES: Record<CharacterId, string> = {
-  rock: '少入局 · 守住筹码', hunter: '重视位置 · 主动施压', maniac: '宽范围 · 大胆进攻',
-  'calling-station': '跟得多 · 很少主动加注', 'small-ball': '小底池 · 轻量施压',
-  trapper: '选择慢打 · 等待反击', 'value-bettor': '价值下注 · 尺寸偏大',
+  rock: '挑牌入局 · 不爱冒险', hunter: '挑准位置 · 出手有压迫感', maniac: '爱凑热闹 · 敢下重注',
+  'calling-station': '舍不得弃牌 · 爱跟到底', 'small-ball': '小注试探 · 一点点争取',
+  trapper: '不急着加注 · 擅长慢打', 'value-bettor': '少打花招 · 下注讲分量',
 };
 
 export function rosterFor(players: number): SeatIdentity[] {
@@ -22,7 +24,8 @@ export function rosterFor(players: number): SeatIdentity[] {
     ...selectNpcRoster(players).map((id, index) => {
       const character = CHARACTERS[id];
       return { seatIndex: index + 1, playerId: `${character.displayName}“${character.nickname}”`,
-        name: character.displayName, nickname: character.nickname, style: STYLES[id], characterId: id };
+        name: character.displayName, nickname: character.nickname, style: STYLES[id], characterId: id,
+        about: tablePerson({ characterId: id, seatIndex: index + 1 }).about };
     })];
 }
 
@@ -34,7 +37,9 @@ export interface LocalSession {
 }
 
 export async function openLocalTable(players: number, mode: SessionMode, experience: TableExperience, lesson = 0, socialEnabled = false,
-  runSeed = experience === 'tutorial' ? `night-school-v1-lesson-${lesson}` : crypto.randomUUID()): Promise<LocalSession> {
+  runSeed = experience === 'tutorial' ? `night-school-v1-lesson-${lesson}` : crypto.randomUUID(), difficulty: AiDifficulty = 'standard'): Promise<LocalSession> {
+  if (!isAiDifficulty(difficulty)) throw new Error('Invalid AI difficulty');
+  if (experience === 'tutorial') difficulty = 'standard'; // The coach is scripted, not ranked.
   const tutorial = experience === 'tutorial' ? newTutorial(lesson) : null;
   const roster = tutorial ? [rosterFor(2)[0]!, { seatIndex: 1, playerId: '莫叔（教学）', name: '莫叔',
     nickname: '教学陪练', style: '按课程配合 · 不代表正式 NPC 强度', characterId: 'calling-station' }] : rosterFor(players);
@@ -42,17 +47,17 @@ export async function openLocalTable(players: number, mode: SessionMode, experie
     people: roster.filter((person) => person.seatIndex !== 0).map((person) => ({ seatIndex: person.seatIndex, characterId: person.characterId as CharacterId })) }) : null;
   const participants = tutorial ? [null, tutorialCoach(lesson, roster[1]!.playerId)]
     : [null, ...selectNpcRoster(players).map((id, index) => living
-      ? new LivingParticipant(id, living.memory, () => living.mood(index + 1)) : createCharacterParticipant(id))];
+      ? new LivingParticipant(id, living.memory, () => living.mood(index + 1), { difficulty }) : createCharacterParticipant(id, { difficulty }))];
   const step = await openGameSession({ mode, config: { ...DEFAULT_TOURNAMENT_CONFIG, maxSeats: players,
     ...(tutorial ? { initialButtonSeat: 0 } : {}) },
     seats: roster.map(({ playerId, seatIndex }) => ({ playerId, seatIndex })), participants,
     humanSeatIndex: 0, runSeed, invalidAgentActionMode: 'fallback' });
   living?.ingest(step.packet.packetIndex, step.packet.viewerEventsSinceLastPacket);
-  const table: WebTable = { id: crypto.randomUUID(), mode, experience, roster, packet: step.packet,
+  const table: WebTable = { id: crypto.randomUUID(), mode, experience, difficulty, roster, packet: step.packet,
     view: advanceTableView(null, step.packet, roster), living: living?.view() ?? null,
     tutorial: tutorial ? tutorialView(tutorial, step.packet) : null, recentHands: [] };
   const session: LocalSession = { handle: step.handle, table, living, tutorial, touched: Date.now(), busy: false,
-    setup: { players, mode, experience, lesson, socialEnabled, runSeed }, journal: [] };
+    setup: { players, mode, experience, lesson, socialEnabled, runSeed, difficulty }, journal: [] };
   refreshPresentation(session);
   return session;
 }

@@ -1,0 +1,90 @@
+/* Texture atlases: left = back, right = blank face. No raster encodes card identity.
+   Attributes may scope a preview, a whole table, or a future public level preset. */
+:root,[data-card-face] { --card-pip-ink:currentColor; --card-face-shadow:2px 3px 0 #a1927d,3px 5px 0 #0f282d80; }
+:root,[data-card-face="night"] {
+  --card-face-image:none; --card-paper:#f3e6c7; --card-ink:#20202c; --card-red-ink:#b12b49;
+  --card-edge:#c7bba0; --card-rank-font:var(--data); --card-rank-weight:800;
+}
+:root,[data-card-back="night"] { --card-back-image:url('/art/card-back-v1.png'); --card-back-size:100% 100%; --card-back-edge:#bfa16d; }
+[data-card-face="lantern"] {
+  --card-face-image:url('/art/deck-lantern-v1.png'); --card-paper:#fff8e9;
+  --card-ink:#28201e; --card-red-ink:#a52c37; --card-edge:#c7b39c;
+  --card-rank-font:Georgia,"Times New Roman",serif; --card-rank-weight:700;
+}
+[data-card-back="lantern"] { --card-back-image:url('/art/deck-lantern-v1.png'); --card-back-size:200% 100%; --card-back-edge:#a52c37; }
+[data-card-face="blue-hour"] {
+  --card-face-image:url('/art/deck-blue-hour-v1.png'); --card-paper:#f6f8f5;
+  --card-ink:#1c2b43; --card-red-ink:#b33149; --card-edge:#a3b4c3;
+  --card-rank-font:var(--data); --card-rank-weight:800;
+}
+[data-card-back="blue-hour"] { --card-back-image:url('/art/deck-blue-hour-v1.png'); --card-back-size:200% 100%; --card-back-edge:#243d75; }
+[data-card-face="jade"] {
+  --card-face-image:url('/art/deck-jade-v1.png'); --card-paper:#f4f0d9;
+  --card-ink:#173e35; --card-red-ink:#9f333b; --card-edge:#b9a474;
+  --card-rank-font:"Palatino Linotype",Palatino,Georgia,serif; --card-rank-weight:700;
+}
+[data-card-back="jade"] { --card-back-image:url('/art/deck-jade-v1.png'); --card-back-size:200% 100%; --card-back-edge:#1b594d; }
+[data-card-face="ghost"] {
+  --card-face-image:url('/art/deck-ghost-v1.png'); --card-paper:#0d1014;
+  --card-ink:#f0f1ed; --card-red-ink:#ff6977; --card-pip-ink:#f0f1ed; --card-edge:#78818b;
+  --card-rank-font:Georgia,"Times New Roman",serif; --card-rank-weight:700;
+  --card-face-shadow:3px 3px 0 #080a0d;
+}
+[data-card-back="ghost"] { --card-back-image:url('/art/deck-ghost-v1.png'); --card-back-size:200% 100%; --card-back-edge:#78818b; }
+.poker-card,.pixel-table .poker-card {
+  background-color:var(--card-paper); background-image:var(--card-face-image); background-size:200% 100%;
+  background-position:right center; background-repeat:no-repeat; color:var(--card-ink); border-color:var(--card-edge);
+  box-shadow:var(--card-face-shadow);
+}
+.poker-card .card-rank { font-family:var(--card-rank-font); font-weight:var(--card-rank-weight); }
+.poker-card .card-pip { color:var(--card-pip-ink); }
+.poker-card.card-red,.pixel-table .poker-card.card-red { color:var(--card-red-ink); }
+.poker-card.card-back,.pixel-table .poker-card.card-back {
+  background-color:var(--night);
+  background-image:var(--card-back-image); background-size:var(--card-back-size); background-position:left center;
+  border-color:var(--card-back-edge); image-rendering:auto;
+}
+.pixel-table .poker-card.card-from-hole { border-bottom-color:var(--brass); }
+.deck-open { border:1px solid var(--line); white-space:nowrap; }
+.deck-dialog { width:min(840px,calc(100vw - 24px)); max-width:calc(100vw - 24px); max-height:calc(100dvh - 32px); padding:22px; border:2px solid var(--brass); background:var(--panel); color:var(--paper); box-shadow:6px 6px 0 #100d1a; overflow:auto; }
+.deck-dialog::backdrop { background:#100d1bc9; }
+.deck-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.deck-dialog-heading h2 { font:700 26px/1.3 var(--display); letter-spacing:2px; margin:3px 0 0; }
+.deck-dialog-heading .eyebrow { margin:0; font-size:10px; color:var(--brass); }
+.deck-dialog-heading button { min-width:64px; min-height:44px; border:1px solid var(--line); flex-shrink:0; }
+#deck-note { margin:8px 0 20px; font-size:12px; color:var(--muted); }
+.deck-gallery { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
+.deck-preset { padding:12px 6px; background:#1d192b; color:var(--paper); border:1px solid var(--line); cursor:pointer; text-align:center; min-width:0; }
+.deck-preset:hover { background:#362a41; }
+.deck-preset[aria-pressed="true"] { border-color:var(--brass); outline:1px solid var(--brass); outline-offset:-4px; background:#3b2f37; }
+.deck-pair { display:flex; gap:7px; justify-content:center; margin:0 0 12px; }
+.deck-pair .poker-card { width:54px; height:76px; border-radius:2px; --rank-size:24px; --pip-size:26px; --card-inset:6px; }
+.deck-preset strong { display:block; font:700 15px/1.5 var(--display); letter-spacing:1px; }
+.deck-preset small { display:block; font:10px/1.5 var(--body); margin-top:3px; color:var(--muted); }
+.deck-custom { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0 12px; }
+.deck-custom label { display:flex; align-items:center; gap:12px; font-size:12px; white-space:nowrap; }
+.deck-custom select { min-width:0; width:100%; padding:8px; background:var(--night); color:var(--paper); border:1px solid var(--line); font:13px var(--body); }
+.deck-follow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-height:44px; font-size:12px; }
+.deck-follow input { accent-color:var(--brass); width:16px; height:16px; margin:0; }
+.deck-follow small { color:var(--muted); }
+.deck-live-preview { margin-top:8px; padding:18px 8px 10px; background:#1b3235; border-top:1px solid #677661; }
+.deck-preview { display:flex; justify-content:center; gap:14px; }
+.deck-preview .poker-card { width:80px; height:112px; border-radius:2px; --rank-size:32px; --pip-size:39px; --card-inset:8px; }
+.deck-preview .card-back { margin-left:10px; }
+.deck-live-preview p,.deck-footnote { font-size:11px; line-height:1.6; color:var(--muted); margin:12px 0 0; }
+.deck-live-preview p { text-align:center; }
+.deck-dialog :is(button,select,input):focus-visible { outline:2px solid var(--brass); outline-offset:3px; }
+@media(max-width:650px) {
+  .deck-open { grid-column:1/-1; min-height:32px; justify-self:stretch; }
+  .deck-dialog { padding:16px; }
+  .deck-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .deck-pair .poker-card { width:42px; height:60px; --rank-size:20px; --pip-size:21px; --card-inset:5px; }
+  .deck-preset strong { font-size:13px; }
+  .deck-custom { gap:12px; }
+  .deck-custom label { display:block; min-width:0; white-space:normal; }
+  .deck-custom select { display:block; margin-top:6px; min-height:40px; }
+  .deck-preview { gap:8px; }
+  .deck-preview .poker-card { width:48px; height:68px; --rank-size:23px; --pip-size:25px; --card-inset:5px; }
+  .deck-preview .card-back { margin-left:3px; }
+  .deck-live-preview p { font-size:10px; }
+}

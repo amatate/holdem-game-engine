@@ -1,0 +1,28 @@
+Night Table / Holdem Game Engine — Sound credits
+
+Creator: Kenney (https://kenney.nl/)
+License: Creative Commons Zero 1.0 Universal (CC0-1.0)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Casino Audio 1.1
+https://kenney.nl/assets/casino-audio
+Source samples: card-slide-1, card-slide-2, card-place-1, card-shove-1,
+chip-lay-1, chips-handle-1, chips-stack-1.
+Original license: LICENSE-casino.txt
+
+Interface Sounds 1.0
+https://kenney.nl/assets/interface-sounds
+Source samples: click_001, question_002, confirmation_001, maximize_001.
+Original license: LICENSE-interface.txt
+
+Verified against both official asset pages and archive licenses on 2026-09-28.
+The packs permit personal and commercial use. Attribution is optional; this
+project includes credit voluntarily. Kenney's logo is not included.
+
+Adaptation: converted OGG to mono 44.1 kHz PCM16 WAV, attenuated peaks
+toward -6 dBFS (boost limited to 12 dB), added 3 ms / 8 ms edge fades.
+No voices or background music are included. Exact mappings, checksums,
+durations, and measured peaks are in manifest.json.
+
+These third-party sound files are CC0. This does not change the licensing of
+the game's code, illustrations, or other assets.

@@ -1,4 +1,5 @@
 import type { SessionCommand, SessionMode } from '../game/session-types.js';
+import { isAiDifficulty, type AiDifficulty } from '../agents/difficulty.js';
 import type { SaveSummary, TableExperience } from './protocol.js';
 
 export const MAX_COMMANDS = 1_000;
@@ -6,6 +7,7 @@ export const MAX_BYTES = 2 * 1024 * 1024;
 export interface TableSetup {
   players: number; mode: SessionMode; experience: TableExperience;
   lesson: number; socialEnabled: boolean; runSeed: string;
+  difficulty?: AiDifficulty;
 }
 export type JournalEntry =
   | { type: 'command'; command: SessionCommand }
@@ -32,6 +34,7 @@ export function validCheckpoint(value: unknown): value is Checkpoint {
     && ['classic', 'ability-lab'].includes(setup.mode) && ['free', 'living', 'tutorial'].includes(setup.experience)
     && Number.isInteger(setup.lesson) && setup.lesson >= 0 && setup.lesson <= 2
     && typeof setup.socialEnabled === 'boolean' && typeof setup.runSeed === 'string' && setup.runSeed.length <= 128
+    && (setup.difficulty === undefined || isAiDifficulty(setup.difficulty))
     && Array.isArray(record.journal) && record.journal.length <= MAX_COMMANDS
     && !!summary && typeof summary.id === 'string' && typeof summary.savedAt === 'string'
     && Number.isFinite(Date.parse(summary.savedAt)) && Number.isSafeInteger(summary.hand) && summary.hand > 0

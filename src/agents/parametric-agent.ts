@@ -1,4 +1,4 @@
-import { estimateEquity, MAX_EQUITY_SAMPLES, type EquityEstimate } from './equity.js';
+import { estimateEquity, estimateRangeEquity, MAX_EQUITY_SAMPLES, type EquityEstimate } from './equity.js';
 import type {
   ActionDecision,
   DecisionContext,
@@ -9,8 +9,9 @@ import type {
 } from './types.js';
 import type { ActionIntent, LegalActionSet } from '../core/legal-actions.js';
 import type { RandomSource } from '../core/types.js';
+import { AI_SAMPLES, isAiDifficulty, difficultyScores, difficultySizing, type AiDifficulty } from './difficulty.js';
+import { choosePlan, primaryRead, tacticalScores, tacticalSizing, type TacticalContext } from './tactics.js';
 
-const DEFAULT_EQUITY_SAMPLES = 300;
 const INVALID_PROFILE = 'Invalid style profile';
 const INVALID_OPTIONS = 'Invalid parametric agent options';
 const INVALID_ESTIMATE = 'Invalid equity estimate';
@@ -22,8 +23,11 @@ export type EquityProvider = (
 ) => EquityEstimate;
 
 export interface ParametricHoldemAgentOptions {
+  /** Internal beliefs / previous intention only. Never attached to public game packets. */
+  readonly tacticalContext?: TacticalContext;
+  readonly difficulty?: AiDifficulty;
   readonly equityProvider?: EquityProvider;
-  /** Positive safe integer <= MAX_EQUITY_SAMPLES; default exactly 300. */
+  /** Positive safe integer <= MAX_EQUITY_SAMPLES; defaults to the tier's budget (standard: 300). */
   readonly equitySamples?: number;
   /** Default false; must not affect action or RNG consumption. */
   readonly includePrivateTrace?: boolean;
@@ -122,13 +126,16 @@ function validateOptions(value: Readonly<ParametricHoldemAgentOptions> | undefin
   equityProvider: EquityProvider;
   equitySamples: number;
   includePrivateTrace: boolean;
+  difficulty: AiDifficulty;
 }> {
   try {
     if (value !== undefined && (typeof value !== 'object' || value === null)) {
       throw new Error(INVALID_OPTIONS);
     }
-    const equityProvider = value?.equityProvider ?? estimateEquity;
-    const equitySamples = value?.equitySamples ?? DEFAULT_EQUITY_SAMPLES;
+    const difficulty = value?.difficulty ?? 'standard';
+    if (!isAiDifficulty(difficulty)) throw new Error(INVALID_OPTIONS);
+    const equityProvider = value?.equityProvider ?? (difficulty === 'casual' ? estimateEquity : estimateRangeEquity);
+    const equitySamples = value?.equitySamples ?? AI_SAMPLES[difficulty];
     const includePrivateTrace = value?.includePrivateTrace ?? false;
     if (typeof equityProvider !== 'function'
       || !Number.isSafeInteger(equitySamples)
@@ -137,7 +144,7 @@ function validateOptions(value: Readonly<ParametricHoldemAgentOptions> | undefin
       || typeof includePrivateTrace !== 'boolean') {
       throw new Error(INVALID_OPTIONS);
     }
-    return { equityProvider, equitySamples, includePrivateTrace };
+    return { equityProvider, equitySamples, includePrivateTrace, difficulty };
   } catch (error) {
     if (error instanceof Error && error.message === INVALID_OPTIONS) throw error;
     throw new Error(INVALID_OPTIONS);
@@ -429,8 +436,9 @@ export function selectAggressiveCandidate(
   profile: Readonly<StyleProfile>,
   varianceRoll: number,
   overbetRoll: number,
+  maximumPayment = Infinity,
 ): AggressiveCandidate | null {
-  const candidates = buildAggressiveCandidates(observation);
+  const candidates = buildAggressiveCandidates(observation).filter(candidate => candidate.payment <= maximumPayment);
   if (candidates.length === 0) return null;
   const ordered = [...candidates].sort((left, right) => left.target - right.target);
   if (overbetRoll < profile.sizing.overbetFrequency * profile.riskAppetite) {
@@ -505,6 +513,8 @@ export class ParametricHoldemAgent implements PokerAgent {
   readonly #equityProvider: EquityProvider;
   readonly #equitySamples: number;
   readonly #includePrivateTrace: boolean;
+  readonly #difficulty: AiDifficulty;
+  readonly #tactics: TacticalContext | undefined;
 
   constructor(
     agentId: string,
@@ -520,6 +530,9 @@ export class ParametricHoldemAgent implements PokerAgent {
     this.#equityProvider = validated.equityProvider;
     this.#equitySamples = validated.equitySamples;
     this.#includePrivateTrace = validated.includePrivateTrace;
+    this.#difficulty = validated.difficulty;
+    // Custom providers retain the legacy policy unless they explicitly opt into tactics.
+    this.#tactics = options?.tacticalContext ?? (!options?.equityProvider && this.#difficulty !== 'casual' ? {} : undefined);
   }
 
   decide(context: Readonly<DecisionContext>): ActionDecision {
@@ -539,27 +552,36 @@ export class ParametricHoldemAgent implements PokerAgent {
     const overbetRoll = sizingRandom.nextFloat();
 
     const estimate = validateEstimate(
-      this.#equityProvider(observation, this.#equitySamples, equityRandom),
+      this.#equityProvider === estimateRangeEquity
+        ? estimateRangeEquity(observation, this.#equitySamples, equityRandom, this.#tactics?.reads)
+        : this.#equityProvider(observation, this.#equitySamples, equityRandom),
       this.#equitySamples,
     );
+    const drawAdjustment = computeVisibleDrawAdjustment(observation);
+    const plan = choosePlan(observation, estimate.equity, drawAdjustment, this.#tactics?.previousPlan);
+    const read = this.#tactics?.reads ? primaryRead(observation, this.#tactics.reads) : undefined;
+    const sizingProfile = difficultySizing(this.#difficulty, this.profile, estimate.equity);
     const candidate = selectAggressiveCandidate(
       observation,
-      this.profile,
+      this.#tactics ? tacticalSizing(sizingProfile, observation, estimate.equity, plan, read) : sizingProfile,
       varianceRoll,
       overbetRoll,
+      this.#tactics && estimate.equity < .72
+        ? Math.max(observation.bigBlind * 3, observation.potTotal + 2 * (legal.call?.pay ?? 0)) : Infinity,
     );
     const callPay = legal.call?.pay ?? 0;
     const facingBet = legal.call !== null;
     const potOdds = facingBet ? callPay / (observation.potTotal + callPay) : 0;
     const positionAdjustment = computePositionAdjustment(observation, this.profile.positionAwareness);
-    const drawAdjustment = computeVisibleDrawAdjustment(observation);
     const stackContext = computeStackContext(
       observation,
       candidate?.payment ?? callPay,
       this.profile.riskAppetite,
     );
-    const scores = computePolicyScores({
-      equity: estimate.equity,
+    const perceivedEquity = this.#difficulty === 'casual'
+      ? Math.max(0, Math.min(1, Math.round(estimate.equity * 5) / 5 + (policyRoll - 0.5) * 0.24)) : estimate.equity;
+    const baselineScores = computePolicyScores({
+      equity: perceivedEquity,
       potOdds,
       profile: this.profile,
       positionAdjustment,
@@ -570,6 +592,10 @@ export class ParametricHoldemAgent implements PokerAgent {
       canAggress: candidate !== null,
       largeCommitPenalty: stackContext.largeCommitPenalty,
     });
+    const difficultyPolicy = difficultyScores(this.#difficulty, baselineScores, observation, this.profile,
+      perceivedEquity, potOdds, drawAdjustment, bluffRoll);
+    const scores = this.#tactics ? tacticalScores(difficultyPolicy, observation, this.profile,
+      perceivedEquity, drawAdjustment, bluffRoll, plan, read, this.#difficulty === 'challenging', candidate !== null) : difficultyPolicy;
 
     let action: ActionIntent;
     if (scores.slowPlayTriggered) {

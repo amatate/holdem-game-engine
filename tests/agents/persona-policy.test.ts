@@ -59,7 +59,8 @@ describe('living-table v2 character policies', () => {
 
   it('lets Kai’s loss change the actual bet size and completely expires the reaction on the fourth hand', async () => {
     const memory = new TableMemory(); memory.observe(1, [raise]); memory.recordOutcome(1, 1, -40, 2);
-    const options = { equityProvider: provider(0.45) };
+    // Tilt still changes strong-hand sizing; weak hands no longer randomly jam deep stacks.
+    const options = { equityProvider: provider(0.76) };
     const act = async (hand: number, shared: TableMemory) => (await new LivingParticipant('maniac', shared, () => -1, options)
       .decide({ observation: observation({ handId: `hand-${hand}`, handNumber: hand }), random: random(0.3) })).action;
     expect((await act(2, new TableMemory())).type).toBe('raiseTo');

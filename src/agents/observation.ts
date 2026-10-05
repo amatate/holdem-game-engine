@@ -97,6 +97,7 @@ function isPlayerStatus(value: unknown): value is SeatState['status'] {
 }
 
 interface EventSnapshot {
+  readonly street?: Street;
   readonly type: string;
   readonly handId: string | null;
   readonly smallBlind?: number;
@@ -126,7 +127,6 @@ function snapshotEventLog(value: unknown, expectedLength: number): EventSnapshot
       case 'DeckPrepared':
       case 'HoleCardsDealt':
       case 'HoleCardReplaced':
-      case 'BettingRoundStarted':
       case 'BettingRoundClosed':
       case 'CardBurned':
       case 'CommunityCardsDealt':
@@ -146,6 +146,12 @@ function snapshotEventLog(value: unknown, expectedLength: number): EventSnapshot
         const bigBlind = requirePositiveInteger(event.bigBlind);
         if (smallBlind >= bigBlind) rejectObservation();
         snapshots.push({ type, handId, smallBlind, bigBlind });
+        break;
+      }
+      case 'BettingRoundStarted': {
+        const street = event.street;
+        if (!isBettingStreet(street)) rejectObservation();
+        snapshots.push({ type, handId, street });
         break;
       }
       case 'BlindPosted': {
@@ -365,7 +371,8 @@ export function projectObservation(
     const legalActions = cloneLegalActions(authorityLegalActions);
 
     const eventSnapshots = snapshotEventLog(state.eventLog, version);
-    const actionHistory: PublicActionEvent[] = [];
+    const actionHistory: Array<PublicActionEvent & { readonly street?: Street }> = [];
+    let actionStreet: Street = 'preflop';
     let decisionIndex = 0;
     let handStartedCount = 0;
     let smallBlind = 0;
@@ -380,6 +387,8 @@ export function projectObservation(
         handStartedCount += 1;
         smallBlind = event.smallBlind!;
         bigBlind = event.bigBlind!;
+      } else if (event.type === 'BettingRoundStarted') {
+        actionStreet = event.street!;
       } else if (event.type === 'BlindPosted') {
         actionHistory.push({
           type: 'blindPosted',
@@ -392,6 +401,7 @@ export function projectObservation(
         decisionIndex += 1;
         actionHistory.push({
           type: 'playerActed',
+          street: actionStreet,
           seatIndex: event.seatIndex!,
           kind: event.actionKind!,
           paid: event.amount!,

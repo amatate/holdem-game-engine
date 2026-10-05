@@ -1,0 +1,37 @@
+CURRENT TABLE MUSIC
+
+"Cool Vibes" Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Source: https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100863
+Original file: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cool%20Vibes.mp3
+License and authorship checked on the artist's site: 2026-10-03.
+Bundled as: cool-vibes-v1.mp3 (original MP3, no musical edits).
+SHA-256: 86e5afb1f71da4c45927bb693cc32e2f72954137cf010599a912fa89cfd4db2e
+8,737,561 bytes; 218.384 seconds; 44.1 kHz stereo.
+
+Artist metadata: 83 BPM, vibraphone / bass / drum kit; calming, relaxed.
+The full track repeats; this is not a claim of a seamless loop.
+Music is off by default, separate from sound effects, starts after a user
+gesture, and pauses in a hidden tab. Playback volume does not alter the file.
+Attribution and the license link remain visible in the music menu.
+The music license does not apply to the project's code or other artwork.
+
+PREVIOUS AUDITION (retained in source; not served or included in Pages builds)
+
+Bebop (Chiptune)
+Author: Alex McCulloch (Pro Sensory)
+Source: https://opengameart.org/content/bebop-chiptune
+Original file: https://opengameart.org/sites/default/files/Bebop%20%28Chiptune%29_0.mp3
+License: CC0 1.0 Universal
+License text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+License and authorship checked on the author's upload page: 2026-10-03.
+
+Archived as: bebop-chiptune-v1.mp3 (original MP3, no musical edits).
+SHA-256: e5cfeedcc0c6cc355bcc8fbc68f77b9f841ddd9bb0b198ac61029f191fe02f77
+The upload is tagged Jazz and chiptune. This is a retro chip-jazz audition
+for the table, not a commissioned original or a claim of seamless looping.
+Playback repeats the complete track. Music is off by default, separate from
+sound effects, starts after a user gesture, and pauses in a hidden tab.
+Credit is included voluntarily; CC0 does not require attribution.

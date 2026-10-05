@@ -8,14 +8,39 @@
   <title>夜局 · 德州扑克</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/pixel-table.css">
+  <link rel="stylesheet" href="/deck-skins.css">
   <script type="module" src="/client.js"></script>
 </head>
 <body>
   <header class="topbar"><a class="wordmark" href="/" aria-label="夜局，返回当前牌桌"><span aria-hidden="true">♠</span> 夜局 <small>HOLD’EM</small></a><div class="topbar-right"><label class="language-control" data-no-i18n>语言 / Language <select id="language" aria-label="语言 / Language"><option value="zh-CN">中文</option><option value="en">English</option></select></label><span id="mode-label" class="mode-label">经典德州</span><span id="connection">本地牌桌</span><button id="sync" class="text-button">同步牌桌</button></div></header>
   <main class="main"><div id="notice" role="status" aria-live="polite" hidden></div>
-    <div class="playback-toolbar" aria-label="牌局播放控制"><span class="playback-title">牌桌节奏 <small>轮到你时自动停下</small></span><label for="playback-speed">速度</label><select id="playback-speed"><option value="0.5">0.5× · 慢速</option><option value="1" selected>1× · 标准</option><option value="2">2× · 快速</option><option value="4">4× · 极速</option></select><button id="playback-skip" class="text-button" disabled>跳过本段 →</button></div>
+    <div class="playback-toolbar" aria-label="牌局播放控制"><span class="playback-title">牌桌节奏 <small>轮到你时自动停下</small></span><label for="playback-speed">速度</label><select id="playback-speed"><option value="0.5">0.5× · 慢速</option><option value="1" selected>1× · 标准</option><option value="2">2× · 快速</option><option value="4">4× · 极速</option></select><button id="playback-skip" class="text-button" disabled>跳过本段 →</button>
+      <details class="sound-menu"><summary id="sound-label">音效：开</summary><div class="sound-panel" aria-label="音效设置">
+        <div class="sound-buttons"><button id="sound-toggle" class="text-button" type="button" aria-pressed="true">静音</button><button id="sound-preview" class="text-button" type="button">试听提示音</button></div>
+        <label for="sound-volume">音效音量<input id="sound-volume" type="range" min="0" max="100" step="5" value="40"></label>
+        <p id="sound-status" role="status">点击或按键后播放</p><a href="./audio/CREDITS.txt" target="_blank" rel="noopener">音效来源：Kenney · CC0</a>
+      </div></details>
+      <details class="sound-menu music-menu"><summary id="music-label">音乐：关</summary><div class="sound-panel" aria-label="背景音乐设置">
+        <button id="music-toggle" class="text-button" type="button" aria-pressed="false">播放音乐</button>
+        <label for="music-volume">音乐音量<input id="music-volume" type="range" min="0" max="100" step="5" value="20"></label>
+        <p id="music-status" role="status">轻柔爵士 · 点击播放</p>
+        <a href="./audio/MUSIC-CREDITS.txt" target="_blank" rel="noopener">Cool Vibes · Kevin MacLeod (incompetech.com)</a>
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>
+      </div></details>
+      <button id="deck-open" class="text-button deck-open" type="button" aria-haspopup="dialog">牌组外观</button>
+    </div>
     <div id="app"><p class="loading">正在连接牌桌…</p></div></main>
   <dialog id="replace-table-dialog" class="replace-dialog" aria-labelledby="replace-title"><h2 id="replace-title">重新选择牌桌？</h2><p>你可以更换模式和人数。开始任一新牌桌后，旧牌局结束，能力次数重新计算。旧存档会保留到新牌桌第一手结算，再被覆盖。</p><form method="dialog"><button class="button button-secondary" value="cancel" autofocus>保留当前牌桌</button><button class="button button-primary" value="choose">重新选桌</button></form></dialog>
+  <div id="character-tooltip" class="character-tooltip" role="tooltip" hidden></div>
+  <dialog id="deck-dialog" class="deck-dialog" aria-labelledby="deck-title" aria-describedby="deck-note">
+    <header class="deck-dialog-heading"><div><p class="eyebrow">桌上的小讲究</p><h2 id="deck-title">换一副牌</h2></div><button id="deck-close" class="text-button" type="button" autofocus>完成</button></header>
+    <p id="deck-note">只换外观，不影响发牌、胜率或当前操作。</p>
+    <div id="deck-gallery" class="deck-gallery" aria-label="成套牌组"></div>
+    <div class="deck-custom"><label for="deck-face">牌面<select id="deck-face"></select></label><label for="deck-back">牌背<select id="deck-back"></select></label></div>
+    <label class="deck-follow"><input id="deck-follow-scene" type="checkbox"><span>跟随场景推荐</span><small>当前推荐：<span id="deck-scene-name">夜局</span></small></label>
+    <div class="deck-live-preview"><div id="deck-preview" class="deck-preview" aria-label="固定示例牌"></div><p>固定示例牌，不是当前底牌。可分别搭配牌面与牌背。</p></div>
+    <p class="deck-footnote">偏好只保存在当前浏览器。教学推荐红馆，剧情序章推荐蓝调，自由牌桌推荐夜局。</p>
+  </dialog>
   <footer class="footer"><span>NO-LIMIT TEXAS HOLD’EM</span><span>只用虚拟筹码 · 本机运行</span></footer>
 </body>
 </html>

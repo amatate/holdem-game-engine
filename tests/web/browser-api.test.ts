@@ -36,6 +36,26 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('Pages JSON host', () => {
+  it.each(['casual', 'standard', 'challenging'])('persists and restores %s strength in both social and quiet play', async difficulty => {
+    for (const socialEnabled of [true, false]) {
+      const store = new MemoryStore(), api = createBrowserApi(store, 'difficulty-v1');
+      const opened = await post(api, '/api/table', { players: 2, difficulty, socialEnabled });
+      expect(opened.status, opened.body.error).toBe(200);
+      expect(opened.body.table?.difficulty).toBe(difficulty);
+      const table = await finish(api, opened.body.table!);
+      expect(store.value?.setup.difficulty).toBe(difficulty);
+      const restored = await post(createBrowserApi(store, 'difficulty-v1'), '/api/resume', { checkpointId: store.value!.summary.id });
+      expect(restored.status, restored.body.error).toBe(200);
+      expect(restored.body.table?.difficulty).toBe(difficulty);
+      expect(restored.body.table?.packet).toEqual(table.packet);
+    }
+  });
+  it('rejects invalid difficulty and keeps tutorial scripting independent', async () => {
+    const api = createBrowserApi(new MemoryStore(), 'v1');
+    for (const difficulty of ['extreme', 3, {}, false, null]) expect((await post(api, '/api/table', { players: 2, difficulty })).status).toBe(400);
+    const reply = await post(api, '/api/table', { players: 2, difficulty: 'challenging', experience: 'tutorial' });
+    expect(reply.status).toBe(200); expect(reply.body.table?.difficulty).toBe('standard');
+  });
   it.each([2, 3, 4, 5, 6])('opens %i seats without Node proxy APIs or hidden data in replies', async (players) => {
     const store = new MemoryStore(), api = createBrowserApi(store, 'test-v1');
     const reply = await post(api, '/api/table', { players, socialEnabled: true });

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
 import { createLocalServer } from '../../src/web/server.js';
 import type { WebTable } from '../../src/web/protocol.js';
+import { SOUND_FILES, AUDIO_CREDIT_FILES } from '../../src/web/sound-assets.js';
 
 describe('local browser table', () => {
   const server = createLocalServer();
@@ -32,8 +33,8 @@ describe('local browser table', () => {
     return response;
   }
   it('serves only fixed local art assets and never caches game state', async () => {
-    for (const name of ['hunter', 'maniac', 'calling-station', 'room']) {
-      const response = await fetch(`${origin}/art/${name}-v1.png`);
+    for (const name of ['hunter-v1', 'maniac-v1', 'calling-station-v1', 'room-v1', 'card-back-v1', 'deck-lantern-v1', 'deck-blue-hour-v1', 'deck-jade-v1', 'deck-ghost-v1', 'rock-v2', 'small-ball-v2', 'trapper-v2', 'value-bettor-v2']) {
+      const response = await fetch(`${origin}/art/${name}.png`);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toBe('image/png');
       expect(response.headers.get('cache-control')).toContain('immutable');
@@ -41,6 +42,13 @@ describe('local browser table', () => {
       expect([...bytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     }
     expect((await fetch(`${origin}/pixel-table.css`)).headers.get('content-type')).toContain('text/css');
+    const cards = await fetch(`${origin}/poker-cards.js`);
+    expect(cards.status).toBe(200);
+    expect(await cards.text()).toContain('orderedBestFive');
+    expect((await fetch(`${origin}/deck-skins.css`)).headers.get('content-type')).toContain('text/css');
+    const decks = await fetch(`${origin}/deck-skins.js`);
+    expect(decks.status).toBe(200);
+    expect(await decks.text()).toContain('installDeckSkins');
     for (const file of ['i18n.js', 'i18n-catalog.js']) {
       const response = await fetch(`${origin}/${file}`);
       expect(response.status).toBe(200);
@@ -53,11 +61,34 @@ describe('local browser table', () => {
     }
   });
   it('rejects invalid counts and foreign origins without creating a game', async () => {
+    expect((await post('/api/table', { players: 2, difficulty: 'unknown' })).status).toBe(400);
     expect((await post('/api/table', { players: 7 })).status).toBe(400);
     expect((await post('/api/table', { players: 2, mode: 'unknown' })).status).toBe(400);
     expect((await post('/api/table', { players: 4 }, { origin: 'https://unrelated.example' })).status).toBe(403);
     expect((await fetch(`${origin}/api/bootstrap`)).status).toBe(200);
     expect((await fetch(`${origin}/src/core/state.ts`)).status).toBe(404);
+  });
+  it('serves only reviewed audio samples and their provenance with correct MIME types', async () => {
+    const music = await fetch(`${origin}/audio/cool-vibes-v1.mp3`);
+    expect(music.status).toBe(200); expect(music.headers.get('content-type')).toBe('audio/mpeg');
+    expect((await music.arrayBuffer()).byteLength).toBe(8737561);
+    for (const file of ['music.js', 'character-info.js', 'agents/difficulty.js', 'agents/tactics.js']) expect((await fetch(`${origin}/${file}`)).status).toBe(200);
+    for (const file of SOUND_FILES) {
+      const response = await fetch(`${origin}/audio/${file}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('audio/wav');
+      expect(response.headers.get('cache-control')).toContain('immutable');
+      expect(Buffer.from(await response.arrayBuffer()).toString('ascii', 0, 4)).toBe('RIFF');
+    }
+    for (const file of AUDIO_CREDIT_FILES) {
+      const response = await fetch(`${origin}/audio/${file}`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain(file === 'MUSIC-CREDITS.txt' ? 'CC BY 4.0' : file.endsWith('.json') ? 'CC0-1.0' : 'CC0');
+    }
+    for (const file of ['sound.js', 'sound-assets.js']) expect((await fetch(`${origin}/${file}`)).status).toBe(200);
+    for (const file of ['bebop-chiptune-v1.mp3', 'unknown.wav', 'README.md', '..%2F..%2Fpackage.json']) {
+      expect((await fetch(`${origin}/audio/${file}`)).status).toBe(404);
+    }
   });
   it('keeps peek private, restores it once, rejects duplicate/spent requests and clears it at settlement', async () => {
     let { table } = await (await post('/api/table', { players: 2, mode: 'ability-lab' })).json() as { table: WebTable };

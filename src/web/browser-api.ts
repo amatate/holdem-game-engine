@@ -5,6 +5,7 @@ import type { WebTable, SaveStatus } from './protocol.js';
 import { MAX_BYTES, MAX_COMMANDS, validCheckpoint, type Checkpoint } from './checkpoint-data.js';
 import { openLocalTable, rosterFor, advanceSession, refreshPresentation, type LocalSession } from './table-session.js';
 import type { BrowserStore } from './browser-store.js';
+import { isAiDifficulty } from '../agents/difficulty.js';
 
 export interface BrowserReply { status: number; body: { table?: WebTable | null; save?: SaveStatus; error?: string; rosters?: Record<number, ReturnType<typeof rosterFor>> } }
 class ApiError extends Error { constructor(readonly status: number, message: string) { super(message); } }
@@ -53,7 +54,7 @@ export function createBrowserApi(store: BrowserStore, version: string) {
     if (!validCheckpoint(saved) || saved.summary.id !== id || saved.engine !== version) throw new ApiError(409, '存档已变化或版本不兼容；旧记录保留。');
     if (new TextEncoder().encode(JSON.stringify(saved)).length > MAX_BYTES) throw new ApiError(409, '存档过大。');
     const s = saved.setup, deadline = Date.now() + 30_000;
-    const restored = await openLocalTable(s.players, s.mode, s.experience, s.lesson, s.socialEnabled, s.runSeed);
+    const restored = await openLocalTable(s.players, s.mode, s.experience, s.lesson, s.socialEnabled, s.runSeed, s.difficulty);
     for (const entry of saved.journal) {
       if (Date.now() > deadline) throw new Error('Restore deadline');
       if (entry.type === 'command' || entry.type === 'continue') {
@@ -96,7 +97,9 @@ export function createBrowserApi(store: BrowserStore, version: string) {
         if (experience === 'tutorial' && mode !== 'classic') throw new ApiError(400, '教学使用经典规则。');
         if (typeof players !== 'number' || !Number.isInteger(players) || players < 2 || players > 6) throw new ApiError(400, '请选择 2–6 人。');
         if (body.socialEnabled !== undefined && typeof body.socialEnabled !== 'boolean') throw new ApiError(400, '人物互动选项无效。');
-        const opened = await openLocalTable(players, mode, experience as 'free' | 'living' | 'tutorial', 0, body.socialEnabled === true);
+        const difficulty = body.difficulty === undefined ? 'standard' : body.difficulty;
+        if (!isAiDifficulty(difficulty)) throw new ApiError(400, '请选择有效的 AI 强度。');
+        const opened = await openLocalTable(players, mode, experience as 'free' | 'living' | 'tutorial', 0, body.socialEnabled === true, undefined, difficulty);
         opened.table.save = { ...await savedStatus(), current: false };
         await checkpoint(opened); session = opened; return ok(session.table);
       }

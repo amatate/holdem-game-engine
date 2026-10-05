@@ -6,6 +6,8 @@ import type { Participant } from '../game/participant.js';
 import type { HandCategory } from '../core/hand-evaluator.js';
 import type { Street } from '../core/state.js';
 import { personaProfile, pressuredBoard, type StreetPlan } from './persona-policy.js';
+import { interpretOpponent } from './opponent-beliefs.js';
+import { currentPressure, type DecisionPlan } from './tactics.js';
 
 export interface PublicOutcome { hand: number; net: number; bigBlind: number }
 
@@ -118,6 +120,7 @@ export class LivingParticipant implements Participant {
   #initiative = false;
   #street: Street | null = null;
   #plan: StreetPlan = 'none';
+  #decisionPlan: DecisionPlan | undefined;
   constructor(readonly characterId: CharacterId, readonly memory: TableMemory, readonly mood: () => number,
     readonly options?: Readonly<ParametricHoldemAgentOptions>) {
     const character = CHARACTERS[characterId];
@@ -127,7 +130,7 @@ export class LivingParticipant implements Participant {
   async decide(context: Readonly<DecisionContext>): Promise<ActionDecision> {
     const observation = context.observation;
     this.memory.observe(observation.handNumber, observation.actionHistory);
-    if (this.#hand !== observation.handId) { this.#hand = observation.handId; this.#initiative = false; this.#street = null; this.#plan = 'none'; }
+    if (this.#hand !== observation.handId) { this.#hand = observation.handId; this.#initiative = false; this.#street = null; this.#plan = 'none'; this.#decisionPlan = undefined; }
     if (this.#street !== observation.street) {
       this.#plan = this.#initiative ? pressuredBoard(observation) ? 'control' : 'pressure' : 'none';
       this.#street = observation.street;
@@ -137,17 +140,25 @@ export class LivingParticipant implements Participant {
     const aggressor = [...observation.actionHistory].reverse().find((event) => event.type === 'playerActed'
       && (event.kind === 'bet' || event.kind === 'raise') && rivals.some((seat) => seat.seatIndex === event.seatIndex));
     const target = aggressor?.seatIndex ?? rivals[0]?.seatIndex ?? 0;
-    const pressure = observation.actionHistory.filter((event) => event.type === 'playerActed'
-      && event.seatIndex !== observation.actorSeatIndex && (event.kind === 'bet' || event.kind === 'raise')).length;
+    const pressure = currentPressure(observation);
+    const reads = new Map(rivals.map(seat => [seat.seatIndex, interpretOpponent(this.characterId,
+      this.memory.evidence(seat.seatIndex, observation.handNumber),
+      this.memory.keyEvidence(seat.seatIndex, observation.handNumber).shownHighCardAggression)]));
     const evidence = this.memory.evidence(target, observation.handNumber);
     // Kai's result reaction has a defined three-hand lifetime rather than an endless mood tail.
     const adapted = adaptProfile(CHARACTERS[this.characterId].profile, evidence, pressure, this.#initiative,
       this.characterId === 'maniac' ? 0 : this.mood());
     const profile = personaProfile(this.characterId, adapted, observation, { plan: this.#plan, evidence,
       ...this.memory.keyEvidence(target, observation.handNumber), outcome: this.memory.lastSignificantOutcome(observation.actorSeatIndex, observation.handNumber) });
-    const decision = new ParametricHoldemAgent(this.characterId, profile, this.options).decide(context);
+    const options = this.options?.difficulty === 'casual' ? this.options : { ...this.options, includePrivateTrace: true,
+      tacticalContext: { reads, ...(this.#decisionPlan ? { previousPlan: this.#decisionPlan } : {}) } };
+    const decision = new ParametricHoldemAgent(this.characterId, profile, options).decide(context);
     this.#initiative = decision.action.type === 'raiseTo' || (decision.action.type === 'allIn'
       && observation.legalActions.allIn?.mode !== 'call');
-    return decision;
+    const intent = decision.privateTrace?.intent;
+    this.#decisionPlan = intent === 'bluff' || intent === 'semiBluff' ? 'pressure'
+      : intent === 'value' || intent === 'trap' ? 'value' : intent === 'draw' ? 'draw' : 'control';
+    // Keep private plans internal even though they influence subsequent decisions.
+    return this.options?.includePrivateTrace ? decision : { action: decision.action };
   }
 }

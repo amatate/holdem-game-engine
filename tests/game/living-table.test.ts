@@ -59,6 +59,29 @@ describe('public table memory', () => {
 });
 
 describe('living table expression', () => {
+  it('shares public memory across all present NPCs and rotates visible witnesses without extra notices', () => {
+    const table = new LivingTable({ story: false });
+    for (let hand = 1; hand <= 3; hand++) table.ingest(hand, [start(hand), action(), action()]);
+    const notices = table.view().memories;
+    expect(notices.filter(n => n.kind === 'action').map(n => n.speaker)).toEqual(['林岚', '阿凯', '莫叔']);
+    expect(notices.filter(n => n.kind === 'pressure').map(n => n.speaker)).toEqual(['阿凯', '莫叔', '林岚']);
+    expect(notices).toHaveLength(6);
+    expect(table.memory.evidence(0)).toMatchObject({ hands: 3, raises: 6 });
+    table.ingest(4, [start(4), ...[1, 2, 3].map(seatIndex => ({ type: 'playerEliminated' as const, seatIndex })), action()]);
+    expect(table.view().memories).toEqual(notices);
+  });
+  it('leaves routine calls and folds quiet, but keeps their public memory', () => {
+    const table = new LivingTable({ story: false });
+    table.ingest(0, [start(1), action(0, 'call'), action(0, 'fold')]);
+    expect(table.view().lines.filter(line => line.kind === 'speech')).toHaveLength(1); // Greeting only.
+    expect(table.view().memories).toHaveLength(1);
+  });
+  it('rotates accepted reactions without repeating them or consuming a new random source', () => {
+    const table = new LivingTable({ story: false });
+    for (let hand = 1; hand <= 5; hand++) table.ingest(hand, [start(hand), action()]);
+    const replies = table.view().lines.filter(line => line.kind === 'speech' && line.speaker === '林岚').slice(1);
+    expect(replies.map(line => line.text)).toEqual(['加这么多啊。', '你这一下，倒不犹豫。', '加这么多啊。']);
+  });
   it.each([2, 3, 4, 5, 6])('uses only the actual %i-player roster for speech and observations', (count) => {
     const people = selectNpcRoster(count).map((characterId, index) => ({ characterId, seatIndex: index + 1 }));
     const table = new LivingTable({ story: false, people });
@@ -66,7 +89,7 @@ describe('living table expression', () => {
     const view = table.view();
     expect(view.notes.map((person) => person.name)).toEqual(people.map((person) => CHARACTERS[person.characterId].displayName));
     for (const line of view.lines) expect(view.notes.some((person) => person.name === line.speaker && person.seatIndex === line.seatIndex)).toBe(true);
-    expect(view.memories[0]?.speaker).toBe(view.notes.find((person) => person.name === '林岚')?.name ?? view.notes[0]?.name);
+    expect(view.memories[0]?.speaker).toBe(view.notes[0]?.name);
     expect(view.prompt).toBeNull(); expect(view.limit).toBeNull(); expect(view.story).toBe(false);
     expect(table.reply('opening', 'warm', view.revision)).toBe(false);
   });
@@ -92,14 +115,14 @@ describe('living table expression', () => {
     table.ingest(1, [action()]);
     expect(table.view().memories).toEqual([memory]);
     table.ingest(2, [finish([70, 130, 100, 100])]);
-    expect(table.view().lines.at(-1)?.text).toBe('先把这一手收好，下一手重新算。');
+    expect(table.view().lines.at(-1)?.text).toBe('这回算我运气好。');
   });
   it('waits for three observed hands for an impression and never assigns it to an absent player', () => {
     const table = new LivingTable({ story: false });
     for (let hand = 1; hand <= 3; hand++) table.ingest(hand, [start(hand), action()]);
     expect(table.view().memories.at(-1)?.inference).toContain('样本较少');
     table.ingest(4, [{ type: 'playerEliminated', seatIndex: 1 }, start(4), action(0, 'fold')]);
-    expect(table.view().memories.at(-1)?.speaker).toBe('阿凯');
+    expect(table.view().memories.at(-1)?.speaker).toBe('莫叔');
     expect(table.view().lines.filter((line) => line.hand === 4).some((line) => line.speaker === '林岚')).toBe(false);
   });
   it('ignores private cards and does not re-ingest packets on refresh', () => {
@@ -118,7 +141,7 @@ describe('living table expression', () => {
     expect(table.view().lines.filter((line) => line.kind !== 'observation')).toHaveLength(5); // intro + incidental speech
     expect(table.view().lines.filter((line) => line.kind === 'observation').length).toBeLessThanOrEqual(2);
     table.ingest(2, [finish(), start(2), action()]);
-    expect(table.view().lines.filter((line) => line.text.includes('这个价'))).toHaveLength(1);
+    expect(table.view().lines.filter((line) => line.text === '加这么多啊。')).toHaveLength(1);
   });
   it('keeps choices idempotent, distinguishes fact from inference and completes six hands', () => {
     const table = new LivingTable(); table.ingest(0, [start(1)]);

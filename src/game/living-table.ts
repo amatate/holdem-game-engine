@@ -1,7 +1,7 @@
 import { TableMemory, type ActionEvidence } from '../agents/table-memory.js';
 import type { PublicGameEvent, PublicActionEvent } from '../core/public-events.js';
 import type { Street } from '../core/state.js';
-import { tablePerson, type TablePerson } from './table-personas.js';
+import { tablePerson, characterLine, type VoiceMoment, type TablePerson } from './table-personas.js';
 
 export interface EventAnchor { packetIndex: number; eventIndex: number }
 export interface TableLine extends EventAnchor {
@@ -69,6 +69,7 @@ export class LivingTable {
   #paid = new Map<number, number>();
   #shown = new Set<number>();
   #cooldowns = new Map<string, number>();
+  #voiceCounts = new Map<string, number>();
   #moods = new Map<number, number>();
   #relations = new Map<number, number>();
   #stacks = [100, 100, 100, 100];
@@ -86,14 +87,23 @@ export class LivingTable {
 
   mood(seat: number): number { return this.#moods.get(seat) ?? 0; }
 
-  #say(speaker: string, text: string, key: string, important = false): void {
-    if (!important && (this.#counts >= 2 || this.#hand - (this.#cooldowns.get(key) ?? -10) < 2)) return;
+  #say(speaker: string, text: string, key: string, important = false): boolean {
+    if (!important && (this.#counts >= 2 || this.#hand - (this.#cooldowns.get(key) ?? -10) < 2)) return false;
     this.#lines.push({ id: this.#nextLine++, hand: this.#hand, speaker, text, kind: 'speech',
       seatIndex: this.#people.find((person) => person.name === speaker)?.seatIndex ?? null,
       packetIndex: this.#packet, eventIndex: this.#eventIndex });
     this.#lines = this.#lines.slice(-32);
     this.#cooldowns.set(key, this.#hand);
     if (!important) this.#counts++;
+    return true;
+  }
+
+  #speak(person: ReturnType<typeof tablePerson>, moment: VoiceMoment, key: string, important = false): void {
+    const voiceKey = `${person.characterId}:${moment}`;
+    const count = this.#voiceCounts.get(voiceKey) ?? 0;
+    if (this.#say(person.name, characterLine(person.characterId, moment, count), key, important)) {
+      this.#voiceCounts.set(voiceKey, count + 1);
+    }
   }
 
   #observeAction(event: Extract<PublicGameEvent, { type: 'playerActed' }>): void {
@@ -127,7 +137,9 @@ export class LivingTable {
     // At most one significant encounter beyond the first-action fact in each hand.
     if (this.#keyKinds.size) return;
     const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
-    const person = active.find((person) => person.characterId === 'hunter') ?? active[0];
+    // The memory is public and shared. Rotate the visible witness instead of
+    // implying that only the hunter notices; use a different witness for key facts.
+    const person = active[this.#hand % active.length];
     if (!person) return;
     this.#keyKinds.add(kind);
     this.#memories.push({ id: this.#nextMemory++, hand: this.#hand, kind, seatIndex: person.seatIndex, speaker: person.name,
@@ -139,7 +151,7 @@ export class LivingTable {
   #remember(event: Extract<PublicGameEvent, { type: 'playerActed' }>): void {
     if (event.seatIndex !== 0 || this.#memories.some((notice) => notice.hand === this.#hand && notice.kind === 'action')) return;
     const active = this.#people.filter((person) => !this.#out.has(person.seatIndex));
-    const observer = active.find((person) => person.characterId === 'hunter') ?? active[0];
+    const observer = active[(this.#hand - 1) % active.length];
     if (!observer) return;
     const labels = { fold: '弃牌', check: '过牌', call: '跟注', bet: '下注', raise: '加注' };
     const stats = this.#visibleMemory.evidence(0);
@@ -168,12 +180,12 @@ export class LivingTable {
           this.#memories = this.#memories.filter((notice) => notice.hand >= this.#hand - 7);
           for (const [seat, mood] of this.#moods) this.#moods.set(seat, mood * 0.5);
           if (this.#hand === 1 && this.#story) {
-            this.#say('莫叔', '先坐。今晚不谈输赢以外的债，只用这盒练习筹码。', 'hello', true);
-            this.#say('阿凯', '那也得认真打。林岚，可别又说只是随便玩玩。', 'hello-kai', true);
-            this.#say('林岚', '我看的是人，不只看结果。', 'hello-lan', true);
+            this.#say('莫叔', '杯子在边上，自己倒。坐吧。', 'hello', true);
+            this.#say('阿凯', '莫叔，又拿你那盒旧筹码啊？', 'hello-kai', true);
+            this.#say('林岚', '能用就行。你那枚别转了，听着晕。', 'hello-lan', true);
           } else if (this.#hand === 1) {
             const host = this.#people[0];
-            if (host) this.#say(host.name, host.hello, 'hello', true);
+            if (host) this.#speak(host, 'hello', 'hello', true);
           }
           break;
         }
@@ -199,22 +211,21 @@ export class LivingTable {
             const raises = this.#actions.filter((action) => action.type === 'playerActed' && action.seatIndex === 0 && (action.kind === 'bet' || action.kind === 'raise')).length;
             if (raises >= 2) this.#keyMemory('pressure', '这次连续施压', `第 ${this.#hand} 手，你第 ${raises} 次主动下注／加注，本轮到 ${event.betTo}。`);
             const observer = lan ?? active[0]!;
-            const stats = this.#visibleMemory.evidence(0, this.#hand);
-            this.#say(observer.name, stats.hands >= 3 && stats.aggressiveHands >= 2
-              ? `前面 ${stats.hands} 手，你有 ${stats.aggressiveHands} 手主动加过价。我记着，但还不能下结论。`
-              : observer.raise, 'hero-raise');
+            // Evidence stays in the notebook. Chatter is a reaction, not a statistics report.
+            this.#speak(observer, 'raise', 'hero-raise');
           }
           if (kai && mo && event.seatIndex === kai.seatIndex && aggression) {
-            this.#say('莫叔', '阿凯，筹码推慢一点，人家看得清。', 'kai-raise');
-            this.#say('阿凯', '知道了。我是想让这一桌认真一点。', 'kai-answer');
+            this.#say('莫叔', '阿凯，慢点推，筹码快滚到我这儿了。', 'kai-raise');
+            this.#say('阿凯', '没滚过去就还不算你的啊，莫叔。', 'kai-answer');
           }
-          if (event.seatIndex === 0 && event.kind === 'fold' && active.length) {
+          if (event.seatIndex === 0 && event.kind === 'fold' && active.length
+            && (this.#paid.get(0) ?? 0) >= this.#bigBlind * 3) {
             const observer = mo ?? active[0]!;
-            this.#say(observer.name, observer.fold, 'hero-fold');
+            this.#speak(observer, 'fold', 'hero-fold');
           }
-          if (event.seatIndex === 0 && event.kind === 'call' && active.length) {
+          if (event.seatIndex === 0 && event.kind === 'call' && active.length && event.paid >= this.#bigBlind * 5) {
             const observer = active[(this.#hand - 1) % active.length]!;
-            this.#say(observer.name, observer.call, 'hero-call');
+            this.#speak(observer, 'call', 'hero-call');
           }
           break;
         }
@@ -251,7 +262,7 @@ export class LivingTable {
               const person = this.#people.find((person) => person.seatIndex === seat.seatIndex);
               // A single result reaction has its own slot; incidental banter cannot swallow it.
               if (person && !reacted) {
-                this.#say(person.name, net > 0 ? person.win : person.loss, `result-${seat.seatIndex}`, true);
+                this.#speak(person, net > 0 ? 'win' : 'loss', `result-${seat.seatIndex}`, true);
                 reacted = true;
               }
             }
@@ -280,11 +291,11 @@ export class LivingTable {
     const seat = this.#stage === 'opening' ? 3 : this.#stage === 'middle' ? 1 : 2;
     this.#relations.set(seat, (this.#relations.get(seat) ?? 0) + (choice === 'warm' ? 1 : choice === 'direct' ? -1 : 0));
     const answer = this.#stage === 'opening'
-      ? choice === 'warm' ? '莫叔轻轻点头：“你肯来，就很好。先认识这一桌。”' : choice === 'direct' ? '莫叔停了一下：“那一夜的事，等熟一点再说。”' : '莫叔把水放在你手边，没有再催你说话。'
-      : this.#stage === 'middle' ? choice === 'warm' ? '林岚把旧记分纸推近一点：“那一夜，有人收起了赢来的筹码。”'
-        : choice === 'direct' ? '林岚抬眼：“你问得很快。但‘没拿走筹码’不等于‘输了’。”' : '林岚把纸折回去：“有些局，不是分完筹码就算结束。”'
-      : choice === 'warm' ? '阿凯收起玩笑：“下次你来，我把那晚后半段讲给你听。”'
-        : choice === 'direct' ? '阿凯没有躲开：“行，下次不绕弯。你也别只盯着输赢。”' : '阿凯替你留了张椅子：“下次见。你不说话的时候，我也知道你在听。”';
+      ? choice === 'warm' ? '莫叔点点头：“来都来了，先打两手。”' : choice === 'direct' ? '莫叔停了一下：“你是来问那晚的事啊……先坐。”' : '莫叔把水放在你手边，没有再催你说话。'
+      : this.#stage === 'middle' ? choice === 'warm' ? '林岚把旧记分纸推近一点：“这张我一直没扔。你慢慢看。”'
+        : choice === 'direct' ? '林岚抬眼：“我只说他没拿筹码。怎么回事，我也没弄明白。”' : '林岚把纸留在桌上：“先放这儿。你想问了再说。”'
+      : choice === 'warm' ? '阿凯收起玩笑：“说好了啊，下次别放我鸽子。那晚还有点事，下回讲。”'
+        : choice === 'direct' ? '阿凯点头：“行，下回把我知道的都告诉你。”' : '阿凯拍了拍椅背：“下次还坐这儿？我给你占着。”';
     this.#say('桌边', answer, `answer-${prompt.id}`, true); this.#revision++;
     return true;
   }

@@ -5,7 +5,11 @@ import type { SessionCommand } from '../../src/game/session-types.js';
 import type { WebTable, SeatIdentity } from '../../src/web/protocol.js';
 import { advanceTableView } from '../../src/web/view.js';
 
-afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+const soundIO = vi.hoisted(() => ({ play: vi.fn(), stop: vi.fn() }));
+vi.mock('../../src/web/sound.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../../src/web/sound.js')>(), installSoundControls: () => soundIO,
+}));
+afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 /** Browser IO only: track controls emitted by the real renderer, not layout or poker state. */
 function installBrowserIO() {
@@ -64,8 +68,9 @@ function installBrowserIO() {
   const app = new Surface();
   const dialog = new Surface();
   const sync = new Surface();
+  const skip = new Surface();
   const surfaces: Record<string, Surface> = { '#app': app, '#notice': new Surface(), '#connection': new Surface(),
-    '#sync': sync, '#replace-table-dialog': dialog };
+    '#sync': sync, '#playback-skip': skip, '#replace-table-dialog': dialog };
   const documentIO = {
     querySelector: (selector: string) => surfaces[selector],
     activeElement: null as Input | null,
@@ -76,7 +81,7 @@ function installBrowserIO() {
   vi.stubGlobal('window', windowIO);
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem: vi.fn() });
   vi.stubGlobal('HTMLDetailsElement', Details);
-  return { app, dialog, sync, documentIO, windowIO };
+  return { app, dialog, sync, skip, documentIO, windowIO };
 }
 
 it('shows the recovered replacement table when the create response is lost, without posting again', async () => {
@@ -203,6 +208,59 @@ it.each([false, true])('restores from the home ticket once without advancing or 
   expect(app.innerHTML).toContain('已保存到第 1 手结算');
   expect(app.innerHTML).not.toContain('正在播放');
   expect(posts).toEqual(['/api/resume']);
+  expect(soundIO.play.mock.calls.filter(([cue]) => cue !== null)).toEqual([]);
+});
+
+it('plays accepted visible actions then the new turn, but stays silent on sync and cosmetic redraws', async () => {
+  const first = await openPresentationTable();
+  let current = first.table;
+  const { app, sync } = installBrowserIO();
+  const { PlaybackClock } = await import('../../src/web/playback.js');
+  vi.spyOn(PlaybackClock.prototype, 'wait').mockResolvedValue();
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/action') {
+      const result = await submitSessionCommand(first.handle, JSON.parse(init!.body as string).command);
+      if (!result.accepted) throw new Error('Expected action accepted');
+      current = { ...current, packet: result.step.packet, view: advanceTableView(current.view, result.step.packet, current.roster) };
+      return Response.json({ table:current });
+    }
+    return Response.json({ table:current, rosters:{2:current.roster} });
+  });
+  await import('../../src/web/client.js');
+  await vi.waitFor(() => expect(app.innerHTML).toContain('raise-form'));
+  expect(soundIO.play).not.toHaveBeenCalled(); // Bootstrap is not an audio replay.
+  app.action = 'act'; app.actionData = { intent:'call' }; app.dispatchEvent(new Event('click'));
+  await vi.waitFor(() => expect(soundIO.play).toHaveBeenCalledWith('turn'));
+  expect(soundIO.play).toHaveBeenCalledWith('chips');
+  expect(soundIO.play).toHaveBeenCalledWith('reveal');
+  const count = soundIO.play.mock.calls.length;
+  app.action = 'toggle-talk'; app.dispatchEvent(new Event('click'));
+  sync.dispatchEvent(new Event('click'));
+  await vi.waitFor(() => expect(app.querySelector('#raise-amount')?.disabled).toBe(false));
+  expect(soundIO.play).toHaveBeenCalledTimes(count);
+});
+
+it('skipping stops an active sound and does not burst the remaining frame cues', async () => {
+  const first = await openPresentationTable();
+  let current = first.table;
+  const { app, skip } = installBrowserIO();
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/action') {
+      const result = await submitSessionCommand(first.handle, JSON.parse(init!.body as string).command);
+      if (!result.accepted) throw new Error('Expected action accepted');
+      current = { ...current, packet:result.step.packet, view:advanceTableView(current.view,result.step.packet,current.roster) };
+      return Response.json({ table:current });
+    }
+    return Response.json({ table:current, rosters:{2:current.roster} });
+  });
+  await import('../../src/web/client.js');
+  await vi.waitFor(() => expect(app.innerHTML).toContain('raise-form'));
+  app.action = 'act'; app.actionData = { intent:'call' }; app.dispatchEvent(new Event('click'));
+  await vi.waitFor(() => expect(soundIO.play).toHaveBeenCalledWith('chips'));
+  skip.dispatchEvent(new Event('click'));
+  await vi.waitFor(() => expect(soundIO.play).toHaveBeenCalledWith('turn'));
+  expect(soundIO.stop).toHaveBeenCalledOnce();
+  expect(soundIO.play).not.toHaveBeenCalledWith('reveal');
 });
 
 it('preserves the raise draft and focus only while the same table and decision remain visible', async () => {
