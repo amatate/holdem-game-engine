@@ -57,6 +57,9 @@ export function installLocalization(doc: Document, win: Window): { refresh(): vo
   const refresh = () => {
     doc.documentElement.lang = locale;
     if (control) control.value = locale;
+    for (const element of doc.querySelectorAll<HTMLElement>('[data-no-i18n][data-zh][data-en]')) {
+      element.textContent = (locale === 'en' ? element.dataset.en : element.dataset.zh) ?? '';
+    }
     // Numeric constants avoid relying on global NodeFilter in alternate DOM implementations.
     const walker = doc.createTreeWalker(doc.documentElement, 4);
     let node: Node | null;

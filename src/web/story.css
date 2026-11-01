@@ -1,0 +1,39 @@
+/* The story journal is optional chrome; live poker keeps the existing playfield. */
+.campaign-story{--story-gold:#e7bb72;--story-paper:#f5ebdd}
+.campaign-story .mobile-hud strong{font-size:13px;letter-spacing:0}
+.campaign-story .mobile-hud p{max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.campaign-story .mobile-story-room{background:linear-gradient(#100c1b20,#100c1b10 40%,#100c1b88 80%,#100c1be8),url('./art/mobile-room-v1.png') center/cover}
+.campaign-story[data-location="garage"] .mobile-story-room{background-image:linear-gradient(#100c1b18,#100c1b08 40%,#100c1b99 83%,#100c1bee),url('./art/garage-room-v1.png')}
+.campaign-story[data-location="new"] .mobile-story-room{background-image:linear-gradient(#100c1b18,#100c1b08 40%,#100c1b99 83%,#100c1bee),url('./art/second-room-v1.png')}
+.mobile-play[data-location="garage"] .mobile-room{background-image:url('./art/garage-room-v1.png');background-size:cover;background-position:center 30%}
+.campaign-location{position:absolute;left:18px;top:22px;color:#e7cfab;letter-spacing:.1em;font:16px 'Songti SC',STSong,serif;text-shadow:0 2px 4px #000}
+.campaign-story .mobile-dialogue-box{background:#211b2ef5;box-shadow:3px 4px 0 #090610;margin-bottom:12px}
+.campaign-story .story-current-line{font-size:16px;line-height:1.95;min-height:62px}
+.story-line-progress{height:2px;width:100%;display:block;margin:0 0 14px;border:0;appearance:none;background:#68506b50;color:#d6ab69}
+.story-line-progress::-webkit-progress-bar{background:#68506b50}.story-line-progress::-webkit-progress-value{background:#d6ab69}.story-line-progress::-moz-progress-bar{background:#d6ab69}
+.story-choices{gap:8px}.story-choices>button{line-height:1.6}
+.story-unavailable{display:block;color:#c3a9b5;font-size:11px;line-height:1.7}
+.story-journal .story-fact{border-left:2px solid #a8815a;padding:7px 10px;margin:12px 0;background:#15122266}
+.story-fact>small{color:#c5a36c}.story-fact>p{margin:5px 0!important}
+.story-history-entry{margin:9px 0!important;padding:7px 0!important}
+.story-history-entry summary{font-size:12px}.story-history-choice{color:#e7bb72!important;border-top:1px solid #765d7150;padding-top:8px}
+.story-chapter-list li{align-items:center}.story-chapter-list li small{width:auto!important}.story-chapter-list .locked{opacity:.5}.story-chapter-list .current{color:#e7bb72}
+.story-end-note,.story-readonly{font-size:12px!important;line-height:1.8}
+.story-prologue-link{display:block;width:100%;margin-top:13px;color:#d6c2bc;font-size:11px;min-height:32px}
+.story-home-links{display:flex;justify-content:center;gap:18px;margin-top:13px}.story-home-links>.text-button{font-size:10px;color:#cbb3b9;min-height:36px}
+.story-table-terms{display:block;font-size:10px;font-weight:400;line-height:1.6;margin-top:5px;color:#cbb48d}
+.campaign-scene{position:relative;background:linear-gradient(#201a2de8,#201a2de8),url('./art/mobile-room-v1.png') center/cover}
+.campaign-scene[data-location="garage"]{background-image:linear-gradient(#201a2ddc,#201a2de8),url('./art/garage-room-v1.png')}
+.campaign-scene[data-location="new"]{background-image:linear-gradient(#201a2ddc,#201a2de8),url('./art/second-room-v1.png')}
+.campaign-desktop-line{display:flex;align-items:center;gap:32px;min-height:330px;margin:16px 0 24px}
+.campaign-desktop-line>div:last-child{flex:1;min-width:0;padding:12px 0}
+.campaign-desktop-line h3{font-size:14px;color:#e7bb72;margin:12px 0}
+.campaign-desktop-line p{font-size:19px;line-height:2;max-width:650px}
+.campaign-desktop-line small{font:12px Georgia,serif;color:#af96b2}
+.campaign-desktop-portrait{position:relative;height:330px;width:250px;overflow:hidden;flex:none}
+.campaign-desktop-portrait img{position:absolute;width:300%;max-width:none;left:0;top:0;transform:translateY(-11.5%);image-rendering:pixelated}
+.campaign-scene>.story-objective{color:#c5b1c8;font-size:13px}
+.campaign-scene>.night-chapter{margin:0}
+.campaign-scene>details>summary{min-height:44px;cursor:pointer;color:#d8bb96;line-height:2}
+@media(max-width:700px){.campaign-desktop-line{gap:16px;min-height:0}.campaign-desktop-portrait{width:110px;height:190px}.campaign-desktop-line p{font-size:15px}.campaign-desktop-line{align-items:flex-start}}
+@media(max-height:720px){.campaign-story .story-current-line{font-size:14px;min-height:45px}.campaign-story .mobile-dialogue-box{padding:12px}.campaign-story .mobile-scene-choices>button{min-height:44px;font-size:12px}}

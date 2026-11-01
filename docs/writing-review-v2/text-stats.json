@@ -1,0 +1,46 @@
+{
+  "file": "02-夜局第一卷_完整文字稿_v2.md",
+  "date": "2026-10-31",
+  "method": "Unicode字符包括空白、标点、Markdown及分支说明；汉字按U+3400至U+9FFF计。含互斥正文，不是单路线字数。",
+  "characters": 25390,
+  "han_characters": 18197,
+  "scene_sections": 36,
+  "ending_sections": 5,
+  "missing_scene_references": [],
+  "duplicate_scene_ids": [],
+  "chapters": [
+    {
+      "title": "第一夜：二楼，门开着",
+      "han_characters": 2484
+    },
+    {
+      "title": "第二夜：换个地方",
+      "han_characters": 1963
+    },
+    {
+      "title": "第三夜：修车店快关了",
+      "han_characters": 2555
+    },
+    {
+      "title": "第四夜：二楼还开着",
+      "han_characters": 2322
+    },
+    {
+      "title": "第五夜：她留了另一份",
+      "han_characters": 3967
+    },
+    {
+      "title": "第六夜：开桌以前",
+      "han_characters": 2094
+    },
+    {
+      "title": "结尾：这一卷停在哪儿",
+      "han_characters": 2347
+    },
+    {
+      "title": "卷末存档文字",
+      "han_characters": 288
+    }
+  ],
+  "missing_local_links": []
+}

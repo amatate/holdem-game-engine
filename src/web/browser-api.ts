@@ -1,13 +1,16 @@
+import { compatibleStorySave } from './story-compat.js';
 import { continueAfterHandResult, submitSessionCommand } from '../game/game-session.js';
 import { answerTutorial, tutorialAllows, tutorialView } from '../game/tutorial.js';
 import type { SessionCommand } from '../game/session-types.js';
 import type { WebTable, SaveStatus } from './protocol.js';
 import { MAX_BYTES, MAX_COMMANDS, validCheckpoint, type Checkpoint } from './checkpoint-data.js';
-import { openLocalTable, rosterFor, advanceSession, refreshPresentation, type LocalSession } from './table-session.js';
-import type { BrowserStore } from './browser-store.js';
+import { openLocalTable, rosterFor, canCheckpoint, refreshPresentation, type LocalSession } from './table-session.js';
+import { tableCommand, tableContinue, chapterChoice, secondNightChoice, storyCommand } from './table-actions.js';
+import { isNightAbility } from '../game/first-night.js';
+import type { BrowserStore, SaveSlot } from './browser-store.js';
 import { isAiDifficulty } from '../agents/difficulty.js';
 
-export interface BrowserReply { status: number; body: { table?: WebTable | null; save?: SaveStatus; error?: string; rosters?: Record<number, ReturnType<typeof rosterFor>> } }
+export interface BrowserReply { status: number; body: { table?: WebTable | null; save?: SaveStatus; chapterSave?: SaveStatus; journeySave?: SaveStatus; error?: string; rosters?: Record<number, ReturnType<typeof rosterFor>> } }
 class ApiError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 async function digest(table: WebTable): Promise<string> {
   const { id: _id, save: _save, ...state } = table;
@@ -19,17 +22,17 @@ async function digest(table: WebTable): Promise<string> {
 export function createBrowserApi(store: BrowserStore, version: string) {
   let session: LocalSession | null = null, busy = false;
   const rosters = Object.fromEntries([2, 3, 4, 5, 6].map((n) => [n, rosterFor(n)]));
-  async function savedStatus(): Promise<SaveStatus> {
+  async function savedStatus(slot?: SaveSlot): Promise<SaveStatus> {
     try {
-      const saved = await store.read();
+      const saved = await store.read(slot);
       if (saved === null) return { enabled: true, saved: null, error: null };
       if (!validCheckpoint(saved)) throw new Error('Invalid checkpoint');
       return { enabled: true, saved: saved.summary,
-        error: saved.engine === version ? null : '存档来自其他版本，暂不能恢复；仍保留在浏览器中。新开桌结算后将替换。' };
+        error: compatibleStorySave(saved,version) ? null : '存档来自其他版本，暂不能恢复；仍保留在浏览器中。新开桌结算后将替换。' };
     } catch { return { enabled: true, saved: null, error: '浏览器存档不可用或数据损坏；仍可打牌，旧记录不会被自动删除。' }; }
   }
   async function checkpoint(current: LocalSession): Promise<void> {
-    if (current.table.packet.kind === 'decision') return;
+    if (!canCheckpoint(current)) return;
     try {
       if (current.journal.length > MAX_COMMANDS) throw new Error('Command limit');
       const saved: Checkpoint = {
@@ -39,29 +42,36 @@ export function createBrowserApi(store: BrowserStore, version: string) {
           heroStack: current.table.view.seats.find((seat) => seat.seatIndex === 0)!.stack,
           players: current.setup.players, mode: current.setup.mode, experience: current.setup.experience,
           lesson: current.tutorial?.lesson ?? null,
-          ended: current.table.packet.kind === 'game-result' || current.table.living?.ended === true || current.tutorial?.complete === true },
+          ...( current.campaign ? {storyNight:current.table.campaign!.night,wallet:current.campaign.wallet} : {}),
+          ended: current.campaign ? current.campaign.phase === 'complete' : current.secondNight ? current.secondNight.phase === 'complete' : current.firstNight ? current.firstNight.phase === 'complete' : current.table.packet.kind === 'game-result' || current.table.living?.ended === true || current.tutorial?.complete === true },
       };
       if (new TextEncoder().encode(JSON.stringify(saved)).length > MAX_BYTES) throw new Error('Size limit');
-      await store.write(saved, current.table.save?.saved?.id ?? null);
+      await store.write(saved, current.table.save?.saved?.id ?? null, current.secondNight ? 'journey' : current.firstNight ? 'chapter' : undefined);
       current.table.save = { enabled: true, saved: saved.summary, error: null, current: true };
     } catch {
       current.table.save = { enabled: true, saved: current.table.save?.saved ?? null, current: false,
         error: '本次结算未保存：存储被禁用、达到上限，或另一标签页已更新存档。牌局已生效，未覆盖旧记录。' };
     }
   }
-  async function restore(id: unknown): Promise<LocalSession> {
-    const saved = await store.read();
-    if (!validCheckpoint(saved) || saved.summary.id !== id || saved.engine !== version) throw new ApiError(409, '存档已变化或版本不兼容；旧记录保留。');
+  async function restore(id: unknown, slot?: SaveSlot): Promise<LocalSession> {
+    const saved = await store.read(slot);
+    if (!validCheckpoint(saved) || saved.summary.id !== id || !compatibleStorySave(saved,version)) throw new ApiError(409, '存档已变化或版本不兼容；旧记录保留。');
     if (new TextEncoder().encode(JSON.stringify(saved)).length > MAX_BYTES) throw new ApiError(409, '存档过大。');
     const s = saved.setup, deadline = Date.now() + 30_000;
-    const restored = await openLocalTable(s.players, s.mode, s.experience, s.lesson, s.socialEnabled, s.runSeed, s.difficulty);
+    if ((saved.setup.experience === 'first-night') !== (slot === 'chapter') || (saved.setup.experience === 'second-night') !== (slot === 'journey')) throw new ApiError(409, '存档类型不匹配。');
+    const restored = await openLocalTable(s.players, s.mode, s.experience, s.lesson, s.socialEnabled, s.runSeed, s.difficulty, s.nightAbility, undefined, undefined, undefined, null, s.storyEdition);
     for (const entry of saved.journal) {
       if (Date.now() > deadline) throw new Error('Restore deadline');
       if (entry.type === 'command' || entry.type === 'continue') {
-        const result = entry.type === 'command' ? await submitSessionCommand(restored.handle, entry.command)
-          : await continueAfterHandResult(restored.handle, entry.packetIndex);
+        const result = entry.type === 'command' ? await tableCommand(restored, entry.command)
+          : await tableContinue(restored, entry.packetIndex);
         if (!result.accepted) throw new Error('Rejected journal entry');
-        advanceSession(restored);
+      } else if (entry.type === 'story') {
+      if (!await storyCommand(restored, entry.input)) throw new Error('Invalid story command');
+    } else if (entry.type === 'second-night') {
+      if (!await secondNightChoice(restored, entry.choice, entry.revision)) throw new Error('Invalid Second Night choice');
+    } else if (entry.type === 'chapter') {
+        if (!await chapterChoice(restored, entry.choice, entry.revision)) throw new Error('Invalid chapter choice');
       } else if (entry.type === 'reply') {
         if (!restored.living?.reply(entry.promptId, entry.choice, entry.revision)) throw new Error('Invalid reply');
         refreshPresentation(restored);
@@ -70,7 +80,7 @@ export function createBrowserApi(store: BrowserStore, version: string) {
         refreshPresentation(restored);
       } else throw new Error('Invalid journal');
     }
-    if (restored.table.packet.kind === 'decision' || await digest(restored.table) !== saved.digest) throw new Error('Digest mismatch');
+    if (!canCheckpoint(restored) || await digest(restored.table) !== saved.digest) throw new Error('Digest mismatch');
     restored.journal = saved.journal;
     restored.table.save = { enabled: true, saved: saved.summary, error: null, current: true };
     return restored;
@@ -80,32 +90,47 @@ export function createBrowserApi(store: BrowserStore, version: string) {
     busy = true;
     const ok = (table: WebTable): BrowserReply => ({ status: 200, body: { table } });
     try {
-      if (path === '/api/bootstrap') return { status: 200, body: { rosters, table: session?.table ?? null, save: session?.table.save ?? await savedStatus() } };
-      if (!['/api/table', '/api/resume', '/api/action', '/api/continue', '/api/reply', '/api/lesson'].includes(path)) throw new ApiError(404, '没有这个操作。');
+      if (path === '/api/bootstrap') return { status: 200, body: { rosters, table: session?.table ?? null,
+        save: session && !session.firstNight && !session.secondNight ? session.table.save ?? await savedStatus() : await savedStatus(),
+        chapterSave: session?.firstNight ? session.table.save ?? await savedStatus('chapter') : await savedStatus('chapter'),
+        journeySave: session?.secondNight ? session.table.save ?? await savedStatus('journey') : await savedStatus('journey') } };
+      if (!['/api/table', '/api/resume', '/api/action', '/api/continue', '/api/reply', '/api/lesson', '/api/first-night', '/api/second-night', '/api/story'].includes(path)) throw new ApiError(404, '没有这个操作。');
       if (typeof input !== 'string' || input.length > 4096) throw new ApiError(400, '请求格式无效。');
       const body: Record<string, unknown> = JSON.parse(input);
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ApiError(400, '请求格式无效。');
       if (path === '/api/resume') {
-        if (session) throw new ApiError(409, '当前已有牌桌，未重复恢复。');
-        session = await restore(body.checkpointId); return ok(session.table);
+        if (session && body.replace !== true) throw new ApiError(409, '当前已有牌桌，未重复恢复。');
+        session = await restore(body.checkpointId, body.slot === 'journey' ? 'journey' : body.slot === 'chapter' ? 'chapter' : undefined); return ok(session.table);
       }
       if (path === '/api/table') {
         const experience = body.experience ?? 'free', mode = body.mode ?? 'classic';
-        const players = experience === 'tutorial' ? 2 : experience === 'living' ? 4 : body.players;
-        if (!['free', 'living', 'tutorial'].includes(String(experience)) || typeof experience !== 'string') throw new ApiError(400, '请选择有效玩法。');
+        const players = experience === 'tutorial' || experience === 'competitive' || experience === 'first-night' || experience === 'second-night' ? 2 : experience === 'living' ? 4 : body.players;
+        if (!['free', 'living', 'tutorial', 'competitive', 'first-night', 'second-night'].includes(String(experience)) || typeof experience !== 'string') throw new ApiError(400, '请选择有效玩法。');
         if (mode !== 'classic' && mode !== 'ability-lab') throw new ApiError(400, '请选择经典或能力模式。');
         if (experience === 'tutorial' && mode !== 'classic') throw new ApiError(400, '教学使用经典规则。');
+        if (experience === 'competitive' && mode !== 'classic') throw new ApiError(400, '竞技练习使用经典规则，不启用能力。');
+        if (experience === 'second-night' && mode !== 'classic') throw new ApiError(400, '第二夜使用经典德州。');
+        if(body.storyEdition!==undefined&&(body.storyEdition!==2||experience!=='second-night'))throw new ApiError(400,'剧情版本无效。');
+        const nightAbility = experience === 'first-night' && mode === 'ability-lab' ? body.nightAbility : null;
+        if (experience === 'first-night' && mode === 'ability-lab' && !isNightAbility(nightAbility)) throw new ApiError(400, '请为第一夜选择一种能力。');
         if (typeof players !== 'number' || !Number.isInteger(players) || players < 2 || players > 6) throw new ApiError(400, '请选择 2–6 人。');
         if (body.socialEnabled !== undefined && typeof body.socialEnabled !== 'boolean') throw new ApiError(400, '人物互动选项无效。');
         const difficulty = body.difficulty === undefined ? 'standard' : body.difficulty;
         if (!isAiDifficulty(difficulty)) throw new ApiError(400, '请选择有效的 AI 强度。');
-        const opened = await openLocalTable(players, mode, experience as 'free' | 'living' | 'tutorial', 0, body.socialEnabled === true, undefined, difficulty);
-        opened.table.save = { ...await savedStatus(), current: false };
+        const opened = await openLocalTable(players, mode, experience as import('./protocol.js').TableExperience, 0, body.socialEnabled === true, undefined, difficulty, nightAbility as import('../game/first-night.js').NightAbility | null, undefined, undefined, undefined, null, body.storyEdition===2?2:undefined);
+        opened.table.save = { ...await savedStatus(opened.secondNight ? 'journey' : opened.firstNight ? 'chapter' : undefined), current: false };
         await checkpoint(opened); session = opened; return ok(session.table);
       }
       if (!session) return { status: 401, body: { error: '请从主页开桌或恢复上次结算。', save: await savedStatus() } };
       if (body.tableId !== session.table.id) throw new ApiError(409, '牌桌已更新，请同步。');
-      if (path === '/api/reply' || path === '/api/lesson') {
+      if (path === '/api/story') {
+        if(body.expectedPacketIndex!==session.table.packet.packetIndex || !await storyCommand(session,body.input as import('../game/story-campaign.js').StoryInput))throw new ApiError(409,'故事位置已变化，或还未读完当前对白。请同步后继续。');
+        session.journal.push({type:'story',input:body.input as import('../game/story-campaign.js').StoryInput});
+      } else if (path === '/api/first-night' || path === '/api/second-night') {
+        if (body.expectedPacketIndex !== session.table.packet.packetIndex || typeof body.choice !== 'string' || typeof body.revision !== 'number'
+          || !await (path === '/api/second-night' ? secondNightChoice : chapterChoice)(session, body.choice, body.revision)) throw new ApiError(409, '这段对话已更新，请同步。');
+        session.journal.push({ type: path === '/api/second-night' ? 'second-night' : 'chapter', choice: body.choice, revision: body.revision });
+      } else if (path === '/api/reply' || path === '/api/lesson') {
         const revision = path === '/api/reply' ? session.table.living?.revision : session.tutorial?.revision;
         if (revision === undefined || revision !== body.revision || body.expectedPacketIndex !== session.table.packet.packetIndex) throw new ApiError(409, '提示已更新，请同步。');
         if (path === '/api/reply') {
@@ -125,11 +150,10 @@ export function createBrowserApi(store: BrowserStore, version: string) {
         if (session.tutorial && (path === '/api/continue' || command?.type !== 'act' || !tutorialAllows(session.tutorial, session.table.packet, command.intent))) {
           throw new ApiError(409, `这是引导练习，未扣筹码。${tutorialView(session.tutorial, session.table.packet).hint}`);
         }
-        const result = path === '/api/action' ? await submitSessionCommand(session.handle, command as SessionCommand)
-          : await continueAfterHandResult(session.handle, body.expectedPacketIndex as number);
+        const result = path === '/api/action' ? await tableCommand(session, command as SessionCommand)
+          : await tableContinue(session, body.expectedPacketIndex as number);
         if (!result.accepted) throw new ApiError(409, '操作已过期或不合法，未重复下注或消耗能力。');
         session.journal.push(path === '/api/action' ? { type: 'command', command: command! } : { type: 'continue', packetIndex: body.expectedPacketIndex as number });
-        advanceSession(session);
       }
       await checkpoint(session); return ok(session.table);
     } catch (error) {

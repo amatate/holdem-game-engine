@@ -1,0 +1,265 @@
+{
+  "versions": {
+    "node": "e3acbc4e8b77638847401ac62f0728d0ff025f3ba16ae0256e2e9ccef13b0266",
+    "pages": "0cf21ca788c800b31f1d5246fe5dc1d603a8499348473f7638ab48a1c99eea04"
+  },
+  "attended": {
+    "checkpoint": {
+      "format": 1,
+      "engine": "e3acbc4e8b77638847401ac62f0728d0ff025f3ba16ae0256e2e9ccef13b0266",
+      "setup": {
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": 0,
+        "socialEnabled": true,
+        "runSeed": "9548f294-3d5f-4209-bdc1-9e0a011b19d6",
+        "difficulty": "casual"
+      },
+      "journal": [
+        {
+          "type": "second-night",
+          "choice": "terms",
+          "revision": 0
+        },
+        {
+          "type": "second-night",
+          "choice": "visit",
+          "revision": 1
+        },
+        {
+          "type": "second-night",
+          "choice": "buy",
+          "revision": 2
+        },
+        {
+          "type": "command",
+          "command": {
+            "type": "act",
+            "decisionKey": "hand/1/seat/0/decision/1",
+            "expectedPacketIndex": 0,
+            "intent": {
+              "type": "call"
+            }
+          }
+        },
+        {
+          "type": "command",
+          "command": {
+            "type": "act",
+            "decisionKey": "hand/1/seat/0/decision/4",
+            "expectedPacketIndex": 1,
+            "intent": {
+              "type": "call"
+            }
+          }
+        },
+        {
+          "type": "second-night",
+          "choice": "after-table",
+          "revision": 4
+        },
+        {
+          "type": "second-night",
+          "choice": "ask-record",
+          "revision": 5
+        }
+      ],
+      "digest": "7cb3cca5bd1ce8b2e4b9db33bfcfc71c96948fe9a1965ac68e633e1c5addc4e6",
+      "summary": {
+        "id": "6d4498ab-440b-4d62-9d69-e2c6e28235d3",
+        "savedAt": "2026-10-31T14:28:10.543Z",
+        "hand": 1,
+        "heroStack": 0,
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": null,
+        "ended": true
+      }
+    },
+    "expected": {
+      "phase": "complete",
+      "revision": 6,
+      "wallet": 300,
+      "route": "new",
+      "ledger": [
+        {
+          "id": "opening",
+          "delta": 600,
+          "balance": 600,
+          "text": "第二夜起始金额",
+          "en": "Second Night opening balance"
+        },
+        {
+          "id": "buy-in",
+          "delta": -300,
+          "balance": 300,
+          "text": "新牌室买入",
+          "en": "New room buy-in"
+        },
+        {
+          "id": "cash-out",
+          "delta": 0,
+          "balance": 300,
+          "text": "离桌回收",
+          "en": "Table cash-out"
+        }
+      ],
+      "askedWho": false,
+      "askedMo": false,
+      "questioned": true,
+      "atTableStart": false,
+      "lastLines": [
+        {
+          "who": "你",
+          "text": "你那笔账，跟我来有关系？",
+          "en": "Does that debt have something to do with me coming?"
+        },
+        {
+          "who": "阿凯",
+          "text": "这儿先别说。回头我找你。",
+          "en": "Not here. I’ll find you later."
+        },
+        {
+          "who": "你",
+          "text": "行。下次先说这个。",
+          "en": "Okay. That’s the first thing we talk about."
+        }
+      ],
+      "facts": [
+        {
+          "who": "账的来路",
+          "text": "离桌时，你亲耳听到韩烈对阿凯说：“你那笔，明天给你划了。”",
+          "en": "As you left, you heard Han tell Kai: “I’ll cross off that debt tomorrow.”"
+        }
+      ],
+      "result": {
+        "hands": 1,
+        "closing": 0,
+        "net": -300,
+        "reason": "bust"
+      },
+      "title": "第二夜 · 结束",
+      "titleEn": "Second Night · End",
+      "lines": [
+        {
+          "who": "你",
+          "text": "你那笔账，跟我来有关系？",
+          "en": "Does that debt have something to do with me coming?"
+        },
+        {
+          "who": "阿凯",
+          "text": "这儿先别说。回头我找你。",
+          "en": "Not here. I’ll find you later."
+        },
+        {
+          "who": "你",
+          "text": "行。下次先说这个。",
+          "en": "Okay. That’s the first thing we talk about."
+        }
+      ],
+      "choices": [],
+      "task": "今晚结束，金额与记录已保留",
+      "taskEn": "Tonight is over; your money and notes are kept",
+      "goal": "下次见阿凯，核对这笔账",
+      "goalEn": "Ask Kai about the debt next time",
+      "location": "new",
+      "limit": 8
+    }
+  },
+  "declined": {
+    "checkpoint": {
+      "format": 1,
+      "engine": "e3acbc4e8b77638847401ac62f0728d0ff025f3ba16ae0256e2e9ccef13b0266",
+      "setup": {
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": 0,
+        "socialEnabled": true,
+        "runSeed": "76f45e39-fb76-4976-bdd3-9414e0dd955b",
+        "difficulty": "casual"
+      },
+      "journal": [
+        {
+          "type": "second-night",
+          "choice": "decline",
+          "revision": 0
+        },
+        {
+          "type": "second-night",
+          "choice": "head-home",
+          "revision": 1
+        },
+        {
+          "type": "second-night",
+          "choice": "later",
+          "revision": 2
+        }
+      ],
+      "digest": "8e1a6b606387c6964ebb5b850d768f17b093035629559d0d7feca6b811a94307",
+      "summary": {
+        "id": "bc7d74f7-e343-44fd-b564-4276608105c1",
+        "savedAt": "2026-10-31T14:27:47.438Z",
+        "hand": 1,
+        "heroStack": 99,
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": null,
+        "ended": true
+      }
+    },
+    "expected": {
+      "phase": "complete",
+      "revision": 3,
+      "wallet": 600,
+      "route": "old",
+      "ledger": [
+        {
+          "id": "opening",
+          "delta": 600,
+          "balance": 600,
+          "text": "第二夜起始金额",
+          "en": "Second Night opening balance"
+        }
+      ],
+      "askedWho": false,
+      "askedMo": false,
+      "questioned": false,
+      "atTableStart": true,
+      "lastLines": [
+        {
+          "who": "",
+          "text": "你没有再问。那句话还留在脑子里。",
+          "en": "You leave it for now. His words stay with you."
+        }
+      ],
+      "facts": [
+        {
+          "who": "账的来路",
+          "text": "你没去新牌室。阿凯发来：“韩烈说你没来，这次就不算了。”",
+          "en": "You did not visit the new room. Kai texted: “Han says you didn’t come, so it doesn’t count this time.”"
+        }
+      ],
+      "result": null,
+      "title": "第二夜 · 结束",
+      "titleEn": "Second Night · End",
+      "lines": [
+        {
+          "who": "",
+          "text": "你没有再问。那句话还留在脑子里。",
+          "en": "You leave it for now. His words stay with you."
+        }
+      ],
+      "choices": [],
+      "task": "今晚结束，金额与记录已保留",
+      "taskEn": "Tonight is over; your money and notes are kept",
+      "goal": "下次见阿凯，核对这笔账",
+      "goalEn": "Ask Kai about the debt next time",
+      "location": "old",
+      "limit": 6
+    }
+  }
+}

@@ -4,6 +4,37 @@
  * Numeric slots are deliberately constrained to numbers; no arbitrary HTML matching.
  */
 export const EN_MESSAGES: readonly (readonly [string, string])[] = String.raw`
+设置 => Settings
+对白进度 => Dialogue progress
+关闭面板 => Close panel
+减少下注 => Decrease bet
+增加下注 => Increase bet
+仅虚拟筹码 · 结算后保存 · 未完成的一手不保存 => Virtual chips only · Saves after settlement · Unfinished hands are not saved
+第一夜 => First Night
+旧版六手片段 => Original six-hand vignette
+保留早期人物互动原型。想体验完整的第一晚，请从上方「第一夜」入座。 => The original social prototype is still here. For the full first evening, enter First Night above.
+阿凯 · 消息 => Kai · Message
+请为第一夜选择一种能力。 => Choose one ability for First Night.
+这一桌已暂停，请先回应桌间对话。 => This table is paused. Finish the conversation first.
+只能使用本章选定的能力，且需要足够精力。未消耗精力。 => Only your chosen chapter ability is available, and it needs enough energy. No energy was spent.
+这段对话已更新，请同步。 => This conversation has changed. Sync the table.
+存档类型不匹配。 => Save slot does not match this mode.
+收池 · 本轮下注归入底池 => Collecting this round's bets into the pot
+竞技练习 · 实验版 v0 => Competitive practice · Experimental v0
+和基线牌手，认真打一场 => Take on the arena baseline
+林岚使用评测场的固定挑战策略。没有暗手，没有闲聊，只凭牌技。 => Lin Lan uses the arena's fixed challenge policy. No abilities or table talk. Just poker.
+单挑 · 100BB 起始 · 每 8 手升盲 · 非 GTO 求解器 => Heads-up · Starts at 100BB · Blinds rise every 8 hands · Not a GTO solver
+进入竞技练习 → => Enter competitive practice →
+竞技练习规则 => Competitive practice rules
+hunter-challenge · 600 次采样 · 初始 100BB · 每 8 手升盲 => hunter-challenge · 600 samples · Starts at 100BB · Blinds rise every 8 hands
+无能力 · 无跨手人物记忆 · 非 GTO 求解器 => No abilities · No cross-hand social memory · Not a GTO solver
+竞技基线 v0 => Arena baseline v0
+固定挑战策略 · 无跨手人物记忆 => Fixed challenge policy · No cross-hand social memory
+采用评测场的 hunter-challenge 策略，每次决策 600 次胜率采样。只看自己的牌与公开行动，不读你的底牌；不是 GTO 求解器。 => Uses the arena's hunter-challenge policy with 600 equity samples per decision. It sees only its own cards and public actions, never your hole cards. Not a GTO solver.
+竞技练习使用经典规则，不启用能力。 => Competitive practice uses classic rules without abilities.
+筹码跟随牌背配色，图案仅作装饰；实际金额以旁边数字为准。 => Chips match the card back. Artwork is decorative; the number beside it is the actual amount.
+筹码按面额分色、按金额堆叠；牌背主题改变包边和纹饰，不改变面额。 => Chip colours indicate denominations and stacks reflect the amount. The card-back theme changes the rim and engraving, not the value.
+偏好只保存在当前浏览器。教学推荐红馆，剧情序章推荐蓝调，竞技练习推荐幽影，自由牌桌推荐夜局。 => Preferences stay in this browser. Lessons recommend Lantern Club, the prologue Blue Hour, competitive practice Wraith, and free play Night Table.
 牌组外观 => Deck style
 完成 => Done
 桌上的小讲究 => A little table ritual
@@ -697,6 +728,7 @@ export const EN_MESSAGES: readonly (readonly [string, string])[] = String.raw`
 });
 
 export const EN_TEMPLATES: readonly (readonly [string, string])[] = String.raw`
+第 {0} 夜 => Night {0}
 底部两张是只有你知道的底牌。你已付小盲，先点“跟注”，再付 {0}，补齐对手的大盲。盲注是自动投入，不代表强牌。 => Your two cards are private. You paid the small blind. Click Call and pay {0} more to match the big blind. Blinds are automatic, not a sign of strong cards.
 把“加注到”设为 {0} 并确认。你本轮已投入 {1}，这次再付 {2}。这是总额，不是额外再加。 => Set Raise to to {0} and confirm. You have paid {1} this round, so pay {2} more. The raise amount is the total, not extra chips.
 莫叔反加了：继续需要再跟 {0}。这关练习“弃牌”止损。教学对手按脚本配合，不代表正常牌局遇到反加都该弃牌。 => Uncle Mo re-raised. Calling costs {0} more. Practise folding in this lesson. The coach follows a script; a re-raise does not always mean you should fold in normal play.

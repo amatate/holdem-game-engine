@@ -1,5 +1,6 @@
 import { cardFace } from './poker-cards.js';
 import type { Card } from '../core/types.js';
+import { renderChipPile } from './chips.js';
 
 export const DECK_SKINS = [
   { id:'night', name:'夜局', description:'紫金像素 · 原版', atlas:null },
@@ -34,7 +35,7 @@ const SAMPLE_CARDS: readonly Card[] = [
 ];
 export function renderDeckGallery(): string {
   return DECK_SKINS.map(skin => `<button type="button" class="deck-preset" data-deck-preset="${skin.id}" aria-pressed="false">
-    <span class="deck-pair" data-card-face="${skin.id}" data-card-back="${skin.id}" aria-hidden="true">${cardFace(null)}${cardFace(SAMPLE_CARDS[1]!)}</span>
+    <span class="deck-pair" data-card-face="${skin.id}" data-card-back="${skin.id}" aria-hidden="true">${cardFace(null)}${cardFace(SAMPLE_CARDS[1]!)}<span class="deck-mini-chips">${renderChipPile(37)}</span></span>
     <strong>${skin.name}</strong><small>${skin.description}</small></button>`).join('');
 }
 
@@ -57,7 +58,7 @@ export function installDeckSkins(doc: Document, win: Window, changed: () => void
   gallery.innerHTML = renderDeckGallery();
   const options = DECK_SKINS.map(skin => `<option value="${skin.id}">${skin.name}</option>`).join('');
   face.innerHTML = options; back.innerHTML = options;
-  preview.innerHTML = `${SAMPLE_CARDS.map(card => cardFace(card)).join('')}${cardFace(null)}`;
+  preview.innerHTML = `<span class="deck-cards-preview">${SAMPLE_CARDS.map(card => cardFace(card)).join('')}${cardFace(null)}</span><span class="deck-chip-sample">${[2, 20, 137].map(value => `<span>${renderChipPile(value)}<b>${value}</b></span>`).join('')}</span>`;
   const render = () => {
     const style = resolveDeckStyle(preference, scene);
     doc.documentElement.dataset.cardFace = style.face;

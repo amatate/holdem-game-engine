@@ -2,13 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="从三关教学入门德州，与记得你打法的牌手走进夜局短序章，或自由选择经典和能力牌桌。">
   <meta name="theme-color" content="#1b1730">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%23211c32%22%2F%3E%3Ctext%20x%3D%227%22%20y%3D%2231%22%20font-size%3D%2232%22%20fill%3D%22%23e7bb72%22%3E%E2%99%A0%3C%2Ftext%3E%3C%2Fsvg%3E">
   <title>夜局 · 德州扑克</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/pixel-table.css">
   <link rel="stylesheet" href="/deck-skins.css">
+  <link rel="stylesheet" href="/chips.css">
+  <link rel="stylesheet" href="/first-night.css">
+  <link rel="stylesheet" href="/mobile.css">
+  <link rel="stylesheet" href="/second-night.css">
+  <link rel="stylesheet" href="/story.css">
   <script type="module" src="/client.js"></script>
 </head>
 <body>
@@ -32,14 +38,15 @@
     <div id="app"><p class="loading">正在连接牌桌…</p></div></main>
   <dialog id="replace-table-dialog" class="replace-dialog" aria-labelledby="replace-title"><h2 id="replace-title">重新选择牌桌？</h2><p>你可以更换模式和人数。开始任一新牌桌后，旧牌局结束，能力次数重新计算。旧存档会保留到新牌桌第一手结算，再被覆盖。</p><form method="dialog"><button class="button button-secondary" value="cancel" autofocus>保留当前牌桌</button><button class="button button-primary" value="choose">重新选桌</button></form></dialog>
   <div id="character-tooltip" class="character-tooltip" role="tooltip" hidden></div>
+  <dialog id="mobile-settings" class="mobile-settings-dialog" aria-labelledby="mobile-settings-title"><header><h2 id="mobile-settings-title">设置</h2><button id="mobile-settings-close" class="text-button" type="button">完成</button></header><div id="mobile-settings-content"></div><button id="mobile-go-home" class="text-button" type="button">返回主页</button><p class="mobile-sheet-note">仅虚拟筹码 · 结算后保存 · 未完成的一手不保存</p></dialog>
   <dialog id="deck-dialog" class="deck-dialog" aria-labelledby="deck-title" aria-describedby="deck-note">
     <header class="deck-dialog-heading"><div><p class="eyebrow">桌上的小讲究</p><h2 id="deck-title">换一副牌</h2></div><button id="deck-close" class="text-button" type="button" autofocus>完成</button></header>
-    <p id="deck-note">只换外观，不影响发牌、胜率或当前操作。</p>
+    <p id="deck-note">只换外观，不影响发牌、胜率或当前操作。</p><p class="chip-style-note">筹码按面额分色、按金额堆叠；牌背主题改变包边和纹饰，不改变面额。</p>
     <div id="deck-gallery" class="deck-gallery" aria-label="成套牌组"></div>
     <div class="deck-custom"><label for="deck-face">牌面<select id="deck-face"></select></label><label for="deck-back">牌背<select id="deck-back"></select></label></div>
     <label class="deck-follow"><input id="deck-follow-scene" type="checkbox"><span>跟随场景推荐</span><small>当前推荐：<span id="deck-scene-name">夜局</span></small></label>
     <div class="deck-live-preview"><div id="deck-preview" class="deck-preview" aria-label="固定示例牌"></div><p>固定示例牌，不是当前底牌。可分别搭配牌面与牌背。</p></div>
-    <p class="deck-footnote">偏好只保存在当前浏览器。教学推荐红馆，剧情序章推荐蓝调，自由牌桌推荐夜局。</p>
+    <p class="deck-footnote">偏好只保存在当前浏览器。教学推荐红馆，剧情序章推荐蓝调，竞技练习推荐幽影，自由牌桌推荐夜局。</p>
   </dialog>
   <footer class="footer"><span>NO-LIMIT TEXAS HOLD’EM</span><span>只用虚拟筹码 · 本机运行</span></footer>
 </body>

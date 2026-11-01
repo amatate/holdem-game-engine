@@ -18,13 +18,13 @@ export function tableDigest(table: WebTable): string {
 export async function engineFingerprint(): Promise<string> {
   const pieces: string[] = ['checkpoint-v1'];
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
-  for (const directory of ['core', 'agents', 'game', 'cli']) {
+  for (const directory of ['core', 'agents', 'game', 'cli', 'arena']) {
     const url = new URL(`../${directory}/`, import.meta.url);
     for (const name of (await readdir(url)).filter((name) => name.endsWith(extension)).sort()) {
       pieces.push(`${directory}/${name}`, await readFile(new URL(name, url), 'utf8'));
     }
   }
-  for (const name of ['server', 'view', 'checkpoints', 'checkpoint-data', 'table-session']) pieces.push(await readFile(new URL(`./${name}${extension}`, import.meta.url), 'utf8'));
+  for (const name of ['server', 'view', 'checkpoints', 'checkpoint-data', 'table-session', 'table-actions', 'story-compat']) pieces.push(await readFile(new URL(`./${name}${extension}`, import.meta.url), 'utf8'));
   return hash(pieces.join('\0'));
 }
 

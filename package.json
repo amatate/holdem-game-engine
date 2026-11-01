@@ -22,7 +22,9 @@
     "build:pages": "node scripts/build-pages.mjs",
     "preview:pages": "node scripts/preview-pages.mjs",
     "simulate": "tsx scripts/simulate.ts",
-    "test:stress": "tsx scripts/stress.ts"
+    "test:stress": "tsx scripts/stress.ts",
+    "ai:arena": "node --import tsx scripts/arena.ts",
+    "ai:chipzen": "npm run build && node --env-file-if-exists=.env.chipzen dist/arena/chipzen/cli.js"
   },
   "devDependencies": {
     "@types/node": "22.19.21",
@@ -31,5 +33,8 @@
     "tsx": "4.23.12",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "@chipzen-ai/bot": "0.3.1"
   }
 }

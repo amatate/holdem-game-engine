@@ -1,5 +1,32 @@
 # Pixel night / Phase A assets
 
+## Matching chip stacks (2026-10-13)
+
+Five new original transparent PNG sprites, generated with the **built-in imagegen**
+tool, visually inspected and copied unchanged into this directory:
+`chips-night-v1.png`, `chips-lantern-v1.png`, `chips-blue-hour-v1.png`,
+`chips-jade-v1.png`, `chips-ghost-v1.png`. Each is 1254 × 1254 RGBA.
+[Exact final prompts and original filenames](chips-v1.json).
+
+The star / lantern / record / ginkgo / crescent motifs follow the existing
+five deck themes. These PNGs remain decorative entrance artwork. After playtest
+feedback, pot/bet piles, transfers and the deck gallery now use individually
+rendered denomination chips in `../chips.ts` and `../chips.css`, not these flattened
+stacks. The new implementation is original code-native UI inspired by
+[Replay Poker's public design case study](https://supereightstudio.com/project_replaypoker);
+no reference artwork was copied into the project. Each chip has a value, with
+colours fixed by denomination and rims/engravings following the public card-back
+theme. Very large counts use explicit ×N bundles. No hidden information or RNG
+selects a visual, and changing a skin never submits a poker action.
+
+The existing table palette and typography are preserved. Chips are the new
+tactile accent; amounts and action controls remain plain, high-contrast text.
+Original source images are unmodified; CSS scales them without adding another
+image-processing dependency. Node and Pages serve fixed, versioned local paths.
+These project-generated assets add no third-party brand marks or license grants.
+
+---
+
 Generated for this project with the built-in image generation tool on 2026-09-26.
 Identity references: the approved character sheets in
 `docs/design/pixel-night-v1/characters-v1/`. Prompts and design scope:
@@ -179,3 +206,22 @@ Use case: stylized-concept. Asset type: production game playing-card texture atl
 Use case: stylized-concept. Asset type: production game playing-card texture atlas. Create a flat 1600x1120 landscape raster with EXACTLY TWO equally sized 800x1120 portrait rectangles side by side, each a 5:7 card. The LEFT half is the decorative card BACK, the RIGHT half is a BLANK matching card FACE to receive code-rendered rank and suit later. No gutter, no margins outside these two rectangles, no perspective, no card shadows, no rounded exterior corners. The vertical split must be exactly 50 percent of the image. Both halves fill their rectangle completely edge to edge. Original vintage playing-card design, classic American printed-card heritage with an indie pixel-art game sensibility: precise stepped engraved lines, limited screen-printed colors, restrained fine ornament and strong silhouette. LEFT: two-way balanced ornament, even narrow ivory border, ample contrast and central bold ornaments legible when scaled down. RIGHT: almost entirely clean light ivory paper with only an extremely faint central watermark and a delicate frame at the outermost 2 percent; leave the upper-left 40 percent and lower-right 40 percent blank and clean for readable game values. NO text, NO letters, NO numbers, NO suit pips printed on the right half, NO brand logos, NO Bicycle branding, NO bicycles, NO angels, NO watermark signature. Opaque image. This is usable source artwork, not a mockup or presentation board. Theme: JADE SALON. Deep jade #1b594d, muted antique gold #c2a467, pale rice ivory #f4f0d9. LEFT: a strong symmetrical diamond medallion filled with interlaced ginkgo leaves and four mirrored botanical fans, fine jade and gold engraving, graceful layered nested borders. The diamond/leaf motif is bold and readable, unlike a circular medallion. RIGHT: pale rice ivory paper, hairline jade-and-antique-gold stepped frame, extremely faint botanical diamond watermark at center. Collector-quality private salon deck; warm, calm and tactile. No dark face background.
 
 </details>
+# Mobile room v1
+
+`mobile-room-v1.png` is a text-free portrait room background generated with the built-in imagegen tool from the project's approved mobile UI concept. Rainy violet city window, warm brass lamp, worn armchair and low table retain the existing game's pixel-art direction. The logo, chapter text, buttons, cards, wagers and other live values are drawn by the frontend, not baked into this image. Original generation: `exec-8268f028-0237-4bb0-acb3-85fc0af1501f.png`; reference: `output/design/mobile-ui-v1/mobile-ui-concept.png`. No external game artwork was downloaded.
+
+
+## Second Night room v1
+
+- File: `second-room-v1.png`, original generated PNG, built-in image generation. No reference images or downloaded artwork.
+- Used by the Second Night new-room scenes and mobile table background. Old-room scenes keep the existing room art. All dialogue, money and controls are DOM text.
+- Prompt: production portrait pixel-art background; quiet upstairs card room south of a bridge; empty green felt table, plum chairs, dark wood, brass pendant, rainy blue window and distant bridge; midnight purple/green/brass palette; no people, chips, cards, text, UI, logos or watermark; dark lower third reserved for dialogue.
+- Original: `exec-e061998c-aba7-4e4a-83f5-df073180f05a.png`; generated in this chat with the built-in tool, copied unchanged into the game.
+
+
+## Garage room v1
+
+- File: `garage-room-v1.png`, generated with the built-in image tool and copied unchanged into the game.
+- Production background for Third Night scenes and the optional Kai heads-up table. Existing portraits remain separate; dialogue, money and controls are DOM text.
+- Prompt: ordinary neighborhood repair shop after closing, half-lowered shutter, wet blue street, warm work lights, tools, car, empty folding table and two chairs; crisp pixel clusters in plum/teal/amber; portrait 2:3; no people, text, cards, chips, logos or UI. Full prompt: `docs/design/garage-room-prompt.txt`.
+- Original generated file: `exec-834021e1-47eb-49f5-b278-4d2383ae217a.png`.

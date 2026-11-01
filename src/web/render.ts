@@ -1,14 +1,19 @@
 import type { Card } from '../core/types.js';
 import type { HandCategory } from '../core/hand-evaluator.js';
-import type { SeatIdentity, WebTable, SaveStatus } from './protocol.js';
+import type { SeatIdentity, WebTable, SaveStatus, TableExperience } from './protocol.js';
 import type { PlaybackFrame } from './playback.js';
 import type { SessionMode } from '../game/session-types.js';
 import { STREET_NAMES } from './view.js';
 import { AI_DIFFICULTIES, AI_LABELS, type AiDifficulty } from '../agents/difficulty.js';
 import { renderEntrances, renderGuide, renderStory, renderObservations, renderPulse } from './experience-render.js';
 import { cardFace, orderedBestFive } from './poker-cards.js';
+import { renderChipPile } from './chips.js';
+import { renderCampaignScene, renderCampaignTableHeader } from './story-render.js';
+import { renderJourney, renderJourneyEntrance } from './second-night-render.js';
+import { renderNight, renderNightEntrance, bilingual } from './first-night-render.js';
+import type { NightAbility } from '../game/first-night.js';
 
-const CATEGORIES: Record<HandCategory, string> = {
+export const CATEGORIES: Record<HandCategory, string> = {
   'high-card': '高牌', 'one-pair': '一对', 'two-pair': '两对', 'three-of-a-kind': '三条',
   straight: '顺子', flush: '同花', 'full-house': '葫芦', 'four-of-a-kind': '四条', 'straight-flush': '同花顺',
 };
@@ -26,7 +31,7 @@ const PORTRAITS = new Map([
   ['rock', './art/rock-v2.png'], ['small-ball', './art/small-ball-v2.png'],
   ['trapper', './art/trapper-v2.png'], ['value-bettor', './art/value-bettor-v2.png'],
 ]);
-function portrait(person: SeatIdentity, state: 'neutral' | 'speaking' | 'win'): string {
+export function portrait(person: SeatIdentity, state: 'neutral' | 'speaking' | 'win'): string {
   const source = PORTRAITS.get(person.characterId);
   return source ? `<div class="character-portrait portrait-${state}" data-portrait="${escapeHtml(person.characterId)}" aria-hidden="true"><img class="portrait-atlas" src="${source}" alt="" draggable="false" decoding="async"></div>`
     : '<div class="character-portrait portrait-fallback" aria-hidden="true"><span class="portrait-silhouette"></span></div>';
@@ -46,10 +51,12 @@ function board(cards: readonly Card[]): string {
 }
 
 export function renderLobby(rosters: Record<number, SeatIdentity[]>, playerCount: number, mode: SessionMode = 'classic', socialEnabled = true,
-  save?: SaveStatus, hasActiveTable = false, difficulty: AiDifficulty = 'standard'): string {
+  save?: SaveStatus, hasActiveTable = false, difficulty: AiDifficulty = 'standard', chapterSave?: SaveStatus, nightAbility: NightAbility | null = null, journeySave?: SaveStatus): string {
   const roster = rosters[playerCount] ?? [];
   return `<section class="lobby" aria-label="选择牌桌">
     ${renderSavedProgress(save, hasActiveTable)}
+    <section class="night-chapter"><p class="eyebrow">${bilingual('第一卷 · 六夜故事','Volume One · Six nights',escapeHtml)}</p><h2>${bilingual('留个位置','A Seat Kept',escapeHtml)}</h2><p>${bilingual('二楼，门开着。先认识这一桌人，再决定以后怎么坐。','The door upstairs is open. Meet the table, then decide where you stand.',escapeHtml)}</p><button class="button button-primary" data-action="volume-start">${bilingual('开始第一卷 · 留个位置','Start Volume One · A Seat Kept',escapeHtml)}</button><p class="aside-note">${bilingual('中文剧情 · 真实德州 · 可不入桌。新开局重置故事钱包；旧版入口与经典牌桌仍可选。','Chinese story · Real Hold’em · Wagering optional. A new story resets the story wallet. Legacy stories and free play remain available.',escapeHtml)}</p></section>
+    ${renderNightEntrance(chapterSave, nightAbility, escapeHtml, difficulty, hasActiveTable)}${renderJourneyEntrance(journeySave,escapeHtml)}
     ${renderEntrances()}
     <div class="arena arena-lobby" data-count="${playerCount}"><div class="felt"></div>
       <div class="table-center"><div class="table-mark">夜 局</div><p class="table-subtitle">NO-LIMIT TEXAS HOLD’EM</p>${board([])}<p class="table-caption">选好人数，即可发牌</p></div>
@@ -69,7 +76,7 @@ function renderSavedProgress(save: SaveStatus | undefined, hasActiveTable: boole
   const saved = save.saved;
   if (!saved) return `<p class="save-empty">${escapeHtml(save.error ?? '每手结算后自动保存。下次回来，可以从这里继续。')}</p>`;
   const date = new Date(saved.savedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-  const experience = saved.experience === 'tutorial' ? `桌边课 · 第 ${(saved.lesson ?? 0) + 1} 关` : saved.experience === 'living' ? '留一张椅子 · 序章' : '自由牌桌';
+  const experience = saved.experience === 'tutorial' ? `桌边课 · 第 ${(saved.lesson ?? 0) + 1} 关` : saved.experience === 'living' ? '留一张椅子 · 序章' : saved.experience === 'competitive' ? '竞技练习 · 实验版 v0' : '自由牌桌';
   return `<section class="resume-ticket" aria-label="上次结算存档"><div class="ticket-stub"><span>留席签</span><strong>${saved.hand}</strong><small>手 · 已结算</small></div>
     <div class="ticket-body"><p class="eyebrow">${experience} · ${saved.players} 人 · ${saved.mode === 'classic' ? '经典' : '能力实验'}</p><h1>${saved.ended ? '这一局的结果，替你留着。' : '椅子还在，接着打。'}</h1><p>你的筹码 <strong>${amount(saved.heroStack)}</strong> <span class="separator">/</span> <time datetime="${escapeHtml(saved.savedAt)}">${escapeHtml(date)}</time> 保存</p>
     <p class="ticket-note">${hasActiveTable ? '当前牌桌仍在运行，可从上方返回。' : `恢复到第 ${saved.hand} 手结算，未完成的一手不保存。`}</p>
@@ -81,19 +88,30 @@ function renderSavedProgress(save: SaveStatus | undefined, hasActiveTable: boole
 function renderSaveStatus(table: WebTable): string {
   const save = table.save;
   if (!save?.enabled) return '';
+  if(table.campaign)return `<div class="save-status ${save.error?'save-error':''}"><span role="status">${save.error?escapeHtml(save.error):bilingual('故事检查点已保存 · 包括金额与对白位置','Story checkpoint saved · Money and dialogue position included',escapeHtml)}</span><button class="text-button" data-action="home">${bilingual('返回主页','Back home',escapeHtml)}</button></div>`;
+  if (table.secondNight) {
+    const unfinished=table.secondNight.phase==='playing'&&table.packet.kind==='decision'&&!table.secondNight.atTableStart;
+    return `<div class="save-status ${save.error?'save-error':''}"><span role="status">${save.error?escapeHtml(save.error):bilingual(unfinished?'上一检查点已保存 · 当前这手尚未结算':'第二夜金额与行程已保存',unfinished?'Last checkpoint saved · This hand is in progress':'Second Night wallet and plans saved',escapeHtml)}</span><button class="text-button" data-action="home">${bilingual('返回主页','Back home',escapeHtml)}</button></div>`;
+  }
+  if (table.firstNight) {
+    const unfinished = table.firstNight.phase === 'playing' && table.packet.kind === 'decision' && !table.firstNight.atTableStart;
+    const label = save.error ? escapeHtml(save.error) : bilingual(unfinished ? '上一检查点已保存 · 当前这手尚未结算' : '第一夜检查点已保存 · 可从主页继续',
+      unfinished ? 'Last checkpoint saved · This hand is still in progress' : 'First Night checkpoint saved · Continue from home', escapeHtml);
+    return `<div class="save-status ${save.error ? 'save-error' : ''}"><span role="status">${label}</span><button class="text-button" data-action="home">返回主页</button></div>`;
+  }
   const label = save.error ?? (save.saved ? save.current ? `已保存到第 ${save.saved.hand} 手结算${table.packet.kind === 'decision' ? ' · 当前这手尚未保存' : ''}`
     : `保留上一桌／关的第 ${save.saved.hand} 手结算 · 本手结束后覆盖` : '本手结算后自动保存 · 现在离开尚无本桌存档');
   return `<div class="save-status ${save.error ? 'save-error' : ''}"><span role="status">${escapeHtml(label)}</span><button class="text-button" data-action="home">返回主页</button></div>`;
 }
 
-function renderRecaps(table: WebTable): string {
+export function renderRecaps(table: WebTable): string {
   if (!table.recentHands?.length) return '<p class="recap-empty">打完一手后，这里会留下交锋与净结果。</p>';
   return `<section class="recent-hands" aria-label="最近交锋"><h2>最近 ${table.recentHands.length} 手交锋</h2><p class="aside-note">只回顾已结算的公开事实，不推断未亮出的底牌。</p><ol>${[...table.recentHands].reverse().map((hand) => `<li><div class="recap-heading"><strong>第 ${hand.hand} 手</strong><span class="${hand.net > 0 ? 'net-win' : ''}">净${hand.net > 0 ? '赢' : hand.net < 0 ? '输' : '结果'} ${amount(Math.abs(hand.net))}</span><small>结算后 ${amount(hand.stack)}</small></div><p>${escapeHtml(hand.text)}</p>${hand.facts.map((fact) => `<p class="recap-fact">${escapeHtml(fact)}</p>`).join('')}</li>`).join('')}</ol></section>`;
 }
 
-type PresentationTable = Omit<WebTable, 'packet'> & { packet: WebTable['packet'] | null };
+export type PresentationTable = Omit<WebTable, 'packet'> & { packet: WebTable['packet'] | null };
 
-function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: PlaybackFrame): string {
+export function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: PlaybackFrame, touch = false): string {
   const seat = table.view.seats.find((item) => item.seatIndex === person.seatIndex)!;
   const hero = person.seatIndex === 0;
   const current = hero && table.packet?.kind === 'decision';
@@ -108,7 +126,7 @@ function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: Play
     table.view.bigBlindSeat === person.seatIndex ? '<span class="position">大盲</span>' : '',
   ].join('');
   const cards = hero ? table.view.holeCards : seat.cards;
-  const cardsHtml = seat.status === 'eliminated' && (!cards || cards.length === 0) ? ''
+  const cardsHtml = (seat.status === 'eliminated' && (!cards || cards.length === 0)) || (touch && !hero && seat.status === 'folded' && !cards) ? ''
     : `<div class="seat-cards ${hero ? 'hero-cards' : ''}">${cardFace(cards?.[0] ?? null, !hero)}${cardFace(cards?.[1] ?? null, !hero)}</div>`;
   // All-in describes the hand's action, not the player's state after chips are paid.
   const settled = !!result || table.packet?.kind === 'game-result' || event?.type === 'handCompleted';
@@ -120,23 +138,28 @@ function renderSeat(table: PresentationTable, person: SeatIdentity, frame?: Play
   const topSeat = ({ 2: 1, 4: 2, 6: 3 } as Record<number, number>)[table.roster.length] === person.seatIndex;
   const expression = awarded || (result?.net ?? 0) > 0 ? 'win' : speaking && frame?.line?.kind !== 'observation' ? 'speaking' : 'neutral';
   const note = table.packet ? table.living?.notes.find(note => note.seatIndex === person.seatIndex) : undefined;
-  const profile = hero ? '' : `<button type="button" class="character-inspect" data-character-info="profile-${person.seatIndex}" aria-label="${escapeHtml(person.name)} · 人物资料" aria-expanded="false"><span aria-hidden="true">i</span></button><template id="profile-${person.seatIndex}"><p class="eyebrow">桌边人物</p><h2>${escapeHtml(person.name)} <small>${escapeHtml(person.nickname)}</small></h2><p class="profile-style">${escapeHtml(person.style)}</p><p>${escapeHtml(person.about ?? '教学陪练，按课程配合。')}</p><p class="profile-state">${amount(seat.stack)} 筹码 · ${escapeHtml(status || '在座')}</p>${note ? `<p class="profile-mood">${escapeHtml(note.mood)}</p><div class="profile-memory"><strong>公开印象</strong><p>${escapeHtml(note.fact)}</p><small>${escapeHtml(note.inference)}</small></div>` : ''}<p class="profile-footnote">只展示人物设定和已发生的公开信息，不显示底牌或胜率。</p></template>`;
+  // A closing round clears committedStreet. Keep an anchor just for its outgoing chips.
+  const sweep = !frame?.reactionOnly ? frame?.chipTransfers?.find(move => move.kind === 'collect'
+    && move.from.zone === 'bet' && move.from.seatIndex === person.seatIndex) : undefined;
+  const visibleBet = sweep?.amount ?? seat.committedStreet;
+  const profile = hero ? '' : touch ? `<button type="button" class="mobile-person-target" data-action="mobile-profile" data-seat-index="${person.seatIndex}" aria-label="${escapeHtml(person.name)} · 人物资料"></button>`
+    : `<button type="button" class="character-inspect" data-character-info="profile-${person.seatIndex}" aria-label="${escapeHtml(person.name)} · 人物资料" aria-expanded="false"><span aria-hidden="true">i</span></button><template id="profile-${person.seatIndex}"><p class="eyebrow">桌边人物</p><h2>${escapeHtml(person.name)} <small>${escapeHtml(person.nickname)}</small></h2><p class="profile-style">${escapeHtml(person.style)}</p><p>${escapeHtml(person.about ?? '教学陪练，按课程配合。')}</p><p class="profile-state">${amount(seat.stack)} 筹码 · ${escapeHtml(status || '在座')}</p>${note ? `<p class="profile-mood">${escapeHtml(note.mood)}</p><div class="profile-memory"><strong>公开印象</strong><p>${escapeHtml(note.fact)}</p><small>${escapeHtml(note.inference)}</small></div>` : ''}<p class="profile-footnote">只展示人物设定和已发生的公开信息，不显示底牌或胜率。</p></template>`;
   return `<article class="seat ${hero ? 'hero' : 'npc-seat'} ${current ? 'is-current' : ''} ${acting ? 'is-acting' : ''} ${speaking || remembered ? 'is-speaking' : ''} ${awarded ? 'is-awarded' : ''} ${seat.status === 'folded' || seat.status === 'eliminated' ? 'is-out' : ''}" data-seat="${person.seatIndex}" aria-label="${escapeHtml(person.name)}${current ? '，轮到你' : ''}">
     ${hero ? '' : portrait(person, expression)}${profile}
     ${cardsHtml}<div class="seat-body">${identity(person)}<div class="seat-positions">${badges}</div><p class="seat-stack">${amount(seat.stack)} <small>筹码</small></p>
     <p class="seat-action">${current ? '轮到你' : escapeHtml(settled ? status : acting ? seat.lastAction || status || '亮牌' : status || seat.lastAction || '等待行动')}</p>${winnings}</div>
-    ${(!table.packet || table.packet.kind === 'decision') && seat.committedStreet > 0 ? `<div class="bet-chip"><span aria-hidden="true">◉</span> ${amount(seat.committedStreet)} <small>本轮</small></div>` : ''}
+    ${(!table.packet || table.packet.kind === 'decision') && visibleBet > 0 ? `<div class="bet-chip"${sweep ? ' aria-hidden="true" data-chip-collecting' : ''}><span class="bet-chip-bank" data-chip-total="${visibleBet}">${renderChipPile(visibleBet)}</span><span class="bet-amount">${amount(visibleBet)} <small>本轮</small></span></div>` : ''}
     ${speaking ? `<div class="seat-bubble ${frame!.line!.kind === 'observation' ? 'bubble-observation' : 'bubble-speech'} ${topSeat ? 'speech-top' : ''}" role="status" aria-label="${escapeHtml(person.name)} · ${frame!.line!.kind === 'observation' ? '观察到的动作' : '发言'}"><small class="bubble-kind">${frame!.line!.kind === 'observation' ? '观察' : '发言'}</small><span>${escapeHtml(frame!.line!.text)}</span></div>` : remembered ? '<span class="seat-memory-tag">记下了你的动作</span>' : ''}
   </article>`;
 }
 
-function settlement(table: PresentationTable): string {
+export function settlement(table: PresentationTable): string {
   if (table.packet?.kind !== 'hand-result') return '';
   const result = table.packet.handResult;
   const hero = result.seats.find((seat) => seat.seatIndex === 0)!;
   const title = hero.net > 0 ? `本手净赢 ${signed(hero.net)}` : hero.net < 0 ? `本手净输 ${amount(-hero.net)}` : '本手持平';
   const name = (index: number) => escapeHtml(table.roster.find((person) => person.seatIndex === index)?.name ?? '玩家');
-  return `<section class="settlement" aria-label="本手结算"><div class="result-heading"><div><p class="eyebrow">第 ${result.handNumber} 手 · 已结算</p><h2>${title}</h2></div>${!table.tutorial && !table.living?.ended ? `<button class="button button-primary" data-action="continue">${hero.finalStack === 0 ? '继续观看' : '下一手'} <span aria-hidden="true">→</span></button>` : ''}</div>
+  return `<section class="settlement" aria-label="本手结算"><div class="result-heading"><div><p class="eyebrow">第 ${result.handNumber} 手 · 已结算</p><h2>${title}</h2></div>${!table.tutorial && !table.living?.ended && (!table.firstNight || table.firstNight.phase === 'playing') && (table.campaign ? table.campaign.phase==='playing' : !table.secondNight || table.secondNight.phase === 'playing') ? `<button class="button button-primary" data-action="continue">${hero.finalStack === 0 ? '继续观看' : '下一手'} <span aria-hidden="true">→</span></button>` : ''}</div>
     <div class="pot-results">${result.pots.map((pot) => `<p><span class="pot-label">${escapeHtml(pot.label)} ${amount(pot.amount)}</span>${pot.winnerSeatIndexes.map((winner, index) => `${name(winner)} 获得 ${amount(pot.awards[index]!)}`).join(' · ')}${pot.winnerSeatIndexes.length > 1 ? pot.awards.every(award => award === pot.awards[0]) ? '（平分）' : '（分池，含零头筹码）' : ''}</p>`).join('')}</div>
     <details class="settlement-details" data-panel="settlement-${result.handNumber}"><summary>结算账单 · 牌型与筹码去向</summary>
       <p class="settlement-key">金色底边标记组成牌型的底牌；底池收入包含自己的投入，净结果才是盈亏。</p>
@@ -149,7 +172,7 @@ function settlement(table: PresentationTable): string {
   </section>`;
 }
 
-function renderAbilityPanel(table: PresentationTable): string {
+export function renderAbilityPanel(table: PresentationTable): string {
   const packet = table.packet;
   if (!packet || table.mode !== 'ability-lab') return '';
   if (packet.kind !== 'decision') return '<p class="private-cleared">能力实验 · 本手私有情报已清除</p>';
@@ -162,15 +185,17 @@ function renderAbilityPanel(table: PresentationTable): string {
     read: '估算对手当前牌力：弱 / 中等 / 强，不保证胜负。',
     swap: '选自己的一张牌，换成下一张未发出的牌；不可预览或撤销。',
   };
-  const slots = (['peek', 'read', 'swap'] as const).map((ability) => {
+  const night = table.firstNight;
+  const slots = (['peek', 'read', 'swap'] as const).filter(ability => !night || ability === night.ability).map((ability) => {
     const spent = abilities.charges[ability] === 0;
-    const commands = abilities.availableCommands.filter((command) => command.ability === ability);
+    const cost = ability === 'read' ? 1 : 2;
+    const commands = abilities.availableCommands.filter((command) => command.ability === ability && (!night || night.phase === 'playing' && night.energy >= cost));
     return `<section class="ability-slot ${spent ? 'is-spent' : ''}" aria-label="${labels[ability]}"><div class="ability-slot-heading"><h3>${labels[ability]}</h3><span class="ability-charge">本场剩余 ${abilities.charges[ability]} / 1</span></div>
-      <p class="ability-description">${descriptions[ability]}</p>
+      <p class="ability-description">${descriptions[ability]}${night ? ` ${bilingual(`消耗 ${cost} 精力 · 每桌一次`, `Costs ${cost} energy · Once per table`, escapeHtml)}` : ''}</p>
       ${commands.length ? `<div class="peek-targets">${commands.map((command) => command.ability === 'swap'
         ? `<button class="button button-peek button-swap" data-action="swap" data-hole-index="${command.holeCardIndex}">换掉 ${cardFace(packet.observation.holeCards[command.holeCardIndex], true)}</button>`
         : `<button class="button button-peek" data-action="${command.ability}" data-target-seat="${command.targetSeatIndex}">${command.ability === 'peek' ? '偷看' : '读牌'} ${name(command.targetSeatIndex)}</button>`).join('')}</div>`
-        : `<p class="ability-state">${spent ? '本场已使用 · 下一手不会恢复' : abilities.usedThisDecision ? '本次行动已锁定' : '当前没有可用目标'}</p>`}
+        : `<p class="ability-state">${spent ? '本场已使用 · 下一手不会恢复' : night && night.energy < cost ? bilingual('精力不足，桌间可休息', 'Not enough energy. Rest between tables.', escapeHtml) : abilities.usedThisDecision ? '本次行动已锁定' : '当前没有可用目标'}</p>`}
     </section>`;
   }).join('');
   const bands = { weak: '弱', medium: '中等', strong: '强' };
@@ -180,7 +205,7 @@ function renderAbilityPanel(table: PresentationTable): string {
     return `<div class="intel-card"><div class="swap-receipt">${cardFace(entry.oldCard, true)}<span aria-label="换成">→</span>${cardFace(entry.newCard, true)}</div><div><strong>第 ${entry.holeCardIndex + 1} 张底牌已更换</strong><p>旧牌退出本手，本手将按新牌结算。</p></div></div>`;
   }).join('');
   return `<section class="ability-panel" aria-label="私有能力"><div class="ability-heading"><div><p class="eyebrow">能力实验 / 仅你可见</p><h2>你的暗手</h2></div><span class="ability-rule">每种每场一次</span></div>
-    <p class="ability-description">${Object.values(abilities.charges).every((remaining) => remaining === 0) ? '本场三种能力均已用完，请继续正常打牌。' : abilities.usedThisDecision ? '本次已使用能力，请完成正常打牌操作；下次轮到你时可用另一种。' : '先用一种能力，或直接打牌。能力不消耗筹码，也不会替你下注。'}</p>
+    <p class="ability-description">${night ? bilingual('本章只带所选能力。每桌最多一次，精力不随换桌重置。', 'Only your chosen ability is available. Once per table; energy carries over.', escapeHtml) : Object.values(abilities.charges).every((remaining) => remaining === 0) ? '本场三种能力均已用完，请继续正常打牌。' : abilities.usedThisDecision ? '本次已使用能力，请完成正常打牌操作；下次轮到你时可用另一种。' : '先用一种能力，或直接打牌。能力不消耗筹码，也不会替你下注。'}</p>
     <div class="ability-grid">${slots}</div>
     ${intel ? `<div class="private-intel" role="status" aria-live="polite" aria-label="本手私有情报">${intel}<p class="ability-description">本手结束后清除 · 不会传给 NPC</p></div>` : ''}
   </section>`;
@@ -209,7 +234,17 @@ function controls(table: PresentationTable): string {
 }
 
 export function renderTable(table: WebTable, muted = false): string {
-  return renderSurface(table, '', undefined, muted);
+  if(table.campaign){
+    if(table.campaign.phase!=='playing')return `${renderCampaignScene(table,escapeHtml)}${renderSaveStatus(table)}${table.campaign.phase==='settled'?settlement(table):''}`;
+    return `${renderCampaignTableHeader(table,escapeHtml)}${renderSurface(table,'',undefined,muted)}`;
+  }
+  const chapter = renderJourney(table,escapeHtml)||renderNight(table, escapeHtml);
+  if(table.secondNight&&table.secondNight.phase!=='playing') return `${chapter}${renderSaveStatus(table)}${table.secondNight.phase==='settled'?settlement(table):''}`;
+  if (table.firstNight?.phase === 'intro') return `${chapter}${renderSaveStatus(table)}`;
+  if (table.firstNight?.phase === 'invitation' || table.firstNight?.phase === 'complete') {
+    return `${chapter}${renderSaveStatus(table)}<details class="night-last-table" data-panel="night-last-table"><summary>${bilingual('回看最后一手的结算', 'Review the last settled hand', escapeHtml)}</summary>${renderSurface(table, '', undefined, muted)}</details>`;
+  }
+  return `${chapter}${renderSurface(table, '', undefined, muted)}`;
 }
 
 function frameCaption(frame: PlaybackFrame, roster: readonly SeatIdentity[]): string {
@@ -224,6 +259,7 @@ function frameCaption(frame: PlaybackFrame, roster: readonly SeatIdentity[]): st
     case 'communityCardsDealt': return `${STREET_NAMES[event.street]} · ${event.cards.map((card) => card.code.slice(0, -1) + SUITS[card.suit]).join(' ')}`;
     case 'holeCardsRevealed': return `${name(event.seatIndex)} · ${event.reason === 'all-in' ? '全下亮牌' : '摊牌'}`;
     case 'showdownStarted': return '开始摊牌';
+    case 'bettingRoundClosed': return '收池 · 本轮下注归入底池';
     case 'handEvaluated': return `${name(event.seatIndex)} · ${CATEGORIES[event.category]}`;
     case 'uncalledBetReturned': return `${name(event.seatIndex)} · 未跟注部分退回 ${amount(event.amount)}`;
     case 'potAwarded': return event.winners.map((winner, index) => `${name(winner)} 获得 ${amount(event.amounts[index]!)}`).join(' · ');
@@ -232,11 +268,11 @@ function frameCaption(frame: PlaybackFrame, roster: readonly SeatIdentity[]): st
   }
 }
 
-export function renderPlaybackFrame(frame: PlaybackFrame, roster: SeatIdentity[], step: number, total: number, mode: SessionMode = 'classic'): string {
+export function renderPlaybackFrame(frame: PlaybackFrame, roster: SeatIdentity[], step: number, total: number, mode: SessionMode = 'classic', experience: TableExperience = 'free', chapter: WebTable | null = null): string {
   const evaluated = frame.event.type === 'handEvaluated'
     ? `<div class="playback-best-five"><span>最佳五张</span>${orderedBestFive(frame.event.bestFive, frame.event.category).map((card) => cardFace(card, true)).join('')}</div>` : '';
   const panel = `<section class="decision playback-status" role="status" aria-live="polite"><p class="eyebrow">正在播放 · ${step} / ${total}</p><h2>${escapeHtml(frameCaption(frame, roster))}</h2>${evaluated}<p class="playback-hint">轮到你时会自动停下 · 可在上方调速或跳过</p></section>`;
-  return renderSurface({ id: '', mode, roster, packet: null, view: frame.view }, panel, frame);
+  return `${chapter ? chapter.campaign?renderCampaignTableHeader(chapter,escapeHtml):renderJourney(chapter,escapeHtml)||renderNight(chapter, escapeHtml) : ''}${renderSurface({ id: '', mode, experience, roster, packet: null, view: frame.view }, panel, frame)}`;
 }
 
 function renderSurface(table: PresentationTable, playbackPanel = '', frame?: PlaybackFrame, muted = false): string {
@@ -244,6 +280,8 @@ function renderSurface(table: PresentationTable, playbackPanel = '', frame?: Pla
   const settled = table.packet !== null && table.packet.kind !== 'decision';
   const pot = table.packet?.kind === 'hand-result'
     ? table.packet.handResult.pots.reduce((sum, item) => sum + item.amount, 0) : view.potTotal;
+  // The numeric pot includes bets still in front of seats; physical chips do not.
+  const centralChips = settled ? 0 : Math.max(0, view.potTotal - view.seats.reduce((sum, seat) => sum + seat.committedStreet, 0));
   const fullTable = table.packet ? table as WebTable : null;
   const guide = fullTable ? renderGuide(fullTable, escapeHtml) : '';
   const story = fullTable ? renderStory(fullTable, escapeHtml) : '';
@@ -259,8 +297,9 @@ function renderSurface(table: PresentationTable, playbackPanel = '', frame?: Pla
   const latest = memoryIsLatest ? `第 ${latestMemory.hand} 手 · ${latestMemory.title}`
     : latestLine ? `第 ${latestLine.hand} 手 · ${latestLine.speaker} · ${latestLine.kind === 'observation' ? '观察' : '发言'}：${latestLine.text}` : '人物观察与本手记录';
   const ability = renderAbilityPanel(table);
-  return `<div class="table-surface pixel-table ${table.tutorial && !settled ? 'has-coach' : ''}"><div class="table-toolbar"><div><span class="live-dot" aria-hidden="true"></span> ${table.roster.length} 人桌 <span class="separator">/</span> 第 ${view.handNumber} 手 <span class="separator">/</span> ${settled ? '结算' : STREET_NAMES[view.street]}</div><div class="blind-label">盲注 <strong>${view.smallBlind} / ${view.bigBlind}</strong></div><button class="text-button" data-action="new">重新开桌</button></div>
-    <div class="game-layout"><div class="play-column"><section class="arena" data-count="${table.roster.length}" aria-label="德州牌桌"><div class="room-backdrop" aria-hidden="true"></div><div class="felt" aria-hidden="true"></div><div class="table-center"><div class="pot-display"><span>${settled ? '本手总底池 · 已结算' : '当前底池'}</span><strong>${amount(pot)}</strong></div>${board(view.board)}<p class="table-caption">${frame ? escapeHtml(frameCaption(frame, table.roster)) : caption}</p></div>${table.roster.map((person) => renderSeat(table, person, frame)).join('')}</section>
+  const competitive = table.experience === 'competitive' ? '<aside class="competitive-banner" aria-label="竞技练习规则"><strong>竞技练习 · 实验版 v0</strong><span>hunter-challenge · 600 次采样 · 初始 100BB · 每 8 手升盲</span><small>无能力 · 无跨手人物记忆 · 非 GTO 求解器</small></aside>' : '';
+  return `<div class="table-surface pixel-table ${table.tutorial && !settled ? 'has-coach' : ''}">${competitive}<div class="table-toolbar"><div><span class="live-dot" aria-hidden="true"></span> ${table.roster.length} 人桌 <span class="separator">/</span> 第 ${view.handNumber} 手 <span class="separator">/</span> ${settled ? '结算' : STREET_NAMES[view.street]}</div><div class="blind-label">盲注 <strong>${view.smallBlind} / ${view.bigBlind}</strong></div><button class="text-button" data-action="new">重新开桌</button></div>
+    <div class="game-layout"><div class="play-column"><section class="arena" data-count="${table.roster.length}" aria-label="德州牌桌"><div class="room-backdrop" aria-hidden="true"></div><div class="felt" aria-hidden="true"></div><div class="table-center"><div class="pot-display"><span class="pot-chip-bank" data-chip-total="${centralChips}">${renderChipPile(centralChips)}</span><span>${settled ? '本手总底池 · 已结算' : '当前底池'}</span><strong>${amount(pot)}</strong></div>${board(view.board)}<p class="table-caption">${frame ? escapeHtml(frameCaption(frame, table.roster)) : caption}</p></div>${table.roster.map((person) => renderSeat(table, person, frame)).join('')}</section>
     <div class="action-dock">${playbackPanel || controls(table)}</div>
     ${fullTable ? renderSaveStatus(fullTable) : ''}
     <div class="table-tools">${ability ? `<details class="table-pocket ability-pocket" data-panel="abilities"><summary>你的暗手 <span>${table.packet?.kind === 'decision' ? table.packet.abilities?.usedThisDecision ? '已用能力 · 查看情报' : '偷看 / 读牌 / 换牌' : '本手情报已清除'}</span></summary>${ability}</details>` : ''}

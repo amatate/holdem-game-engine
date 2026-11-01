@@ -31,6 +31,21 @@ function rig(raw:string | null = null, blocked = false) {
 }
 
 describe('cosmetic deck skins', () => {
+  it.each(DECK_SKINS)('includes a transparent, versioned chip stack for $id in both hosts', skin => {
+    const name = `chips-${skin.id}`;
+    const png = readFileSync(new URL(`../../src/web/art/${name}-v1.png`, import.meta.url));
+    expect(png.subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+    expect(png[25]).toBe(6); // RGBA, not a flattened background.
+    expect(png.readUInt32BE(16)).toBe(png.readUInt32BE(20));
+    for (const path of ['src/web/server.ts', 'scripts/build-pages.mjs', 'scripts/preview-pages.mjs']) {
+      expect(readFileSync(new URL('../../'+path, import.meta.url),'utf8')).toContain(`'${name}'`);
+    }
+    const css = readFileSync(new URL('../../src/web/deck-skins.css', import.meta.url),'utf8');
+    expect(css).toContain(`[data-card-back="${skin.id}"] { --chip-image:url('/art/${name}-v1.png'); }`);
+    const gallery = renderDeckGallery();
+    expect(gallery.match(/class="deck-mini-chips"/g)).toHaveLength(5);
+    expect(gallery).toContain('data-denomination="25"');
+  });
   it.each([null, '', '{bad', 'null','[]','{}','{"face":"../../private","back":"jade","followScene":true}','{"face":"jade","back":"night","followScene":"yes"}'])('ignores invalid preference %s', raw => {
     expect(readDeckPreference(raw)).toEqual({face:'night',back:'night',followScene:false});
   });

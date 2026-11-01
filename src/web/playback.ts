@@ -2,6 +2,7 @@ import type { PublicGameEvent } from '../core/public-events.js';
 import type { SeatIdentity, TableView } from './protocol.js';
 import { applyPublicEvents } from './view.js';
 import type { TableLine, MemoryNotice } from '../game/living-table.js';
+import { chipTransfers, chipMotionDuration, type ChipTransfer } from './chip-motion.js';
 
 export interface PlaybackFrame {
   view: TableView;
@@ -11,6 +12,7 @@ export interface PlaybackFrame {
   line?: TableLine;
   memory?: MemoryNotice;
   reactionOnly?: boolean;
+  chipTransfers?: readonly ChipTransfer[];
 }
 
 export interface PlaybackFeedback { packetIndex: number; lines: readonly TableLine[]; memories: readonly MemoryNotice[] }
@@ -31,6 +33,7 @@ export function buildPlaybackFrames(
   let greetings: TableLine[] = [];
   for (const [eventIndex, event] of events.entries()) {
     const previousBoardCount = view?.board.length ?? 0;
+    const transfers = chipTransfers(view, event);
     view = applyPublicEvents(view, [event], roster);
     const anchored = (item: TableLine | MemoryNotice) => item.packetIndex === feedback?.packetIndex && item.eventIndex === eventIndex;
     let lines = feedback?.lines.filter(anchored) ?? [];
@@ -38,10 +41,11 @@ export function buildPlaybackFrames(
     if (event.type === 'handStarted') { greetings = lines; continue; }
     if (event.type === 'positionsAssigned') { lines = [...greetings, ...lines]; greetings = []; }
     const memory = feedback?.memories.find(anchored);
-    const holdMs = HOLDS[event.type] ?? 0;
+    const holdMs = Math.max(HOLDS[event.type] ?? 0, chipMotionDuration(transfers));
     const line = lines[0];
     if (holdMs || line || memory) frames.push({ view, event, previousBoardCount,
-      holdMs: Math.max(holdMs, feedbackHold(line, memory)), ...(line ? { line } : {}), ...(memory ? { memory } : {}) });
+      holdMs: Math.max(holdMs, feedbackHold(line, memory)), ...(transfers.length ? { chipTransfers: transfers } : {}),
+      ...(line ? { line } : {}), ...(memory ? { memory } : {}) });
     for (const line of lines.slice(1)) frames.push({ view, event, previousBoardCount,
       holdMs: feedbackHold(line), line, reactionOnly: true });
   }
@@ -61,7 +65,7 @@ export class PlaybackClock {
   speed = 1;
   skipped = false;
   private pending: {
-    remaining: number; since: number; timer: ReturnType<typeof setTimeout>; resolve: () => void;
+    remaining: number; since: number; timer: ReturnType<typeof setTimeout>; resolve: () => void; maxSpeed: number;
   } | null = null;
 
   start(): void { this.skip(); this.skipped = false; }
@@ -69,17 +73,17 @@ export class PlaybackClock {
     if (!PLAYBACK_SPEEDS.some((speed) => speed === value)) return;
     const pending = this.pending;
     if (pending) {
-      pending.remaining = Math.max(0, pending.remaining - (Date.now() - pending.since) * this.speed);
+      pending.remaining = Math.max(0, pending.remaining - (Date.now() - pending.since) * Math.min(this.speed, pending.maxSpeed));
       clearTimeout(pending.timer);
     }
     this.speed = value;
     if (pending) this.schedule();
   }
-  wait(duration: number): Promise<void> {
+  wait(duration: number, maxSpeed = Infinity): Promise<void> {
     if (this.skipped || duration <= 0) return Promise.resolve();
     return new Promise((resolve) => {
       if (this.pending) throw new Error('Playback waits must be sequential');
-      this.pending = { remaining: duration, since: Date.now(), timer: undefined as unknown as ReturnType<typeof setTimeout>, resolve };
+      this.pending = { remaining: duration, since: Date.now(), timer: undefined as unknown as ReturnType<typeof setTimeout>, resolve, maxSpeed };
       this.schedule();
     });
   }
@@ -98,6 +102,6 @@ export class PlaybackClock {
     pending.timer = setTimeout(() => {
       this.pending = null;
       pending.resolve();
-    }, pending.remaining / this.speed);
+    }, pending.remaining / Math.min(this.speed, pending.maxSpeed));
   }
 }

@@ -1,0 +1,22 @@
+/* Night plans and money live outside the betting controls. */
+.journey-entrance{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:18px 0;padding:24px;border:1px solid #876b80;background:linear-gradient(100deg,#211c32ed,#142e35dc),url('./art/second-room-v1.png') center 45%/cover;color:#f5ebdd}
+.journey-entrance h2{font:26px 'Songti SC',STSong,serif;color:#e7bb72;margin:4px 0 10px}
+.journey-entrance p{line-height:1.7;margin:6px 0}.journey-entrance small{color:#bfadca}
+.journey-entrance>button{flex:none;min-height:48px}
+.journey-money{display:flex;gap:28px;margin:12px 0 18px}.journey-money>span{font-size:12px;color:#cfbcd4}.journey-money strong{display:block;font:700 30px Georgia,serif;color:#e7bb72;margin-top:5px}
+.journey-task,.journey-goal{line-height:1.7}.journey-task small,.journey-goal small{display:block;color:#bc9eaa;font-size:11px}
+.journey-journal details{margin:14px 0;border-top:1px solid #705d764d;padding-top:12px}.journey-journal summary{min-height:28px;cursor:pointer;color:#dbc4a8}
+.journey-journal ol{list-style:none;padding:0}.journey-journal li{display:flex;gap:12px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid #705d764d;font-size:13px}.journey-journal li strong{margin-left:auto}.journey-journal li small{width:100%;color:#b6a2bf}.journey-journal details p{font-size:12px;color:#cbbbcf;line-height:1.8}
+.journey-buy-in{background:#14142185;border:1px solid #b18b60;padding:12px 16px;margin:16px 0}.journey-buy-in p{margin:3px 0;font-size:14px;line-height:1.8}.journey-buy-in strong{color:#f3cc8e}.journey-buy-in small{font-size:11px;color:#d1bfcb;line-height:1.6;display:block}
+.journey-chapter[data-location="new"]:not(.night-playing){background:linear-gradient(#211c32c9,#211c32ed),url('./art/second-room-v1.png') center/cover}
+.mobile-home .journey-entrance{display:block;padding:11px 12px;margin:18px 0 0;background:#211c32e0;border-color:#987c67}
+.mobile-home .journey-entrance>div{display:none}.mobile-home .journey-entrance>button{width:100%;background:none;border:0;box-shadow:none;padding:0;min-height:38px;color:#e7bb72;font-size:15px}
+.mobile-home .journey-entrance .save-error{font-size:10px}
+.mobile-home .journey-entrance>.journey-restart{min-height:30px;margin-top:7px;font-size:10px;color:#bca9bb}
+.mobile-story[data-location="new"] .mobile-story-room{background:linear-gradient(#100d1e10,#100d1e08 45%,#130d2190 80%,#130d21ed),url('./art/second-room-v1.png') center/cover}
+.mobile-play[data-location="new"] .mobile-room{background-image:url('./art/second-room-v1.png');background-size:cover;background-position:center 32%}
+.mobile-story .journey-scene-wallet{display:flex;align-items:center;gap:8px;font-size:11px;color:#d2bdcc;border-bottom:1px solid #785e714d;padding-bottom:9px;margin-bottom:12px}
+.journey-scene-wallet strong{color:#e7bb72;font:700 18px Georgia,serif}.journey-scene-wallet .text-button{margin-left:auto;font-size:10px;min-height:32px;color:#d7bd93}
+.mobile-story .journey-buy-in{margin:12px 0;padding:10px}.mobile-story .journey-buy-in p{font-size:12px}
+.mobile-story-ending .journey-journal{font-size:13px}.mobile-story-ending .journey-chapter .night-dialogue{font-size:13px}
+@media(max-height:760px){.mobile-home .journey-entrance{margin-top:12px;padding:5px 10px}.mobile-home-secondary{margin-top:12px}}

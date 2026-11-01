@@ -8,7 +8,7 @@ await mkdir(join(out, 'art'), { recursive: true });
 await mkdir(join(out, 'audio'), { recursive: true });
 const hash = createHash('sha256');
 // Conservative compatibility fence; never silently replay a save against changed code.
-for (const directory of ['src/core', 'src/agents', 'src/game', 'src/web']) {
+for (const directory of ['src/core', 'src/agents', 'src/game', 'src/web', 'src/arena']) {
   for (const name of (await readdir(directory)).filter((name) => name.endsWith('.ts')).sort()) {
     hash.update(directory + '/' + name).update(await readFile(join(directory, name)));
   }
@@ -32,12 +32,12 @@ const html = (await readFile('src/web/index.html', 'utf8'))
   .replace('<head>', '<head>\n  <meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; worker-src \'self\'; style-src \'self\'; connect-src \'self\'; img-src \'self\' data:; object-src \'none\'; base-uri \'self\'">');
 if (!html.includes('data-runtime="pages"')) throw new Error('Missing Pages runtime marker');
 await writeFile(join(out, 'index.html'), html);
-for (const file of ['style.css', 'pixel-table.css', 'deck-skins.css']) {
+for (const file of ['style.css', 'pixel-table.css', 'deck-skins.css', 'chips.css', 'first-night.css', 'mobile.css', 'second-night.css', 'story.css']) {
   let css = (await readFile('src/web/' + file, 'utf8')).replaceAll("url('/art/", "url('./art/");
   if (file === 'pixel-table.css') css += '\n.pages-note{padding:10px 0;color:var(--muted);font-size:12px;line-height:1.7}.at-table .pages-note{display:none}\n';
   await writeFile(join(out, file), css);
 }
-for (const name of ['hunter', 'maniac', 'calling-station', 'room', 'card-back', 'deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost']) await copyFile(`src/web/art/${name}-v1.png`, join(out, 'art', `${name}-v1.png`));
+for (const name of ['hunter', 'maniac', 'calling-station', 'room', 'mobile-room', 'second-room', 'garage-room', 'card-back', 'deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost', 'chips-night', 'chips-lantern', 'chips-blue-hour', 'chips-jade', 'chips-ghost']) await copyFile(`src/web/art/${name}-v1.png`, join(out, 'art', `${name}-v1.png`));
 for (const name of ['rock', 'small-ball', 'trapper', 'value-bettor']) await copyFile(`src/web/art/${name}-v2.png`, join(out, 'art', `${name}-v2.png`));
 // Only reviewed runtime samples and their provenance; no downloaded archives.
 // Remove only the obsolete generated track; keep its original in the source archive.

@@ -27,6 +27,28 @@ export class TableMemory {
   readonly #showdowns = new Map<number, Map<number, HandCategory>>();
   #latest = 0;
 
+  /** Rebase a returning player's witnessed public history before hand 1 of a new table. */
+  carryFrom(source: TableMemory, seats: ReadonlyMap<number, number>): void {
+    const entries = [...source.#hands.entries()].sort(([a], [b]) => a - b).slice(-8);
+    entries.forEach(([oldHand, events], index) => {
+      const hand = index - entries.length + 1;
+      this.#hands.set(hand, events.filter(event => seats.has(event.seatIndex)).map(event => ({ ...event, seatIndex: seats.get(event.seatIndex)! })));
+      const outcomes = source.#outcomes.get(oldHand), shown = source.#showdowns.get(oldHand);
+      if (outcomes) this.#outcomes.set(hand, new Map([...outcomes].filter(([seat]) => seats.has(seat)).map(([seat, value]) => [seats.get(seat)!, { ...value, hand }])));
+      if (shown) this.#showdowns.set(hand, new Map([...shown].filter(([seat]) => seats.has(seat)).map(([seat, value]) => [seats.get(seat)!, value])));
+    });
+  }
+
+  /** Only the table's public consumer may fill in outcomes and actions after an NPC acts. */
+  syncPublic(source: TableMemory): void {
+    for (const [hand, events] of source.#hands) {
+      this.observe(hand, events);
+      const outcomes = source.#outcomes.get(hand), shown = source.#showdowns.get(hand);
+      if (outcomes) this.#outcomes.set(hand, new Map([...outcomes].map(([seat, value]) => [seat, { ...value }])));
+      if (shown) this.#showdowns.set(hand, new Map(shown));
+    }
+  }
+
   observe(hand: number, history: readonly PublicActionEvent[]): void {
     if (hand < this.#latest - 7) return;
     this.#latest = Math.max(hand, this.#latest);

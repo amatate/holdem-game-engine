@@ -8,7 +8,51 @@ A TypeScript No-Limit Texas Hold'em engine with a playable, pixel-art single-pla
 
 No download, account, or API key. Virtual chips only: no deposits, withdrawals, or real-money betting. This is a single-player prototype, not online multiplayer.
 
-## Latest updates · 2026-10-05
+## Volume One: A Seat Kept
+
+The home screen now opens a continuous six-night story, with optional real Hold’em tables and five ending directions. Volume One’s literary text is currently **Chinese**; the English interface, classic tables, tutorials and legacy story remain available.
+
+Night One uses score chips that never enter the wallet. From Night Two, buy-ins and cash-outs use actual engine results. Accepting 150, retaining an unpaid promise and declining a money arrangement lead to different records. Photos, witnesses and invitations require the corresponding player choices. Winning or using an ability is never required to finish the story.
+
+Starting a new volume replaces the story-journey slot after confirmation. Free play and the legacy First Night have separate saves. Recognized legacy story builds still require deterministic replay and digest verification; old events are not rewritten as the new story.
+
+See the [integration notes](docs/playtests/volume-one-v2.md) and [approved Chinese manuscript](docs/writing-review-v2/02-夜局第一卷_完整文字稿_v2.md).
+
+## Competitive AI laboratory v0 (local only)
+
+An independent evaluation harness for the existing heuristics. Ordinary NPC policies are unchanged; an optional browser Competitive practice entry now uses the same challenge baseline, not a newly trained or GTO agent.
+
+```bash
+npm run ai:arena -- --blocks 100 --samples 300 --seed eval-v0-a
+```
+
+This command runs 200 heads-up hands in 100 independent, seat-swapped deal blocks. JSON and Markdown reports include net `bb/100`, uncertainty, illegal actions, timeouts, latency and source fingerprints. Also supports 2–6 players and local escalating-blind tournaments. This evaluation command makes no network requests. [Usage and limitations](docs/competitive-ai-v0.md).
+
+An experimental **ChipZen remote adapter** is available separately: `npm run ai:chipzen -- --standby` maintains lobby presence and reconnects after transient failures; `--status` reads local connection health. Standby never creates or joins matches. Stop it with Ctrl+C before running `--practice` for exactly one unrated house-bot match. `--check` only validates configuration. It uses the official protocol / pinned SDK, isolated decision workers and redacted local logs. No automatic ranked entry, tournament registration or upload. **Offline protocol tests pass; a completed online match and any strength improvement remain unverified.** Configure credentials locally using `.env.chipzen.example`; never commit the token. [Integration and evaluation guide](docs/chipzen-integration.md).
+
+## Mobile frontend v1 (local, not deployed)
+
+A separate portrait composition adds an illustrated game home, a 2–6 player table that fits the viewport, a raise drawer, tap-to-open character profiles, notebook and ability panels, and dialogue scenes shown one line at a time. Wager controls use the engine's legal total-bet range. Chapter tables show their real settlement before the next conversation.
+
+Narrow screens switch automatically. Add `?ui=mobile&lang=en` to preview the phone interface on desktop, or `?ui=desktop` to keep the original desktop UI. Start with `HOLDEM_PORT=4196 npm run web`, then open [the mobile preview](http://127.0.0.1:4196/?ui=mobile&lang=en). This remains a browser frontend; native app packaging and the public Pages deployment are pending. Existing save-version checks remain in place: older records are retained, but cross-version migration is not implemented.
+
+## First Night · Local update (2026-10-26, not deployed)
+
+Enter **First Night** from home: wait with Mo, play a four-handed table, then choose whether to stay for a duel with Lin. The three tables last up to 4 / 6 / 6 hands, each with a fresh 100-chip buy-in and fixed 1/2 blinds. A score sheet records real results. Leaving after a settled hand is valid; winning is never required to advance.
+
+Play as an ordinary player, or bring just Peek, Read or Swap. Start with 3 energy; costs are 2 / 1 / 2, once per table. Rest between tables to recover 1, capped at 3. Returning NPCs retain only public actions they witnessed. The chapter has a separate save, authored English dialogue and a mobile layout. A later invitation ends the demo; the betrayal arc belongs to future chapters.
+
+Run `npm run web` for [local play](http://127.0.0.1:4173/), or `HOLDEM_PORT=4194 npm run web` to select another port. For the browser-only build, run `npm run build:pages && npm run preview:pages` and open [the local Pages preview](http://127.0.0.1:4182/holdem-game-engine/). These changes have not been pushed or deployed.
+
+## Local development · 2026-10-13 (not deployed to the live demo yet)
+
+- **Denomination-aware stacks:** original, individually rendered chips informed by the [Replay Poker design team's public case study](https://supereightstudio.com/project_replaypoker), with no copied artwork. Amounts break into coloured denominations such as 1, 5, 25 and 100: 20 is four 5s; 137 is six chips. Rims and engravings follow the five card-back themes. Open **Deck style** to compare 2, 20 and 137. Earlier decorative chip images remain entrance artwork, not table-money symbols. [Original decorative assets and prompts](src/web/art/chips-v1.json).
+- **Competitive practice:** choose **Enter competitive practice** on the homepage. Heads-up against Lin Lan, 200 chips each (initially 100BB), 1/2 blinds rising on the existing ladder every 8 hands, until one player is eliminated. Uses the arena's `hunter-challenge` policy with 600 samples per decision. No abilities or cross-hand social memory; all existing modes remain available.
+- **Continue your match:** settlement, next hand, bilingual UI and local/browser checkpoints work in this mode. Single-player practice, not a Chipzen client or cheat-resistant ranked game. Older-build saves may be incompatible; they are retained until a new table settles.
+
+From the project directory, run `npm run web` for the Node edition (default `http://127.0.0.1:4173/`). For the static edition, run `npm run build:pages` then `npm run preview:pages` (default `http://127.0.0.1:4182/holdem-game-engine/`).
+
+## Published updates · 2026-10-05
 
 - **Five deck styles:** Night Table, Lantern Club, Blue Hour, Jade Salon, and Wraith. Open **Deck style** to switch a whole set or mix faces and backs. Preferences stay in your browser; optional scene recommendations use Lantern Club for lessons and Blue Hour for the prologue. Manual choices take priority.
 - **Wraith tribute:** a Black Ghost I-inspired black-and-white direction with original crescent-and-ribbon engraving, silver-white pips and red ranks for hearts/diamonds. Not an official deck or exact reproduction. All card values remain code-rendered; illustrated court cards are not implemented. [Assets, references and full prompts](src/web/art/README.md).
@@ -70,6 +114,7 @@ October 5 hand results, followed by the September 28 English edition.
 - **A Seat for You:** a short four-player prologue with Lin Lan, A-Kai, and Uncle Mo, lasting up to six hands, with dialogue choices and a farewell even if you bust early.
 - **Table personalities:** optional short dialogue, observed actions, public memories, and bounded strategy changes in free play. Speech is distinct from observation; NPCs do not read hidden opponent cards.
 - **Paced playback:** deal, bets, community cards, reveals, and payouts play step by step. Choose 0.5×, 1×, 2×, or 4×, or skip to the next decision. Playback pauses on your turn and supports reduced motion.
+- **Moving chips:** individual denomination chips travel to each player's bet, then sweep into the pot when the round closes. Refunds and payouts return to their recipients. Movement represents the amount actually paid, not the raise-to total. Flights are capped at 2× during 4× playback; other steps remain 4× and skipping is immediate. Bets in front of seats are physically separate from the central stack, while the numeric pot still includes all bets. These are equivalent-value visualizations, not engine inventories; unusually large amounts use explicit ×N bundle labels.
 - **Table sounds:** local card/chip effects, turn reminders, ability feedback, and a short cue for a profitable hand. Open **Sound** in the playback toolbar for mute, volume, or a preview. Default volume is 40%; playback unlocks after a real click/key press. Preferences stay in this browser.
 - **Hand results:** best five cards, hand category, each pot's winners, committed chips, uncalled returns, and net results. Review recent encounters in the table notebook.
 - **Local checkpoints:** save at completed-hand boundaries, including relevant ability charges, tutorial progress, and character/story state.
@@ -209,3 +254,21 @@ The `v0.1.0` GitHub Release is the **older terminal MVP**, without the browser t
 No open-source license has been granted. The source is publicly visible on GitHub, but visibility alone does not grant permission to copy, modify, or redistribute it.
 
 The **11 short sound effects are separately licensed CC0-1.0**, from Kenney's [Casino Audio](https://kenney.nl/assets/casino-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds). Both permit personal and commercial use without mandatory attribution. Credit, original licenses, source mappings, and conversion records are included in [audio provenance](src/web/audio/README.md). These WAV samples total approximately 405 KiB. BGM **Cool Vibes** by Kevin MacLeod is separately licensed **CC BY 4.0, requiring attribution**; see [music credits](src/web/audio/MUSIC-CREDITS.txt). All audio is bundled locally, not streamed from a third-party CDN. These licenses do not apply to the game's code or other artwork.
+
+
+### Second Night: wallet and tonight’s plans (local development)
+
+Enter Second Night from home or the First Night ending; direct entry also supports players who finished an older build. Start with 600. Buy into the new room for 300 (2/5, up to 8 hands), or the old room for 100 (1/2, up to 6 hands). Decline the invitation, head home, or leave after a settled hand. Buy-ins and actual closing stacks are recorded once in a money ledger. First Night scores are separate.
+
+This chapter uses classic Hold’em and a third independent save slot for wallet, objectives and witnessed facts. It does not overwrite free-play or First Night records. Checkpoint replay supports the current version; unfinished hands revert to the last checkpoint and cross-version migration is not yet supported. Nights Three through Six are now playable; see the story-mode section below. These changes have not been pushed or deployed to public Pages.
+
+Run `HOLDEM_PORT=4196 npm run web` in the project directory, then open `http://127.0.0.1:4196/?ui=mobile&lang=en`.
+
+
+### Story mode: Nights Three through Six (local development)
+
+Choose “Continue to Third Night” after Second Night, or resume with “Continue story” from home. The actual wallet, attendance/refusal and earlier questions carry into Kai’s referral debt, Mo’s subsidy, Lin’s withheld material, and three concluding directions.
+
+Includes chapter progress, saved dialogue position, read-only conversation history, character statuses, sourced records and a cross-night ledger. Three optional tables use the real engine. Refusing to play or lacking funds does not block conversation. Known Second Night v1 saves can attempt verified replay; unknown versions are preserved and blocked. “New journey · Reset wallet” intentionally restarts the run.
+
+The repair shop uses a newly generated pixel environment. Local changes only; dialogue quality, economy and ending impact still need human playtests. See [implementation and validation](docs/playtests/story-campaign-v1.md).

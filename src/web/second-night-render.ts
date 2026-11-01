@@ -1,0 +1,27 @@
+import type { SaveStatus, WebTable } from './protocol.js';
+import { SECOND_TABLES } from '../game/second-night.js';
+import { bilingual } from './first-night-render.js';
+type Escape = (value: unknown) => string;
+export function renderJourneyEntrance(save: SaveStatus | undefined, h: Escape): string {
+  const b = (zh: string, en: string) => bilingual(zh, en, h);
+  return `<section class="journey-entrance"><div><p class="eyebrow">${b(save?.saved?.storyNight?'故事行程 · 已保存':'剧情模式 · 第二夜及后续',save?.saved?.storyNight?'STORY JOURNEY · SAVED':'STORY MODE · SECOND NIGHT & BEYOND')}</p><h2>${b(save?.saved?.storyNight?'继续你的故事':'赴约之后',save?.saved?.storyNight?'Continue your story':'After the invitation')}</h2><p>${b('阿凯又发来消息。这一次，你得拿自己的钱。','Kai texts again. This time, you bring your own money.')}</p><small>${b('起始金额 600 · 新局或旧牌室 · 独立存档','Start with 600 · New room or old friends · Separate save')}</small></div><button class="button button-primary mobile-primary" data-action="${save?.saved ? 'journey-restore' : 'journey-start'}">${b(save?.saved ? save.saved.storyNight ? `继续故事 · 第 ${save.saved.storyNight} 夜` : save.saved.ended ? '继续第二夜及后续' : '继续第二夜' : '走进第二夜', save?.saved ? save.saved.storyNight ? `Continue story · Night ${save.saved.storyNight}` : save.saved.ended ? 'Second Night & beyond' : 'Continue Second Night' : 'Enter Second Night')} ›</button>${save?.saved?`<button class="text-button journey-restart" data-action="journey-new">${b('新开第一卷 · 重置行程','Start Volume One · Reset journey')}</button>`:''}${save?.error ? `<p class="save-error">${h(save.error)}</p>` : ''}</section>`;
+}
+export function renderJourneyLedger(table: WebTable, h: Escape): string {
+  const n = table.secondNight;
+  if (!n) return '';
+  const b = (zh: string, en: string) => bilingual(zh,en,h);
+  const inPlay = n.phase === 'playing';
+  return `<section class="journey-journal">${table.save?.error?`<p role="alert" class="save-error">${h(table.save.error)}</p>`:''}<div class="journey-money"><span>${b('手头金额','Wallet')}<strong>${n.wallet}</strong></span>${inPlay ? `<span>${b('桌上剩余筹码','Chips remaining')}<strong>${table.view.seats.find(s=>s.seatIndex===0)!.stack}</strong></span>` : n.result ? `<span>${b('本晚净结果','Tonight’s net')}<strong>${n.result.net>0?'+':''}${n.result.net}</strong></span>` : ''}</div><p class="journey-task"><small>${b('今晚的事','Tonight')}</small>${b(n.task,n.taskEn)}</p><p class="journey-goal"><small>${b('接下来','Looking ahead')}</small>${b(n.goal,n.goalEn)}</p><details data-panel="journey-ledger"><summary>${b('金额明细','Money ledger')}</summary><ol>${n.ledger.map(e=>`<li><span>${b(e.text,e.en)}</span><strong>${e.delta>0?'+':''}${e.delta}</strong><small>${b('余额','Balance')} ${e.balance}</small></li>`).join('')}</ol><p>${b('第一夜是独立记分局，不计入这个钱包。牌局中的钱按真实结算回收。','First Night was a separate score game. This wallet tracks actual buy-ins and settled cash-outs.')}</p></details>${n.facts.length ? `<details data-panel="journey-facts"><summary>${b('亲眼见到、亲耳听到的事','What you actually saw and heard')}</summary>${n.facts.map(f=>`<p>${b(f.text,f.en)}</p>`).join('')}</details>` : ''}</section>`;
+}
+export function renderBuyIn(table: WebTable, h: Escape): string {
+  const n=table.secondNight;
+  if (!n || n.phase!=='buy-in' || !n.route) return '';
+  const c=SECOND_TABLES[n.route], b=(zh:string,en:string)=>bilingual(zh,en,h);
+  return `<div class="journey-buy-in"><p>${b('手头','Wallet')} <strong>${n.wallet}</strong> → ${b('买入后','After buy-in')} <strong>${n.wallet-c.buyIn}</strong></p><p>${b('桌上筹码','Table chips')} <strong>${c.buyIn}</strong> · ${b('盲注','Blinds')} ${c.smallBlind}/${c.bigBlind} · ${b('最多','Up to')} ${c.hands} ${b('手','hands')}</p><small>${b('结算后可随时离桌，无抽成；买入只扣一次。','Leave after any settled hand. No rake; buy-in is deducted once.')}</small></div>`;
+}
+export function renderJourney(table: WebTable, h: Escape): string {
+  const n=table.secondNight;
+  if(!n)return '';
+  const b=(zh:string,en:string)=>bilingual(zh,en,h);
+  return `<section class="night-chapter journey-chapter ${n.phase==='playing'?'night-playing':'night-scene'}" id="second-night-story" data-location="${n.location}"><header><div><p class="eyebrow">${b('第二夜','SECOND NIGHT')}</p><h2>${b(n.title,n.titleEn)}</h2></div><span>${b('手头','Wallet')} <strong>${n.wallet}</strong></span></header>${n.phase==='playing' ? `<p>${b(n.task,n.taskEn)}</p><details data-panel="journey-notes"><summary>${b('今晚行程与钱包','Tonight’s plans & wallet')}</summary>${renderJourneyLedger(table,h)}</details>${table.packet.kind==='hand-result' ? `<button class="text-button" data-action="journey-choice" data-choice="leave-table">${b('结完这手，先走了','Leave after this hand')}</button>` : ''}` : `<div class="night-scene-lines">${n.lines.map(l=>`<div class="night-dialogue">${l.who?`<strong>${h(l.who)}</strong>`:''}<p>${b(l.text,l.en)}</p></div>`).join('')}</div>${renderBuyIn(table,h)}<div class="night-choices">${n.choices.map(c=>`<button class="button button-secondary" data-action="journey-choice" data-choice="${h(c.id)}">${b(c.text,c.en)}</button>`).join('')}</div>${renderJourneyLedger(table,h)}${n.phase==='complete'?`<p>${b('第二夜已经结束。接着去见阿凯，金额和之前的选择都会带过去。','Second Night is over. Continue to meet Kai with your money and earlier choices intact.')}</p><button class="button button-primary mobile-primary" data-action="story-start">${b('继续第三夜 →','Continue to Third Night →')}</button><button class="button button-secondary" data-action="home">${b('回到主页','Back home')}</button>`:''}`}</section>`;
+}

@@ -6,7 +6,8 @@ type Escape = (value: unknown) => string;
 export function renderEntrances(): string {
   return `<section class="entrance-strip" aria-label="选择游玩方式">
     <article class="entrance lesson-entrance"><p class="eyebrow">第一次来牌桌？</p><h2>莫叔教你打三手</h2><p>从跟注、过牌到自己做决定。没有基础也能入座。</p><button class="button button-primary" data-action="tutorial-start">开始新手教学 →</button><small>三关 · 配合练习的对手 · 可随时退出</small></article>
-    <article class="entrance story-entrance"><p class="eyebrow">独立剧情 · 短序章</p><h2>留一张椅子</h2><p>莫叔已经开了灯，阿凯正等人入座。一张旧记分纸，还压在杯底。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 自带人物互动 · 使用下方选定的规则</small></article>
+    <article class="entrance story-entrance"><p class="eyebrow">旧版六手片段</p><h2>留一张椅子</h2><p>保留早期人物互动原型。想体验完整的第一晚，请从上方「第一夜」入座。</p><button class="button button-secondary" data-action="living-start">走进「留一张椅子」 →</button><small>固定四人 · 最多六手 · 自带人物互动 · 使用下方选定的规则</small></article>
+    <article class="entrance competitive-entrance"><span class="competitive-emblem" data-card-back="ghost" aria-hidden="true"><span class="chip-art"></span></span><div><p class="eyebrow">竞技练习 · 实验版 v0</p><h2>和基线牌手，认真打一场</h2><p>林岚使用评测场的固定挑战策略。没有暗手，没有闲聊，只凭牌技。</p><small>单挑 · 100BB 起始 · 每 8 手升盲 · 非 GTO 求解器</small></div><button class="button button-primary" data-action="competitive-start">进入竞技练习 →</button></article>
   </section><div class="free-table-heading"><h2>或，自由开一桌</h2><p>2–6 人 · 可开启人物记忆与闲聊 · 不限六手</p></div>`;
 }
 

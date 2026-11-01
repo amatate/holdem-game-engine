@@ -1,0 +1,32 @@
+{
+  "method": "扫描 line/L 和 choice/C 的第二实参，计汉字。包含互斥条件文案，不是单路线字数；不含标题、任务、事实卡、内联对象选项及动态运行时台词。",
+  "files": [
+    {
+      "file": "src/game/first-night.ts",
+      "line_calls_with_chinese": 32,
+      "line_argument_han_characters": 286,
+      "choice_calls_with_chinese": 17,
+      "choice_argument_han_characters": 82
+    },
+    {
+      "file": "src/game/second-night.ts",
+      "line_calls_with_chinese": 23,
+      "line_argument_han_characters": 344,
+      "choice_calls_with_chinese": 13,
+      "choice_argument_han_characters": 102
+    },
+    {
+      "file": "src/game/story-content.ts",
+      "line_calls_with_chinese": 107,
+      "line_argument_han_characters": 2072,
+      "choice_calls_with_chinese": 29,
+      "choice_argument_han_characters": 298
+    }
+  ],
+  "totals": {
+    "line_calls_with_chinese": 162,
+    "line_argument_han_characters": 2702,
+    "choice_calls_with_chinese": 59,
+    "choice_argument_han_characters": 482
+  }
+}

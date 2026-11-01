@@ -58,7 +58,16 @@ describe('tutorial and living HTTP experiences', () => {
     return table;
   }
 
-  it('has two homepage entries, preserves free mode and validates experience selection', async () => {
+  it('offers competitive practice on Node with the same enforced rules as the browser host', async () => {
+    const opened = await post('/api/table', { experience: 'competitive', players: 6, difficulty: 'casual', socialEnabled: true });
+    expect(opened.status).toBe(200);
+    expect(opened.table).toMatchObject({ mode: 'classic', experience: 'competitive', difficulty: 'challenging', living: null, tutorial: null });
+    expect(opened.table.roster).toHaveLength(2);
+    expect(opened.table.view.seats.reduce((sum, seat) => sum + seat.stack + seat.committedHand, 0)).toBe(400);
+    expect(await restored()).toEqual(opened.table);
+    expect((await post('/api/table', { experience: 'competitive', mode: 'ability-lab' })).status).toBe(400);
+  });
+  it('has three homepage entries, preserves free mode and validates experience selection', async () => {
     const html = renderLobby({}, 4);
     expect(html).toContain('开始新手教学'); expect(html).toContain('留一张椅子'); expect(html).toContain('game-mode');
     expect((await post('/api/table', { players: 4, experience: 'invalid' })).status).toBe(400);

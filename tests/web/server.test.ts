@@ -33,6 +33,14 @@ describe('local browser table', () => {
     return response;
   }
   it('serves only fixed local art assets and never caches game state', async () => {
+    for (const theme of ['night', 'lantern', 'blue-hour', 'jade', 'ghost']) {
+      const response = await fetch(`${origin}/art/chips-${theme}-v1.png`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/png');
+      expect(response.headers.get('cache-control')).toContain('immutable');
+      const bytes = Buffer.from(await response.arrayBuffer());
+      expect(bytes[25]).toBe(6);
+    }
     for (const name of ['hunter-v1', 'maniac-v1', 'calling-station-v1', 'room-v1', 'card-back-v1', 'deck-lantern-v1', 'deck-blue-hour-v1', 'deck-jade-v1', 'deck-ghost-v1', 'rock-v2', 'small-ball-v2', 'trapper-v2', 'value-bettor-v2']) {
       const response = await fetch(`${origin}/art/${name}.png`);
       expect(response.status).toBe(200);
@@ -46,6 +54,12 @@ describe('local browser table', () => {
     expect(cards.status).toBe(200);
     expect(await cards.text()).toContain('orderedBestFive');
     expect((await fetch(`${origin}/deck-skins.css`)).headers.get('content-type')).toContain('text/css');
+    expect((await fetch(`${origin}/chips.css`)).headers.get('content-type')).toContain('text/css');
+    for (const file of ['chips.js', 'chip-motion.js']) {
+      const response = await fetch(`${origin}/${file}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('javascript');
+    }
     const decks = await fetch(`${origin}/deck-skins.js`);
     expect(decks.status).toBe(200);
     expect(await decks.text()).toContain('installDeckSkins');

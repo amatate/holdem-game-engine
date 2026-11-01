@@ -1,0 +1,74 @@
+/* Original code-native chips: denomination colours stay consistent across deck themes.
+   The themed rim/engraving is cosmetic. No Replay Poker artwork is bundled. */
+:root,[data-card-back="night"] { --chip-trim:#d9b467; --chip-engraving:"✦"; --chip-center:#f3e6c7; }
+[data-card-back="lantern"] { --chip-trim:#d78b77; --chip-engraving:"◇"; --chip-center:#fff1df; }
+[data-card-back="blue-hour"] { --chip-trim:#a6c5df; --chip-engraving:"♫"; --chip-center:#e7f0f7; }
+[data-card-back="jade"] { --chip-trim:#a9cc99; --chip-engraving:"✽"; --chip-center:#f1edd6; }
+[data-card-back="ghost"] { --chip-trim:#bbc6d2; --chip-engraving:"☾"; --chip-center:#dce2e7; }
+.chip-tone-0 { --chip-tone:#c9c5b9; --chip-side:#77776f; --chip-ink:#292b30; }
+.chip-tone-1 { --chip-tone:#b8444c; --chip-side:#672c36; --chip-ink:#7d2432; }
+.chip-tone-2 { --chip-tone:#348467; --chip-side:#1d4b3b; --chip-ink:#1c523e; }
+.chip-tone-3 { --chip-tone:#414455; --chip-side:#222530; --chip-ink:#252835; }
+.chip-tone-4 { --chip-tone:#8863a4; --chip-side:#493658; --chip-ink:#55366d; }
+.chip-tone-5 { --chip-tone:#cba147; --chip-side:#775522; --chip-ink:#72531f; }
+.chip-tone-6 { --chip-tone:#4485af; --chip-side:#294b68; --chip-ink:#2b5874; }
+.chip-pile { --coin-w:30px; --coin-h:21px; --coin-step:4.2px; display:inline-grid; grid-template-columns:repeat(4,calc(var(--coin-w) * .9)); align-items:end; justify-content:center; gap:6px 0; vertical-align:bottom; pointer-events:none; filter:drop-shadow(2px 4px 2px #06191566); line-height:1; }
+.chip-pile[data-columns="0"] { display:none; }
+.chip-pile[data-columns="1"] { grid-template-columns:calc(var(--coin-w) * .9); }
+.chip-pile[data-columns="2"] { grid-template-columns:repeat(2,calc(var(--coin-w) * .9)); }
+.chip-pile[data-columns="3"] { grid-template-columns:repeat(3,calc(var(--coin-w) * .9)); }
+.chip-stack { position:relative; display:block; width:var(--coin-w); height:calc(var(--coin-h) + (var(--chip-layers) - 1) * var(--coin-step)); }
+.chip-stack[data-height="1"] { --chip-layers:1; }.chip-stack[data-height="2"] { --chip-layers:2; }
+.chip-stack[data-height="3"] { --chip-layers:3; }.chip-stack[data-height="4"] { --chip-layers:4; }
+.chip-stack[data-height="5"] { --chip-layers:5; }.chip-stack[data-height="6"] { --chip-layers:6; }
+.chip-unit { position:absolute; bottom:0; left:0; width:var(--coin-w); height:var(--coin-h); }
+.chip-unit[data-layer="1"] { bottom:var(--coin-step); }.chip-unit[data-layer="2"] { bottom:calc(var(--coin-step) * 2); }
+.chip-unit[data-layer="3"] { bottom:calc(var(--coin-step) * 3); }.chip-unit[data-layer="4"] { bottom:calc(var(--coin-step) * 4); }
+.chip-unit[data-layer="5"] { bottom:calc(var(--coin-step) * 5); }
+.chip-disc { position:relative; display:block; width:100%; height:100%; border-radius:50%; border:1px solid var(--chip-side); box-sizing:border-box;
+  background:repeating-conic-gradient(from 15deg,var(--chip-tone) 0deg 37deg,#ece7d8 37deg 52deg,var(--chip-tone) 52deg 60deg);
+  box-shadow:0 1px 0 #ece7d899,0 3px 0 var(--chip-side),0 4px 0 #10191bbb; }
+.chip-disc::before { content:""; position:absolute; inset:3px 5px; border-radius:50%; background:var(--chip-center); border:1px solid var(--chip-trim); box-shadow:inset 0 0 0 1px #ffffff70; }
+.chip-disc::after { content:var(--chip-engraving); position:absolute; right:1px; top:3px; font:7px/1 var(--data); color:var(--chip-trim); }
+.chip-face-value { position:absolute; inset:0; display:grid; place-items:center; color:var(--chip-ink); font:900 11px/1 var(--data); letter-spacing:-.7px; text-shadow:0 1px #ffffff80; }
+.chip-bundle { position:absolute; bottom:-7px; left:50%; transform:translateX(-50%); font:9px var(--data); color:#fff; background:#171a23; border:1px solid var(--chip-trim); padding:1px 3px; z-index:2; }
+/* Bets are loose stacks on felt, not icons embedded in a status badge. */
+.pixel-table .arena[data-count] .seat:is(.hero,.npc-seat) .bet-chip { display:flex; flex-direction:column; align-items:center; gap:6px; padding:0; border:0; border-radius:0; background:none; box-shadow:none; }
+.pixel-table .bet-chip .bet-amount { color:#f7efd9; background:#102c29df; padding:2px 7px; border-radius:9px; font:700 11px/1.2 var(--data); box-shadow:0 1px 1px #06191799; white-space:nowrap; }
+.pixel-table .bet-chip small { font-size:9px; color:#becfc1; font-weight:400; }
+/* Geometry remains measurable for outgoing sprites, but never duplicates collected
+   chips, including when reduced motion disables sprites altogether. */
+.pixel-table .bet-chip[data-chip-collecting] { visibility:hidden; }
+.pixel-table .arena[data-count] .seat.npc-seat .bet-chip { bottom:-22px; }
+.pixel-table .arena .hero .bet-chip { right:-100px; bottom:28px; }
+.pixel-table .pot-display { gap:9px; }
+.pot-chip-bank { display:flex; align-items:center; justify-content:center; min-width:30px; min-height:32px; }
+.pixel-table .pot-chip-bank .chip-pile { --coin-w:34px; --coin-h:24px; --coin-step:4.7px; }
+.pixel-table .pot-chip-bank .chip-face-value { font-size:12px; }
+/* Each moving element is ONE denomination chip (or an explicitly labelled bundle). */
+.pixel-table .chip-flight { width:30px; height:21px; filter:drop-shadow(2px 4px 2px #04161266); }
+.pixel-table .chip-flight .chip-flight-amount { top:28px; font-size:11px; }
+.deck-chip-sample { display:flex; gap:14px; align-items:end; justify-content:center; padding:12px 4px 0; }
+.deck-chip-sample>span { display:flex; align-items:center; gap:8px; }
+.deck-chip-sample b { font:700 12px var(--data); }
+.deck-preview { flex-direction:column; }
+.deck-cards-preview { display:flex; gap:14px; justify-content:center; }
+.deck-mini-chips { position:absolute; bottom:-6px; right:-1px; }
+.deck-mini-chips .chip-pile { --coin-w:22px; --coin-h:16px; --coin-step:3px; }
+.deck-mini-chips .chip-face-value { font-size:9px; }
+@media(max-width:760px) {
+  .pixel-table .bet-chip .chip-pile { --coin-w:24px; --coin-h:17px; --coin-step:3.4px; }
+  .pixel-table .bet-chip .chip-face-value { font-size:9px; }
+  .pixel-table .arena .hero .bet-chip { right:-48px; bottom:64px; }
+  .pixel-table .pot-chip-bank .chip-pile { --coin-w:28px; --coin-h:20px; --coin-step:3.9px; }
+  .pixel-table .pot-chip-bank .chip-face-value { font-size:10px; }
+  .pixel-table .chip-flight { width:24px; height:17px; }
+  .pixel-table .chip-flight .chip-face-value { font-size:9px; }
+  .pixel-table .pot-display { gap:6px; }
+  .pixel-table .arena:is([data-count="5"],[data-count="6"]) .table-center { top:200px; bottom:auto; }
+}
+@media(max-width:450px) {
+  .pixel-table .arena[data-count] .seat.npc-seat:nth-child(n) .bet-chip { bottom:-46px; left:50%; right:auto; transform:translateX(-50%); }
+  .pixel-table .arena[data-count="2"] .seat.npc-seat:nth-child(n) .bet-chip { left:calc(100% - 15px); bottom:-20px; transform:none; }
+  .deck-chip-sample { gap:9px; flex-wrap:wrap; }
+}

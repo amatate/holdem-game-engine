@@ -50,6 +50,7 @@ export class LivingTable {
   readonly #visibleMemory = new TableMemory();
   readonly #people: ReturnType<typeof tablePerson>[];
   readonly #story: boolean;
+  readonly #greet: boolean;
   #revision = 0;
   #hand = 0;
   #packet = -1;
@@ -80,8 +81,9 @@ export class LivingTable {
   #ended = false;
   #out = new Set<number>();
 
-  constructor(options: { story?: boolean; people?: readonly TablePerson[] } = {}) {
+  constructor(options: { story?: boolean; people?: readonly TablePerson[]; greet?: boolean } = {}) {
     this.#story = options.story ?? true;
+    this.#greet = options.greet ?? true;
     this.#people = (options.people ?? STORY_PEOPLE).map(tablePerson);
   }
 
@@ -183,7 +185,7 @@ export class LivingTable {
             this.#say('莫叔', '杯子在边上，自己倒。坐吧。', 'hello', true);
             this.#say('阿凯', '莫叔，又拿你那盒旧筹码啊？', 'hello-kai', true);
             this.#say('林岚', '能用就行。你那枚别转了，听着晕。', 'hello-lan', true);
-          } else if (this.#hand === 1) {
+          } else if (this.#hand === 1 && this.#greet) {
             const host = this.#people[0];
             if (host) this.#speak(host, 'hello', 'hello', true);
           }

@@ -20,6 +20,7 @@ export function frameSound(frame: Pick<PlaybackFrame, 'event' | 'reactionOnly'>)
     case 'communityCardsDealt':
     case 'holeCardsRevealed': return 'reveal';
     case 'blindPosted': return event.amount > 0 ? 'chips' : null;
+    case 'bettingRoundClosed': return 'chips';
     case 'uncalledBetReturned':
     case 'potAwarded': return 'payout';
     case 'playerActed':

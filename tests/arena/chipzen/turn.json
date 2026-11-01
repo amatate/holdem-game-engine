@@ -1,0 +1,24 @@
+{
+  "type": "turn_request",
+  "match_id": "fixture-match",
+  "request_id": "fixture-request-1",
+  "seat": 0,
+  "timeout_ms": 30000,
+  "valid_actions": ["fold", "call", "raise"],
+  "state": {
+    "hand_number": 1,
+    "phase": "preflop",
+    "board": [],
+    "your_hole_cards": ["Ac", "Kd"],
+    "pot": 15,
+    "your_stack": 995,
+    "opponent_stacks": [990],
+    "to_call": 5,
+    "min_raise": 20,
+    "max_raise": 1000,
+    "action_history": [
+      {"seat": 0, "action": "post_small_blind", "amount": 5, "phase": "preflop", "is_timeout": false},
+      {"seat": 1, "action": "post_big_blind", "amount": 10, "phase": "preflop", "is_timeout": false}
+    ]
+  }
+}

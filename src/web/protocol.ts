@@ -5,11 +5,12 @@ import type { SessionMode } from '../game/session-types.js';
 import type { LivingView } from '../game/living-table.js';
 import type { TutorialView } from '../game/tutorial.js';
 
-export type TableExperience = 'free' | 'living' | 'tutorial';
+export type TableExperience = 'free' | 'living' | 'tutorial' | 'competitive' | 'first-night' | 'second-night';
 
 export interface SaveSummary {
   id: string; savedAt: string; hand: number; heroStack: number; players: number;
   mode: SessionMode; experience: TableExperience; lesson: number | null; ended: boolean;
+  storyNight?: number; wallet?: number;
 }
 export interface SaveStatus { enabled: boolean; saved: SaveSummary | null; error: string | null; current?: boolean }
 export interface HandRecap {
@@ -63,10 +64,15 @@ export interface WebTable {
   tutorial?: TutorialView | null;
   save?: SaveStatus;
   recentHands?: HandRecap[];
+  firstNight?: import('../game/first-night.js').FirstNightView | null;
+  secondNight?: import('../game/second-night.js').SecondNightView | null;
+  campaign?: import('../game/story-campaign.js').StoryView | null;
 }
 
 export interface Bootstrap {
   rosters: Record<number, SeatIdentity[]>;
   table: WebTable | null;
   save?: SaveStatus;
+  chapterSave?: SaveStatus;
+  journeySave?: SaveStatus;
 }

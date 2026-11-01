@@ -1,3 +1,4 @@
+import { compatibleStorySave } from './story-compat.js';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -8,7 +9,9 @@ import type { SaveStatus } from './protocol.js';
 import { FileCheckpointStore, engineFingerprint, tableDigest, MAX_COMMANDS,
   type Checkpoint, type CheckpointStore } from './checkpoints.js';
 import { answerTutorial, tutorialAllows, tutorialView } from '../game/tutorial.js';
-import { rosterFor, openLocalTable, refreshPresentation, advanceSession, type LocalSession } from './table-session.js';
+import { rosterFor, openLocalTable, refreshPresentation, canCheckpoint, type LocalSession } from './table-session.js';
+import { tableCommand, tableContinue, chapterChoice, secondNightChoice, storyCommand } from './table-actions.js';
+import { isNightAbility } from '../game/first-night.js';
 import { SOUND_FILES, AUDIO_CREDIT_FILES } from './sound-assets.js';
 import { isAiDifficulty } from '../agents/difficulty.js';
 import { MUSIC_FILE } from './music.js';
@@ -42,14 +45,19 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
 async function restoreCheckpoint(checkpoint: Checkpoint): Promise<LocalSession> {
   const setup = checkpoint.setup;
   const deadline = Date.now() + 30_000;
-  const session = await openLocalTable(setup.players, setup.mode, setup.experience, setup.lesson, setup.socialEnabled, setup.runSeed, setup.difficulty);
+  const session = await openLocalTable(setup.players, setup.mode, setup.experience, setup.lesson, setup.socialEnabled, setup.runSeed, setup.difficulty, setup.nightAbility, undefined, undefined, undefined, null, setup.storyEdition);
   for (const entry of checkpoint.journal) {
     if (Date.now() > deadline) throw new Error('Restore time limit');
     if (entry.type === 'command' || entry.type === 'continue') {
-      const result = entry.type === 'command' ? await submitSessionCommand(session.handle, entry.command)
-        : await continueAfterHandResult(session.handle, entry.packetIndex);
+      const result = entry.type === 'command' ? await tableCommand(session, entry.command)
+        : await tableContinue(session, entry.packetIndex);
       if (!result.accepted) throw new Error('Rejected checkpoint command');
-      advanceSession(session);
+    } else if (entry.type === 'story') {
+      if (!await storyCommand(session, entry.input)) throw new Error('Invalid story command');
+    } else if (entry.type === 'second-night') {
+      if (!await secondNightChoice(session, entry.choice, entry.revision)) throw new Error('Invalid Second Night choice');
+    } else if (entry.type === 'chapter') {
+      if (!await chapterChoice(session, entry.choice, entry.revision)) throw new Error('Invalid chapter choice');
     } else if (entry.type === 'reply') {
       if (!session.living?.reply(entry.promptId, entry.choice, entry.revision)) throw new Error('Invalid saved reply');
       refreshPresentation(session);
@@ -58,7 +66,7 @@ async function restoreCheckpoint(checkpoint: Checkpoint): Promise<LocalSession> 
       refreshPresentation(session);
     } else throw new Error('Invalid journal entry');
   }
-  if (session.table.packet.kind === 'decision' || tableDigest(session.table) !== checkpoint.digest) throw new Error('Checkpoint mismatch');
+  if (!canCheckpoint(session) || tableDigest(session.table) !== checkpoint.digest) throw new Error('Checkpoint mismatch');
   session.journal = checkpoint.journal;
   return session;
 }
@@ -74,20 +82,21 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
     if (!store || !token) return { enabled: !!store, saved: null, error: null };
     try {
       const saved = await store.read(token);
-      if (saved && saved.engine !== await fingerprint) return { enabled: true, saved: null, error: '存档来自不同规则版本，暂不能恢复；原文件已保留。' };
+      if (saved && !compatibleStorySave(saved,await fingerprint)) return { enabled: true, saved: null, error: '存档来自不同规则版本，暂不能恢复；原文件已保留。' };
       return { enabled: true, saved: saved?.summary ?? null, error: null };
     } catch { return { enabled: true, saved: null, error: '无法读取本地存档；原文件未删除，请检查服务目录和权限。' }; }
   }
   async function checkpoint(session: LocalSession, token: string): Promise<void> {
-    if (!store || session.table.packet.kind === 'decision') return;
+    if (!store || !canCheckpoint(session)) return;
     try {
       if (session.journal.length > MAX_COMMANDS) throw new Error('Checkpoint limit');
       const summary = { id: randomUUID(), savedAt: new Date().toISOString(), hand: session.table.view.handNumber,
         heroStack: session.table.view.seats.find((seat) => seat.seatIndex === 0)!.stack,
         players: session.setup.players, mode: session.setup.mode, experience: session.setup.experience,
         lesson: session.tutorial?.lesson ?? null,
-        ended: session.table.packet.kind === 'game-result' || session.table.living?.ended === true || session.tutorial?.complete === true };
-      await store.write(token, { format: 1, engine: await fingerprint, setup: session.setup, journal: session.journal,
+        ...( session.campaign ? {storyNight:session.table.campaign!.night,wallet:session.campaign.wallet} : {}),
+          ended: session.campaign ? session.campaign.phase === 'complete' : session.secondNight ? session.secondNight.phase === 'complete' : session.firstNight ? session.firstNight.phase === 'complete' : session.table.packet.kind === 'game-result' || session.table.living?.ended === true || session.tutorial?.complete === true };
+      await store.write(session.secondNight ? `${token}:second-night` : session.firstNight ? `${token}:first-night` : token, { format: 1, engine: await fingerprint, setup: session.setup, journal: session.journal,
         summary, digest: tableDigest(session.table) });
       session.table.save = { enabled: true, saved: summary, error: null, current: true };
     } catch {
@@ -98,6 +107,19 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
   }
   const rosters = Object.fromEntries([2, 3, 4, 5, 6].map((count) => [count, rosterFor(count)]));
   const staticFiles: Record<string, [URL, string]> = {
+    '/story-render.js': [new URL('../../dist/web/story-render.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/story.css': [new URL('../../src/web/story.css', import.meta.url), 'text/css; charset=utf-8'],
+    '/art/garage-room-v1.png': [new URL('../../src/web/art/garage-room-v1.png', import.meta.url), 'image/png'],
+    '/second-night-render.js': [new URL('../../dist/web/second-night-render.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/game/second-night.js': [new URL('../../dist/game/second-night.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/second-night.css': [new URL('../../src/web/second-night.css', import.meta.url), 'text/css; charset=utf-8'],
+    '/art/second-room-v1.png': [new URL('../../src/web/art/second-room-v1.png', import.meta.url), 'image/png'],
+    '/art/mobile-room-v1.png': [new URL('../../src/web/art/mobile-room-v1.png', import.meta.url), 'image/png'],
+    '/mobile-render.js': [new URL('../../dist/web/mobile-render.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/mobile-model.js': [new URL('../../dist/web/mobile-model.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/mobile.css': [new URL('../../src/web/mobile.css', import.meta.url), 'text/css; charset=utf-8'],
+    '/first-night-render.js': [new URL('../../dist/web/first-night-render.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/first-night.css': [new URL('../../src/web/first-night.css', import.meta.url), 'text/css; charset=utf-8'],
     '/': [new URL('../../src/web/index.html', import.meta.url), 'text/html; charset=utf-8'],
     '/style.css': [new URL('../../src/web/style.css', import.meta.url), 'text/css; charset=utf-8'],
     '/pixel-table.css': [new URL('../../src/web/pixel-table.css', import.meta.url), 'text/css; charset=utf-8'],
@@ -106,7 +128,7 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
     '/poker-cards.js': [new URL('../../dist/web/poker-cards.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/deck-skins.js': [new URL('../../dist/web/deck-skins.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/deck-skins.css': [new URL('../../src/web/deck-skins.css', import.meta.url), 'text/css; charset=utf-8'],
-    ...Object.fromEntries(['deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost'].map(name => [
+    ...Object.fromEntries(['deck-lantern', 'deck-blue-hour', 'deck-jade', 'deck-ghost', 'chips-night', 'chips-lantern', 'chips-blue-hour', 'chips-jade', 'chips-ghost'].map(name => [
       `/art/${name}-v1.png`, [new URL(`../../src/web/art/${name}-v1.png`, import.meta.url), 'image/png'] as [URL, string],
     ])),
     '/i18n.js': [new URL('../../dist/web/i18n.js', import.meta.url), 'text/javascript; charset=utf-8'],
@@ -130,6 +152,9 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
     '/client.js': [new URL('../../dist/web/client.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/transport.js': [new URL('../../dist/web/transport.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/playback.js': [new URL('../../dist/web/playback.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/chip-motion.js': [new URL('../../dist/web/chip-motion.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/chips.js': [new URL('../../dist/web/chips.js', import.meta.url), 'text/javascript; charset=utf-8'],
+    '/chips.css': [new URL('../../src/web/chips.css', import.meta.url), 'text/css; charset=utf-8'],
     '/render.js': [new URL('../../dist/web/render.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/view.js': [new URL('../../dist/web/view.js', import.meta.url), 'text/javascript; charset=utf-8'],
     '/agent-tools.js': [new URL('../../dist/web/agent-tools.js', import.meta.url), 'text/javascript; charset=utf-8'],
@@ -166,7 +191,9 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
       if (session) session.touched = now;
       if (req.method === 'GET') {
         if (path === '/api/bootstrap') { json(res, 200, { rosters, table: session?.table ?? null,
-          save: session?.table.save ?? await savedStatus(token) }); return; }
+          save: session && !session.firstNight && !session.secondNight ? session.table.save : await savedStatus(token),
+          chapterSave: session?.firstNight ? session.table.save : await savedStatus(token ? `${token}:first-night` : undefined),
+          journeySave: session?.secondNight ? session.table.save : await savedStatus(token ? `${token}:second-night` : undefined) }); return; }
         const file = staticFiles[path];
         if (!file) throw new HttpError(404, '没有这个页面。');
         const content = await readFile(file[0]);
@@ -176,20 +203,21 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         res.writeHead(200, { 'Content-Type': file[1] }); res.end(content); return;
       }
       if (req.method !== 'POST') throw new HttpError(405, '不支持此请求方式。');
-      if (!['/api/table', '/api/resume', '/api/action', '/api/continue', '/api/reply', '/api/lesson'].includes(path)) throw new HttpError(404, '没有这个操作。');
+      if (!['/api/table', '/api/resume', '/api/action', '/api/continue', '/api/reply', '/api/lesson', '/api/first-night', '/api/second-night', '/api/story'].includes(path)) throw new HttpError(404, '没有这个操作。');
       const body = await readBody(req);
       // A different tab may replace the table while this request body is arriving.
       session = token ? sessions.get(token) : undefined;
       if (session?.busy || (token && pending.has(token))) { json(res, 409, { error: '正在处理上一步，请稍后同步。', table: session?.table }); return; }
       if (path === '/api/resume') {
-        if (session) { json(res, 409, { error: '已有正在进行的牌桌，已返回当前进度。', table: session.table }); return; }
+        if (session && body.replace !== true) { json(res, 409, { error: '已有正在进行的牌桌，已返回当前进度。', table: session.table }); return; }
         if (!store || !token) throw new HttpError(404, '没有可恢复的本地存档。');
         if (sessions.size >= 32) throw new HttpError(503, '本地牌桌已满。');
         pending.add(token);
         try {
-          const saved = await store.read(token);
+          const saved = await store.read(body.slot === 'journey' ? `${token}:second-night` : body.slot === 'chapter' ? `${token}:first-night` : token);
           if (!saved || saved.summary.id !== body.checkpointId) throw new HttpError(409, '存档已变化，请同步后再继续。');
-          if (saved.engine !== await fingerprint) throw new HttpError(409, '规则版本已变化，不能恢复此存档；原文件已保留。');
+          if ((saved.setup.experience === 'first-night') !== (body.slot === 'chapter') || (saved.setup.experience === 'second-night') !== (body.slot === 'journey')) throw new HttpError(409, '存档类型不匹配。');
+          if (!compatibleStorySave(saved,await fingerprint)) throw new HttpError(409, '规则版本已变化，不能恢复此存档；原文件已保留。');
           const restored = await restoreCheckpoint(saved);
           restored.table.save = { enabled: true, saved: saved.summary, error: null, current: true };
           sessions.set(token, restored);
@@ -202,11 +230,16 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
       }
       if (path === '/api/table') {
         const experience = body.experience ?? 'free';
-        if (experience !== 'free' && experience !== 'living' && experience !== 'tutorial') throw new HttpError(400, '请选择自由牌桌、活牌桌或教学。');
-        const players = experience === 'tutorial' ? 2 : experience === 'living' ? 4 : body.players;
+        if (experience !== 'free' && experience !== 'living' && experience !== 'tutorial' && experience !== 'competitive' && experience !== 'first-night' && experience !== 'second-night') throw new HttpError(400, '请选择有效玩法。');
+        const players = experience === 'tutorial' || experience === 'competitive' || experience === 'first-night' || experience === 'second-night' ? 2 : experience === 'living' ? 4 : body.players;
         const mode = body.mode === undefined ? 'classic' : body.mode;
         if (mode !== 'classic' && mode !== 'ability-lab') throw new HttpError(400, '请选择经典德州或能力实验。');
         if (experience === 'tutorial' && mode !== 'classic') throw new HttpError(400, '新手教学使用经典规则，不启用能力。');
+        if (experience === 'competitive' && mode !== 'classic') throw new HttpError(400, '竞技练习使用经典规则，不启用能力。');
+        if (experience === 'second-night' && mode !== 'classic') throw new HttpError(400, '第二夜使用经典德州。');
+        if(body.storyEdition!==undefined&&(body.storyEdition!==2||experience!=='second-night'))throw new HttpError(400,'剧情版本无效。');
+        const nightAbility = experience === 'first-night' && mode === 'ability-lab' ? body.nightAbility : null;
+        if (experience === 'first-night' && mode === 'ability-lab' && !isNightAbility(nightAbility)) throw new HttpError(400, '请为第一夜选择一种能力。');
         if (body.socialEnabled !== undefined && typeof body.socialEnabled !== 'boolean') throw new HttpError(400, '人物互动选项必须为开启或关闭。');
         const difficulty = body.difficulty === undefined ? 'standard' : body.difficulty;
         if (!isAiDifficulty(difficulty)) throw new HttpError(400, '请选择有效的 AI 强度。');
@@ -218,8 +251,8 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         const newToken = token ?? randomUUID();
         pending.add(newToken);
         try {
-          const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true, undefined, difficulty);
-          opened.table.save = await savedStatus(newToken);
+          const opened = await openLocalTable(players, mode, experience, 0, body.socialEnabled === true, undefined, difficulty, nightAbility as import('../game/first-night.js').NightAbility | null, undefined, undefined, undefined, null, body.storyEdition===2?2:undefined);
+          opened.table.save = await savedStatus(opened.secondNight ? `${newToken}:second-night` : opened.firstNight ? `${newToken}:first-night` : newToken);
           await checkpoint(opened, newToken);
           sessions.set(newToken, opened);
           res.setHeader('Set-Cookie', `${cookieName}=${newToken}; HttpOnly; SameSite=Strict; Path=/; Max-Age=15552000`);
@@ -230,6 +263,19 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
       if (body.tableId !== session.table.id) { json(res, 409, { error: '牌桌已更新，已同步当前牌桌。', table: session.table }); return; }
       session.busy = true;
       try {
+        if (path === '/api/story') {
+          if(body.expectedPacketIndex!==session.table.packet.packetIndex || !await storyCommand(session,body.input as import('../game/story-campaign.js').StoryInput)){json(res,409,{error:'故事位置已变化，或还未读完当前对白。请同步后继续。',table:session.table});return;}
+          session.journal.push({type:'story',input:body.input as import('../game/story-campaign.js').StoryInput});
+          await checkpoint(session,token!);json(res,200,{table:session.table});return;
+        }
+        if (path === '/api/first-night' || path === '/api/second-night') {
+          if (body.expectedPacketIndex !== session.table.packet.packetIndex || typeof body.choice !== 'string' || typeof body.revision !== 'number'
+            || !await (path === '/api/second-night' ? secondNightChoice : chapterChoice)(session, body.choice, body.revision)) {
+            json(res, 409, { error: '这段对话已更新，请同步。', table: session.table }); return;
+          }
+          session.journal.push({ type: path === '/api/second-night' ? 'second-night' : 'chapter', choice: body.choice, revision: body.revision });
+          await checkpoint(session, token!); json(res, 200, { table: session.table }); return;
+        }
         if (path === '/api/reply' || path === '/api/lesson') {
           const revision = path === '/api/reply' ? session.table.living?.revision : session.tutorial?.revision;
           if (revision === undefined || body.revision !== revision || body.expectedPacketIndex !== session.table.packet.packetIndex) {
@@ -275,10 +321,12 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
           }
         }
         const result = path === '/api/action'
-          ? await submitSessionCommand(session.handle, body.command as SessionCommand)
-          : await continueAfterHandResult(session.handle, body.expectedPacketIndex as number);
+          ? await tableCommand(session, body.command as SessionCommand)
+          : await tableContinue(session, body.expectedPacketIndex as number);
         if (!result.accepted) {
           const messages: Record<string, string> = {
+            'chapter-paused': '这一桌已暂停，请先回应桌间对话。',
+            'chapter-ability-unavailable': '只能使用本章选定的能力，且需要足够精力。未消耗精力。',
             'wrong-mode': '经典模式不能使用能力。',
             'ability-unavailable': '当前无法使用这项能力。',
             'ability-spent': '这项能力本场已用完；开始新的一桌才会恢复。',
@@ -294,7 +342,6 @@ export function createLocalServer(options: { checkpointStore?: CheckpointStore }
         }
         session.journal.push(path === '/api/action' ? { type: 'command', command: body.command as SessionCommand }
           : { type: 'continue', packetIndex: body.expectedPacketIndex as number });
-        advanceSession(session);
         await checkpoint(session, token!);
         json(res, 200, { table: session.table });
       } finally { session.busy = false; }

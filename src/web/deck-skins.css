@@ -1,5 +1,57 @@
 /* Texture atlases: left = back, right = blank face. No raster encodes card identity.
    Attributes may scope a preview, a whole table, or a future public level preset. */
+/* Chip stacks are decorative tokens, never a denomination or an exact chip count.
+   They follow the PUBLIC back theme, including mixed sets and scene previews. */
+:root,[data-card-back="night"] { --chip-image:url('/art/chips-night-v1.png'); }
+[data-card-back="lantern"] { --chip-image:url('/art/chips-lantern-v1.png'); }
+[data-card-back="blue-hour"] { --chip-image:url('/art/chips-blue-hour-v1.png'); }
+[data-card-back="jade"] { --chip-image:url('/art/chips-jade-v1.png'); }
+[data-card-back="ghost"] { --chip-image:url('/art/chips-ghost-v1.png'); }
+.chip-art { display:inline-block; flex:0 0 auto; width:40px; height:36px; background:var(--chip-image) center/contain no-repeat; image-rendering:pixelated; vertical-align:middle; pointer-events:none; }
+.pixel-table .pot-display { position:relative; }
+.pixel-table .pot-chips { width:52px; height:46px; align-self:center; margin:-14px -6px -8px 0; }
+.pixel-table .bet-chip .chip-art { width:30px; height:25px; margin:-7px 1px -5px -4px; }
+.pixel-table .flying-chip { display:flex; align-items:center; gap:4px; padding:2px 7px 2px 2px; background:#201c30ed; color:var(--paper); border:1px solid var(--brass); box-shadow:2px 2px 0 #0b111a80; }
+.pixel-table .flying-chip .chip-art { width:38px; height:32px; }
+/* Separate overlay: never participates in table layout or accepts pointer input. */
+.chip-motion-layer { position:absolute; inset:0; z-index:15; pointer-events:none; overflow:hidden; }
+.pixel-table .chip-flight { width:58px; height:54px; display:block; padding:0; border:0; border-radius:0; background:none; box-shadow:none; text-align:center; will-change:transform,opacity; filter:drop-shadow(0 5px 2px #07171d99); }
+.pixel-table .chip-flight .chip-art { width:100%; height:100%; display:block; }
+.chip-flight-amount { position:absolute; top:36px; left:50%; transform:translateX(-50%); padding:2px 7px; border:1px solid #c9b184; background:#181c28ed; color:var(--paper); font:700 13px/1.2 var(--data); box-shadow:1px 2px 0 #0b111a; white-space:nowrap; }
+.chip-flight-award .chip-flight-amount { color:#ffe1a0; border-color:var(--brass); }
+.chip-flight-refund .chip-flight-amount { color:#d0e8f3; border-color:#83b3ce; }
+@media(max-width:650px) {
+  .pixel-table .chip-flight { width:44px; height:42px; }
+  .chip-flight-amount { top:28px; font-size:11px; padding:2px 5px; }
+}
+@media(prefers-reduced-motion:reduce) { .chip-motion-layer { display:none; } }
+.deck-pair { position:relative; }
+.deck-pair .chip-art { position:absolute; bottom:-9px; right:0; width:50px; height:44px; filter:drop-shadow(2px 2px 0 #151222); }
+.deck-preview { align-items:center; }
+.deck-preview>.chip-art { width:75px; height:70px; }
+.chip-style-note { color:var(--muted); font-size:12px; line-height:1.6; margin:-10px 0 18px; }
+.competitive-entrance { grid-column:1/-1; display:flex; align-items:center; gap:22px; border-top:1px solid var(--line); background:#171d29; padding:26px 30px; }
+.competitive-entrance h2 { font:700 25px/1.4 var(--display); margin:4px 0 8px; }
+.competitive-entrance p:not(.eyebrow) { color:var(--muted); }
+.competitive-entrance .eyebrow { color:#a8c4d8; }
+.competitive-entrance>div { flex:1; min-width:0; }
+.competitive-entrance>.button { flex-shrink:0; margin:0; }
+.competitive-entrance small { display:block; color:var(--muted); line-height:1.6; }
+.competitive-emblem .chip-art { width:92px; height:88px; }
+.competitive-banner { display:flex; align-items:center; flex-wrap:wrap; gap:7px 18px; border-left:3px solid #a8c4d8; padding:10px 14px; margin-bottom:10px; background:#242735; font-size:12px; line-height:1.5; }
+.competitive-banner strong { color:#d6e5ee; }
+.competitive-banner small { color:var(--muted); }
+@media(max-width:650px) {
+  .competitive-entrance { display:grid; grid-template-columns:48px minmax(0,1fr); gap:12px; padding:22px 18px; }
+  .competitive-emblem .chip-art { width:48px; height:48px; }
+  .competitive-entrance h2 { font-size:21px; }
+  .competitive-entrance>.button { grid-column:1/-1; width:100%; min-height:44px; }
+  .pixel-table .pot-chips { width:36px; height:34px; margin:-9px -4px -6px 0; }
+  .pixel-table .bet-chip .chip-art { width:23px; height:21px; margin:-6px 0 -4px -2px; }
+  .deck-preview>.chip-art { width:38px; height:38px; }
+  .deck-pair .chip-art { width:40px; height:34px; }
+  .competitive-banner { gap:4px 10px; font-size:11px; padding:8px 10px; }
+}
 :root,[data-card-face] { --card-pip-ink:currentColor; --card-face-shadow:2px 3px 0 #a1927d,3px 5px 0 #0f282d80; }
 :root,[data-card-face="night"] {
   --card-face-image:none; --card-paper:#f3e6c7; --card-ink:#20202c; --card-red-ink:#b12b49;

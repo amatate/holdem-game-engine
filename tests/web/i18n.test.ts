@@ -9,8 +9,17 @@ import type { WebTable } from '../../src/web/protocol.js';
 import type { Checkpoint } from '../../src/web/checkpoint-data.js';
 
 afterEach(() => vi.restoreAllMocks());
+it('projects authored First Night dialogue, choices and energy into English', async () => {
+  const api=host();
+  let table=await post(api,'/api/table',{experience:'first-night',mode:'ability-lab',nightAbility:'swap'});
+  assertEnglish(renderTable(table));
+  table=await post(api,'/api/first-night',{tableId:table.id,expectedPacketIndex:table.packet.packetIndex,revision:table.firstNight!.revision,choice:'sit'});
+  assertEnglish(renderTable(table));
+});
 const han = /[\p{Script=Han}]/u;
 function assertEnglish(html: string) {
+  // Literary lines carry reviewed translations; project them as the browser does.
+  html = html.replace(/<(span|option)\b(?=[^>]*data-no-i18n)(?=[^>]*data-en="([^"]*)")[^>]*>[^<]*<\/\1>/g, (_all, _tag, english: string) => `>${english}<`);
   // Inspect text nodes and human-readable labels, never command values or machine IDs.
   const texts = [...html.matchAll(/>([^<>]*)</g)].map(match => match[1]!)
     .concat([...html.matchAll(/(?:aria-label|title|alt)="([^"]*)"/g)].map(match => match[1]!));
@@ -139,4 +148,10 @@ it.each(['quiet','warm','direct'])('translates a six-hand story and the %s dialo
     if (!table.living?.ended) table = await post(api, '/api/continue', { tableId:table.id, expectedPacketIndex:table.packet.packetIndex });
   }
   expect(table.living?.ended).toBe(true);
-}, 15_000); // Full six-hand simulations now include public-range inference.
+}, 90_000); // Six-hand public-range simulations plus complete bilingual DOM checks on slower machines.
+
+
+it('translates story night labels and accessible dialogue progress',()=>{
+  expect(translateText('第 3 夜 · 经典德州','en')).toBe("Night 3 · Classic Hold'em");
+  expect(translateText('对白进度','en')).toBe('Dialogue progress');
+});

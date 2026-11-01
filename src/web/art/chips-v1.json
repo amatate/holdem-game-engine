@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "created": "2026-10-13",
+  "generator": "Built-in imagegen tool; no CLI fallback",
+  "purpose": "Decorative pixel-inspired chip stacks; amounts are code-rendered. Follow public card-back theme only.",
+  "integration": [
+    "pot",
+    "current-round bets",
+    "chip transfer animation",
+    "deck gallery",
+    "fixed preview"
+  ],
+  "pixelProcessing": "Copied original PNG files unchanged; CSS scales for display.",
+  "assets": [
+    {
+      "id": "night",
+      "file": "chips-night-v1.png",
+      "source": "exec-bacc1b1e-0f2a-4d59-9480-656624ac2a5b.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "prompt": "Use case: stylized-concept, production transparent game sprite for an existing pixel-art poker table. Create ONE isolated low stack of THREE identical round poker chips, centered, slight isometric top-down view (top ellipse visible), occupying about 85% width and 75% height of a square canvas. Crisp deliberate 16-bit pixel-art edges, coarse visible pixel clusters, restrained dithering, readable at 48px. Each chip has alternating broad edge inserts, thick dimensional rim, a simple central emblem; ornamental engraved ring. No denomination, no text, no digits, no logo, no brand mark, no cards or other objects. Consistent view and silhouette. Genuine transparent background, no ground plane or surrounding shadow. The chips should look weighty, elegant, tactile, designed for an original nocturnal poker game. Theme: deep plum body #443356, warm antique gold rims #e8b75e, ivory inserts #f2e6c9, a small gold four-point night star emblem."
+    },
+    {
+      "id": "lantern",
+      "file": "chips-lantern-v1.png",
+      "source": "exec-0cfa17d6-c7bd-4ea9-9dcc-bfc0932b436e.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "prompt": "Use case: stylized-concept, production transparent game sprite for an existing pixel-art poker table. Create ONE isolated low stack of THREE identical round poker chips, centered, slight isometric top-down view (top ellipse visible), occupying about 85% width and 75% height of a square canvas. Crisp deliberate 16-bit pixel-art edges, coarse visible pixel clusters, restrained dithering, readable at 48px. Each chip has alternating broad edge inserts, thick dimensional rim, a simple central emblem; ornamental engraved ring. No denomination, no text, no digits, no logo, no brand mark, no cards or other objects. Consistent view and silhouette. Genuine transparent background, no ground plane or surrounding shadow. The chips should look weighty, elegant, tactile, designed for an original nocturnal poker game. Theme: rich lacquer vermilion body #a63642, warm ivory rims #f2e6c9, gold inserts #dcb060, simple red lantern emblem surrounded by curling engraved vines."
+    },
+    {
+      "id": "blue-hour",
+      "file": "chips-blue-hour-v1.png",
+      "source": "exec-8ce9be28-98a1-4c83-ac13-e0f0259ef960.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "prompt": "Use case: stylized-concept, production transparent game sprite for an existing pixel-art poker table. Create ONE isolated low stack of THREE identical round poker chips, centered, slight isometric top-down view (top ellipse visible), occupying about 85% width and 75% height of a square canvas. Crisp deliberate 16-bit pixel-art edges, coarse visible pixel clusters, restrained dithering, readable at 48px. Each chip has alternating broad edge inserts, thick dimensional rim, a simple central emblem; ornamental engraved ring. No denomination, no text, no digits, no logo, no brand mark, no cards or other objects. Consistent view and silhouette. Genuine transparent background, no ground plane or surrounding shadow. The chips should look weighty, elegant, tactile, designed for an original nocturnal poker game. Theme: midnight indigo body #263958, pale blue rims #83b3ce, ivory inserts #ede4cf, a simple silver vinyl record emblem with subtle concentric grooves."
+    },
+    {
+      "id": "jade",
+      "file": "chips-jade-v1.png",
+      "source": "exec-745ee725-a381-4b8c-8e71-ff065720d6cf.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "prompt": "Use case: stylized-concept, production transparent game sprite for an existing pixel-art poker table. Create ONE isolated low stack of THREE identical round poker chips, centered, slight isometric top-down view (top ellipse visible), occupying about 85% width and 75% height of a square canvas. Crisp deliberate 16-bit pixel-art edges, coarse visible pixel clusters, restrained dithering, readable at 48px. Each chip has alternating broad edge inserts, thick dimensional rim, a simple central emblem; ornamental engraved ring. No denomination, no text, no digits, no logo, no brand mark, no cards or other objects. Consistent view and silhouette. Genuine transparent background, no ground plane or surrounding shadow. The chips should look weighty, elegant, tactile, designed for an original nocturnal poker game. Theme: deep jade green body #25675d, pale celadon rims #9ac4a8, antique gold inserts #e0bd77, simple golden ginkgo leaf emblem."
+    },
+    {
+      "id": "ghost",
+      "file": "chips-ghost-v1.png",
+      "source": "exec-f4eb82e2-3304-44de-93c4-966b093e1b08.png",
+      "width": 1254,
+      "height": 1254,
+      "alpha": true,
+      "prompt": "Use case: stylized-concept, production transparent game sprite for an existing pixel-art poker table. Create ONE isolated low stack of THREE identical round poker chips, centered, slight isometric top-down view (top ellipse visible), occupying about 85% width and 75% height of a square canvas. Crisp deliberate 16-bit pixel-art edges, coarse visible pixel clusters, restrained dithering, readable at 48px. Each chip has alternating broad edge inserts, thick dimensional rim, a simple central emblem; ornamental engraved ring. No denomination, no text, no digits, no logo, no brand mark, no cards or other objects. Consistent view and silhouette. Genuine transparent background, no ground plane or surrounding shadow. The chips should look weighty, elegant, tactile, designed for an original nocturnal poker game. Theme: near-black charcoal body #191c25, silver-white rims #d1d9e1, dark garnet inserts #802d47, a clean silver crescent moon emblem and engraved circular fine ornamental ring. Original unbranded design."
+    }
+  ]
+}

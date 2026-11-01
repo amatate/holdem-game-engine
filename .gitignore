@@ -5,6 +5,14 @@ coverage/
 *.log
 .holdem-data/
 .pages-dist/
+artifacts/arena/
+artifacts/chipzen/
+.env.chipzen
+chipzen.toml
 # Local duplicate art bundle; publish the individual source assets instead.
 docs/design/pixel-night-v1/core-character-turnarounds-v1.zip
 docs/design/pixel-night-v1/expansion-v1/pixel-night-expansion-v1.zip
+
+# Local QA captures and browser sessions.
+output/
+.playwright-cli/
