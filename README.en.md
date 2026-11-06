@@ -8,13 +8,23 @@ A TypeScript No-Limit Texas Hold'em engine with a playable, pixel-art single-pla
 
 No download, account, or API key. Virtual chips only: no deposits, withdrawals, or real-money betting. This is a single-player prototype, not online multiplayer.
 
+## Two volumes, twelve nights
+
+Continue from a saved Volume One ending into **After the Table Breaks**, Nights 7–12. The old room must be handed back; earlier decisions, your wallet and unresolved promises carry forward. Choosing to leave the old group does not force a reunion.
+
+A losing table is not game over. Keep the actual loss and continue via routes that remain available with no money. Alternatively, expand **Retry this table?** after a loss and confirm: it undoes only that table’s buy-in, cash-out and result, preserving earlier choices. The deal sequence stays the same. Practice chips never change your wallet.
+
+Both volumes’ literary text is currently **Chinese**. The English interface and classic modes remain available. To continue an existing story, reopen its saved ending; starting a new journey replaces that story slot. Known release saves still require full deterministic replay and an exact digest match.
+
+See [Volume Two design](docs/plans/volume-two-story.md) and [playtest notes](docs/playtests/volume-two.md).
+
 ## Volume One: A Seat Kept
 
 The home screen now opens a continuous six-night story, with optional real Hold’em tables and five ending directions. Volume One’s literary text is currently **Chinese**; the English interface, classic tables, tutorials and legacy story remain available.
 
 Night One uses score chips that never enter the wallet. From Night Two, buy-ins and cash-outs use actual engine results. Accepting 150, retaining an unpaid promise and declining a money arrangement lead to different records. Photos, witnesses and invitations require the corresponding player choices. Winning or using an ability is never required to finish the story.
 
-Starting a new volume replaces the story-journey slot after confirmation. Free play and the legacy First Night have separate saves. Recognized legacy story builds still require deterministic replay and digest verification; old events are not rewritten as the new story.
+Starting a new Volume One replaces the story-journey slot after confirmation; continuing into Volume Two preserves it. Free play and the legacy First Night have separate saves. Recognized legacy story builds still require deterministic replay and digest verification; old events are not rewritten as the new story.
 
 See the [integration notes](docs/playtests/volume-one-v2.md) and [approved Chinese manuscript](docs/writing-review-v2/02-夜局第一卷_完整文字稿_v2.md).
 
@@ -30,7 +40,7 @@ This command runs 200 heads-up hands in 100 independent, seat-swapped deal block
 
 An experimental **ChipZen remote adapter** is available separately: `npm run ai:chipzen -- --standby` maintains lobby presence and reconnects after transient failures; `--status` reads local connection health. Standby never creates or joins matches. Stop it with Ctrl+C before running `--practice` for exactly one unrated house-bot match. `--check` only validates configuration. It uses the official protocol / pinned SDK, isolated decision workers and redacted local logs. No automatic ranked entry, tournament registration or upload. **Offline protocol tests pass; a completed online match and any strength improvement remain unverified.** Configure credentials locally using `.env.chipzen.example`; never commit the token. [Integration and evaluation guide](docs/chipzen-integration.md).
 
-## Mobile frontend v1 (local, not deployed)
+## Mobile frontend v1
 
 A separate portrait composition adds an illustrated game home, a 2–6 player table that fits the viewport, a raise drawer, tap-to-open character profiles, notebook and ability panels, and dialogue scenes shown one line at a time. Wager controls use the engine's legal total-bet range. Chapter tables show their real settlement before the next conversation.
 

@@ -1,0 +1,4015 @@
+{
+  "sourceCommit": "6e8aa94c60e5d7598cc81bfb4898c218bf89d1dc",
+  "generatedFrom": "Unmodified release dist browser API and real deterministic poker",
+  "engine": "3657e3c88812392f599156703b3399bfef741d7338da84171bbab590e312de22",
+  "opening": {
+    "checkpoint": {
+      "format": 1,
+      "engine": "3657e3c88812392f599156703b3399bfef741d7338da84171bbab590e312de22",
+      "setup": {
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": 0,
+        "socialEnabled": true,
+        "runSeed": "58662b4f-4f88-41a8-9889-f628c3556892",
+        "difficulty": "standard",
+        "storyEdition": 2
+      },
+      "journal": [
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 0
+          }
+        }
+      ],
+      "digest": "1da1cf0c61e6e04d27e4a429ec85c1f5de4b6749b455b716bde1da83ec90d1f1",
+      "summary": {
+        "id": "a01f25bf-821b-4d7a-aaac-a426fb5f4a5f",
+        "savedAt": "2026-11-06T14:33:02.631Z",
+        "hand": 1,
+        "heroStack": 99,
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": null,
+        "storyNight": 1,
+        "wallet": 0,
+        "ended": false
+      }
+    },
+    "campaign": {
+      "edition": 2,
+      "phase": "scene",
+      "scene": "v-door",
+      "revision": 1,
+      "night": 1,
+      "title": "楼梯口",
+      "titleEn": "楼梯口",
+      "line": {
+        "who": "",
+        "text": "接着又来一条文字。",
+        "en": "接着又来一条文字。"
+      },
+      "cursor": 1,
+      "lineCount": 9,
+      "location": "old",
+      "wallet": 0,
+      "task": "把眼前的话听完，再决定怎么做",
+      "taskEn": "Read the conversation, then choose. Volume One is currently in Chinese.",
+      "goal": "认识这一桌人，想停就停",
+      "goalEn": "Meet the people and decide whether to play",
+      "choices": [],
+      "ledger": [],
+      "facts": [],
+      "history": [
+        {
+          "scene": "v-door",
+          "night": 1,
+          "title": "楼梯口",
+          "en": "Upstairs",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。",
+              "en": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。"
+            },
+            {
+              "who": "",
+              "text": "接着又来一条文字。",
+              "en": "接着又来一条文字。"
+            }
+          ]
+        }
+      ],
+      "chapters": [
+        {
+          "night": 1,
+          "title": "二楼，门开着",
+          "en": "The door is open",
+          "status": "current"
+        },
+        {
+          "night": 2,
+          "title": "赴约之后",
+          "en": "After the invitation",
+          "status": "locked"
+        },
+        {
+          "night": 3,
+          "title": "卷帘门下面",
+          "en": "Under the shutter",
+          "status": "locked"
+        },
+        {
+          "night": 4,
+          "title": "谁付的电费",
+          "en": "Who pays for the lights",
+          "status": "locked"
+        },
+        {
+          "night": 5,
+          "title": "少掉的那一页",
+          "en": "The missing page",
+          "status": "locked"
+        },
+        {
+          "night": 6,
+          "title": "最后怎么坐",
+          "en": "Where we sit now",
+          "status": "locked"
+        }
+      ],
+      "relationships": [
+        {
+          "name": "阿凯",
+          "text": "刚认识，还没谈过那笔账",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "莫叔",
+          "text": "尚未核对其他往来",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "林岚",
+          "text": "尚未请她协助",
+          "en": "See the conversation record"
+        }
+      ],
+      "table": null,
+      "atTableStart": false,
+      "results": []
+    }
+  },
+  "complete": {
+    "checkpoint": {
+      "format": 1,
+      "engine": "3657e3c88812392f599156703b3399bfef741d7338da84171bbab590e312de22",
+      "setup": {
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": 0,
+        "socialEnabled": true,
+        "runSeed": "58662b4f-4f88-41a8-9889-f628c3556892",
+        "difficulty": "standard",
+        "storyEdition": 2
+      },
+      "journal": [
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 0
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 1
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 2
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 3
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 4
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 5
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 6
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 7
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 8,
+            "choice": "v-sit"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 9
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 10,
+            "choice": "v-mo"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 11
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 12
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 13
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 14
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 15,
+            "choice": "v-arrival"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 16
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 17
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 18
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 19
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 20
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 21,
+            "choice": "v-four-intro"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 22
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 23
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 24
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 25
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 26,
+            "choice": "v-normal"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 27
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 28
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 29
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 30,
+            "choice": "v-four"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 31,
+            "choice": "v-rest"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 32
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 33
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 34
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 35,
+            "choice": "v-clear"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 36
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 37
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 38,
+            "choice": "v-food-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 39
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 40
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 41,
+            "choice": "v-photo"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 42
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 43
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 44
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 45,
+            "choice": "v-photo-no"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 46
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 47
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 48
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 49,
+            "choice": "v-invitation"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 50
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 51
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 52,
+            "choice": "v-weekend"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 53,
+            "choice": "v-not-tonight"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 54
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 55
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 56
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 57
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 58,
+            "choice": "v-missed"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 59
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 60,
+            "choice": "v-shop-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 61
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 62,
+            "choice": "v-wait-shop"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 63
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 64
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 65
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 66
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 67,
+            "choice": "v-kai-question"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 68
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 69
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 70
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 71
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 72
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 73,
+            "choice": "v-kai-common"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 74
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 75
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 76
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 77
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 78,
+            "choice": "v-first-question"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 79
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 80
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 81
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 82
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 83,
+            "choice": "v-kai-reason"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 84
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 85
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 86
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 87,
+            "choice": "v-record-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 88,
+            "choice": "v-kai-record"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 89
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 90
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 91
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 92
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 93
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 94
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 95,
+            "choice": "v-garage-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 96
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 97
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 98
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 99
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 100,
+            "choice": "v-kai-close"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 101
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 102
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 103,
+            "choice": "v-mo-door"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 104
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 105
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 106,
+            "choice": "v-mo-open"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 107
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 108,
+            "choice": "v-mo-explain"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 109
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 110
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 111
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 112
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 113
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 114
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 115
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 116
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 117
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 118,
+            "choice": "v-mo-bill"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 119
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 120
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 121
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 122
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 123
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 124
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 125,
+            "choice": "v-mo-copy"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 126
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 127,
+            "choice": "v-mo-company"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 128
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 129
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 130
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 131,
+            "choice": "v-room-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 132,
+            "choice": "v-lin-message"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 133,
+            "choice": "v-lin-help"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 134
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 135,
+            "choice": "v-witness-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 136,
+            "choice": "v-print"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 137
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 138
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 139
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 140,
+            "choice": "v-lin-files"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 141
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 142
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 143
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 144
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 145
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 146,
+            "choice": "v-lin-missing"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 147
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 148
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 149
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 150
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 151
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 152,
+            "choice": "v-lin-why"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 153
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 154
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 155,
+            "choice": "v-lin-chair"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 156
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 157
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 158
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 159,
+            "choice": "v-lin-hurt"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 160
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 161
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 162,
+            "choice": "v-lin-original-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 163,
+            "choice": "v-lin-authorize"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 164
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 165
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 166,
+            "choice": "v-original"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 167
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 168
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 169
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 170
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 171
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 172
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 173
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 174
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 175
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 176,
+            "choice": "v-verify-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 177,
+            "choice": "v-su-offer"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 178,
+            "choice": "v-cheng-table"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 179
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 180,
+            "choice": "v-cheng-finish"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 181
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 182
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 183
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 184,
+            "choice": "v-invite-meeting"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 185,
+            "choice": "v-meeting-invite"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 186,
+            "choice": "v-meeting"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 187
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 188
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 189
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 190
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 191
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 192
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 193,
+            "choice": "v-meeting-kai"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 194
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 195
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 196
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 197
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 198
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 199
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 200,
+            "choice": "v-meeting-mo"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 201
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 202
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 203
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 204
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 205,
+            "choice": "v-subsidy"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 206
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 207
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 208
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 209
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 210
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 211
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 212,
+            "choice": "v-subsidy-plan"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 213
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 214,
+            "choice": "v-group-end"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 215,
+            "choice": "v-end-account"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 216
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 217
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 218
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 219
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 220
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 221
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 222
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 223,
+            "choice": "finish"
+          }
+        }
+      ],
+      "digest": "74b79a332aaf4b021e62732b80f47eac61cc4f9c27ec6abd58591cf0897a146c",
+      "summary": {
+        "id": "0353868a-a83e-4bb9-8ab3-52f5059f7a3d",
+        "savedAt": "2026-11-06T14:33:02.761Z",
+        "hand": 1,
+        "heroStack": 99,
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": null,
+        "storyNight": 6,
+        "wallet": 600,
+        "ended": true
+      }
+    },
+    "campaign": {
+      "edition": 2,
+      "phase": "complete",
+      "scene": "v-end-account",
+      "revision": 224,
+      "night": 6,
+      "title": "说清之后",
+      "titleEn": "说清之后",
+      "line": {
+        "who": "",
+        "text": "那天有人照常赢，有人照常输。你没去。",
+        "en": "那天有人照常赢，有人照常输。你没去。"
+      },
+      "cursor": 7,
+      "lineCount": 8,
+      "location": "old",
+      "wallet": 600,
+      "task": "这一卷停在这里，钱款与记录保留",
+      "taskEn": "Read the conversation, then choose. Volume One is currently in Chinese.",
+      "goal": "这一段已经结束。你的选择与账目都留着。",
+      "goalEn": "This part is over. Your choices and accounts are kept.",
+      "choices": [],
+      "ledger": [
+        {
+          "id": "opening",
+          "delta": 600,
+          "balance": 600,
+          "text": "随身资金",
+          "en": "Opening wallet"
+        }
+      ],
+      "facts": [
+        {
+          "id": "kai-deal",
+          "source": "阿凯当面说明",
+          "text": "带新人入座换三千减账；你未入座，此次未生效。",
+          "en": "带新人入座换三千减账；你未入座，此次未生效。"
+        },
+        {
+          "id": "kai-record",
+          "source": "阿凯出示的原消息",
+          "text": "已见到约定及未入座、不减账的确认。",
+          "en": "已见到约定及未入座、不减账的确认。"
+        },
+        {
+          "id": "mo-said",
+          "source": "莫叔当面说明",
+          "text": "知道引荐惯例，收韩烈每月800补贴，选择没有说清。",
+          "en": "知道引荐惯例，收韩烈每月800补贴，选择没有说清。"
+        },
+        {
+          "id": "mo-bill",
+          "source": "莫叔出示的缴费与转账",
+          "text": "核对韩烈向莫叔支付的800月补贴；只留相关两笔。",
+          "en": "核对韩烈向莫叔支付的800月补贴；只留相关两笔。"
+        },
+        {
+          "id": "mo-vouch",
+          "source": "林岚提供的原始往来",
+          "text": "莫叔曾让阿凯以他的熟人身份为南桥那桌作保；并不只是被动沉默。",
+          "en": "莫叔曾让阿凯以他的熟人身份为南桥那桌作保；并不只是被动沉默。"
+        }
+      ],
+      "history": [
+        {
+          "scene": "v-door",
+          "night": 1,
+          "title": "楼梯口",
+          "en": "Upstairs",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。",
+              "en": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。"
+            },
+            {
+              "who": "",
+              "text": "接着又来一条文字。",
+              "en": "接着又来一条文字。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“从修锁的旁边上去，别上隔壁。隔壁真有人打麻将，去了不一定放你走。”",
+              "en": "“从修锁的旁边上去，别上隔壁。隔壁真有人打麻将，去了不一定放你走。”"
+            },
+            {
+              "who": "",
+              "text": "楼梯窄，灯比你晚亮一层。上到二楼，门里有人喊：“推，没锁。”",
+              "en": "楼梯窄，灯比你晚亮一层。上到二楼，门里有人喊：“推，没锁。”"
+            },
+            {
+              "who": "",
+              "text": "屋里只有一个男人。他正在把椅子往外搬，一条椅腿碰着门槛，怎么也出不来。你让开，他反倒把椅子放下了。",
+              "en": "屋里只有一个男人。他正在把椅子往外搬，一条椅腿碰着门槛，怎么也出不来。你让开，他反倒把椅子放下了。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“阿凯叫来的？”",
+              "en": "“阿凯叫来的？”"
+            },
+            {
+              "who": "",
+              "text": "你点头。",
+              "en": "你点头。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“那不搬了。坐这个，别坐窗边那把，靠背是松的。”",
+              "en": "“那不搬了。坐这个，别坐窗边那把，靠背是松的。”"
+            },
+            {
+              "who": "",
+              "text": "屋里不像营业的地方。柜子上有几只停了的钟，一件深蓝外套搭在窗边，桌上放着两袋已经拆开的饼干。唯一整齐的是中间那张桌，绿绒面擦过，筹码按颜色排了几摞。",
+              "en": "屋里不像营业的地方。柜子上有几只停了的钟，一件深蓝外套搭在窗边，桌上放着两袋已经拆开的饼干。唯一整齐的是中间那张桌，绿绒面擦过，筹码按颜色排了几摞。"
+            }
+          ],
+          "choice": "坐下，看看屋子",
+          "choiceEn": "坐下，看看屋子"
+        },
+        {
+          "scene": "v-sit",
+          "night": 1,
+          "title": "楼梯口",
+          "en": "楼梯口",
+          "lines": [
+            {
+              "who": "",
+              "text": "你把外套搭在椅背上。莫叔顺手把饼干推过来，又停了一下。",
+              "en": "你把外套搭在椅背上。莫叔顺手把饼干推过来，又停了一下。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“这袋是咸的。甜的那袋叫阿凯吃光了，空袋还给我放回来。”",
+              "en": "“这袋是咸的。甜的那袋叫阿凯吃光了，空袋还给我放回来。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-mo",
+          "night": 1,
+          "title": "先打两手",
+          "en": "先打两手",
+          "lines": [
+            {
+              "who": "莫叔",
+              "text": "“今晚先拿记分的玩，筹码不兑钱。你得先把怎么停弄明白，不能光学怎么加。”",
+              "en": "“今晚先拿记分的玩，筹码不兑钱。你得先把怎么停弄明白，不能光学怎么加。”"
+            },
+            {
+              "who": "",
+              "text": "他给自己和你各数了一百筹码。",
+              "en": "他给自己和你各数了一百筹码。"
+            },
+            {
+              "who": "你",
+              "text": "“输了还得重来？”",
+              "en": "“输了还得重来？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“输完了就看。我又没说随便添。”",
+              "en": "“输完了就看。我又没说随便添。”"
+            },
+            {
+              "who": "",
+              "text": "你们打的第一手很慢。莫叔等你确认按钮，再把动作做完。他不替你看手牌；你要问规则，就先把问题说出来。",
+              "en": "你们打的第一手很慢。莫叔等你确认按钮，再把动作做完。他不替你看手牌；你要问规则，就先把问题说出来。"
+            }
+          ],
+          "choice": "先旁观，等阿凯",
+          "choiceEn": "先旁观，等阿凯"
+        },
+        {
+          "scene": "v-arrival",
+          "night": 1,
+          "title": "先打两手",
+          "en": "先打两手",
+          "lines": [
+            {
+              "who": "",
+              "text": "楼下卷帘门落地，声音顺着楼道传上来。阿凯在门外先喊了一声“别收”。",
+              "en": "楼下卷帘门落地，声音顺着楼道传上来。阿凯在门外先喊了一声“别收”。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“没人收。你把饭吃了没有？”",
+              "en": "“没人收。你把饭吃了没有？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“吃了。”",
+              "en": "“吃了。”"
+            },
+            {
+              "who": "",
+              "text": "他进门时手里还拎着一份没拆的炒饭。",
+              "en": "他进门时手里还拎着一份没拆的炒饭。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“那这是给我的？”",
+              "en": "“那这是给我的？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“……我在路上吃了一半。”",
+              "en": "“……我在路上吃了一半。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-four-intro",
+          "night": 1,
+          "title": "正好四个人",
+          "en": "正好四个人",
+          "lines": [
+            {
+              "who": "",
+              "text": "林岚跟在阿凯后面进来。她绕开地上的电线，把相机包放在柜子上。",
+              "en": "林岚跟在阿凯后面进来。她绕开地上的电线，把相机包放在柜子上。"
+            },
+            {
+              "who": "",
+              "text": "阿凯朝你指了指。",
+              "en": "阿凯朝你指了指。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“我朋友。刚来，你少欺负人。”",
+              "en": "“我朋友。刚来，你少欺负人。”"
+            },
+            {
+              "who": "林岚",
+              "text": "“你替人说了？”",
+              "en": "“你替人说了？”"
+            },
+            {
+              "who": "",
+              "text": "她看向你，等你自己回答。",
+              "en": "她看向你，等你自己回答。"
+            }
+          ],
+          "choice": "“正常打，不会的我问。”",
+          "choiceEn": "“正常打，不会的我问。”"
+        },
+        {
+          "scene": "v-normal",
+          "night": 1,
+          "title": "正好四个人",
+          "en": "正好四个人",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“正常打吧。不会的地方我再问。”",
+              "en": "“正常打吧。不会的地方我再问。”"
+            },
+            {
+              "who": "林岚",
+              "text": "“好。那我真加了，你别找他报销。”",
+              "en": "“好。那我真加了，你别找他报销。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“找我干什么，我又没——”",
+              "en": "“找我干什么，我又没——”"
+            },
+            {
+              "who": "",
+              "text": "他看见莫叔正把炒饭往你这边推，连忙伸手去接。",
+              "en": "他看见莫叔正把炒饭往你这边推，连忙伸手去接。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-four",
+          "night": 1,
+          "title": "正好四个人",
+          "en": "正好四个人",
+          "lines": [
+            {
+              "who": "",
+              "text": "桌上用的是不兑钱的记分筹码。你、阿凯、林岚和莫叔坐好，想停就在一手结算后说。",
+              "en": "桌上用的是不兑钱的记分筹码。你、阿凯、林岚和莫叔坐好，想停就在一手结算后说。"
+            }
+          ],
+          "choice": "不入桌，陪他们坐会儿",
+          "choiceEn": "不入桌，陪他们坐会儿"
+        },
+        {
+          "scene": "v-rest",
+          "night": 1,
+          "title": "再坐一会儿",
+          "en": "再坐一会儿",
+          "lines": [
+            {
+              "who": "",
+              "text": "桌上的记分筹码收好，莫叔拿出一小盒螺丝。他想修窗边那把椅子，阿凯站起来，椅子在他手里响了一下。",
+              "en": "桌上的记分筹码收好，莫叔拿出一小盒螺丝。他想修窗边那把椅子，阿凯站起来，椅子在他手里响了一下。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“你别给我试断了。”",
+              "en": "“你别给我试断了。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“没断。我找个垫圈就行，下回带。”",
+              "en": "“没断。我找个垫圈就行，下回带。”"
+            },
+            {
+              "who": "",
+              "text": "林岚问你还打不打。她说明只剩你们两个人，不让你把“再坐一会儿”误听成必须继续。",
+              "en": "林岚问你还打不打。她说明只剩你们两个人，不让你把“再坐一会儿”误听成必须继续。"
+            }
+          ],
+          "choice": "不打，帮忙收桌",
+          "choiceEn": "不打，帮忙收桌"
+        },
+        {
+          "scene": "v-clear",
+          "night": 1,
+          "title": "再坐一会儿",
+          "en": "再坐一会儿",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯伸手来接你叠好的椅子，见你能拿动，又把手收回去。",
+              "en": "阿凯伸手来接你叠好的椅子，见你能拿动，又把手收回去。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“行，给你留个活。下次别一来就往那把坏椅子坐。”",
+              "en": "“行，给你留个活。下次别一来就往那把坏椅子坐。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔从你手上接过最后一把，没让你搬去楼下。",
+              "en": "莫叔从你手上接过最后一把，没让你搬去楼下。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-food-offer",
+          "night": 1,
+          "title": "下楼买点吃的",
+          "en": "下楼买点吃的",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯终于打开那份炒饭，筷子戳进去半截，停了。",
+              "en": "阿凯终于打开那份炒饭，筷子戳进去半截，停了。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“这怎么还真凉了。”",
+              "en": "“这怎么还真凉了。”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“等它自己热？”",
+              "en": "“等它自己热？”"
+            }
+          ],
+          "choice": "不吃了，准备走",
+          "choiceEn": "不吃了，准备走"
+        },
+        {
+          "scene": "v-photo",
+          "night": 1,
+          "title": "拍不拍",
+          "en": "拍不拍",
+          "lines": [
+            {
+              "who": "",
+              "text": "准备离开时，林岚试了一下相机。屏幕上出现桌子的一角，阿凯的脸从边上挤进去。",
+              "en": "准备离开时，林岚试了一下相机。屏幕上出现桌子的一角，阿凯的脸从边上挤进去。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“拍张能用的。上次我像被抓拍的。”",
+              "en": "“拍张能用的。上次我像被抓拍的。”"
+            },
+            {
+              "who": "林岚",
+              "text": "“上次是你自己抢着站。”",
+              "en": "“上次是你自己抢着站。”"
+            },
+            {
+              "who": "",
+              "text": "她问你：“你入不入镜？不想拍我就拍他们。”",
+              "en": "她问你：“你入不入镜？不想拍我就拍他们。”"
+            }
+          ],
+          "choice": "不拍，先下楼",
+          "choiceEn": "不拍，先下楼"
+        },
+        {
+          "scene": "v-photo-no",
+          "night": 1,
+          "title": "拍不拍",
+          "en": "拍不拍",
+          "lines": [
+            {
+              "who": "林岚",
+              "text": "“好。那我不给你发合照。”",
+              "en": "“好。那我不给你发合照。”"
+            },
+            {
+              "who": "",
+              "text": "你出门后，听见阿凯问：“那你拍不拍我？”",
+              "en": "你出门后，听见阿凯问：“那你拍不拍我？”"
+            },
+            {
+              "who": "林岚",
+              "text": "“你先别动。”",
+              "en": "“你先别动。”"
+            },
+            {
+              "who": "",
+              "text": "这一晚结束。没有人向你借钱，也没有人提另一间牌室。",
+              "en": "这一晚结束。没有人向你借钱，也没有人提另一间牌室。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-invitation",
+          "night": 1,
+          "title": "周六的邀约",
+          "en": "周六的邀约",
+          "lines": [
+            {
+              "who": "",
+              "text": "过了几天，阿凯发来消息。",
+              "en": "过了几天，阿凯发来消息。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“周六有桌，换个地方。一起去？”",
+              "en": "“周六有桌，换个地方。一起去？”"
+            },
+            {
+              "who": "",
+              "text": "你点开上一条记录，还是他问你那晚有没有绕远。新的地址在南桥，离旧牌室有一段路。",
+              "en": "你点开上一条记录，还是他问你那晚有没有绕远。新的地址在南桥，离旧牌室有一段路。"
+            }
+          ],
+          "choice": "周六再决定",
+          "choiceEn": "周六再决定"
+        },
+        {
+          "scene": "v-weekend",
+          "night": 2,
+          "title": "六百",
+          "en": "六百",
+          "lines": [
+            {
+              "who": "",
+              "text": "周六下午，阿凯又发来定位，说门口不好停车，到了叫他。",
+              "en": "周六下午，阿凯又发来定位，说门口不好停车，到了叫他。"
+            }
+          ],
+          "choice": "今晚都不打",
+          "choiceEn": "今晚都不打"
+        },
+        {
+          "scene": "v-not-tonight",
+          "night": 2,
+          "title": "六百",
+          "en": "六百",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“今晚不去了，下次再说。”",
+              "en": "“今晚不去了，下次再说。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“你不是说有空？”",
+              "en": "“你不是说有空？”"
+            },
+            {
+              "who": "你",
+              "text": "“有空也不一定打。”",
+              "en": "“有空也不一定打。”"
+            },
+            {
+              "who": "",
+              "text": "聊天框上“正在输入”亮了很久。",
+              "en": "聊天框上“正在输入”亮了很久。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“行。那我再想办法。”",
+              "en": "“行。那我再想办法。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-missed",
+          "night": 2,
+          "title": "没去的人",
+          "en": "没去的人",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯晚上发来一条：“韩烈说今晚不算了。”",
+              "en": "阿凯晚上发来一条：“韩烈说今晚不算了。”"
+            },
+            {
+              "who": "",
+              "text": "接着是：“我是说，缺人的事。你别管，早点歇。”",
+              "en": "接着是：“我是说，缺人的事。你别管，早点歇。”"
+            }
+          ],
+          "choice": "明晚去店里问",
+          "choiceEn": "明晚去店里问"
+        },
+        {
+          "scene": "v-shop-offer",
+          "night": 3,
+          "title": "还差最后一点",
+          "en": "还差最后一点",
+          "lines": [
+            {
+              "who": "",
+              "text": "卷帘门放到半人高，里面一辆车开着应急灯。你从边上进去，阿凯叫你别碰旁边的板，说漆还没干。",
+              "en": "卷帘门放到半人高，里面一辆车开着应急灯。你从边上进去，阿凯叫你别碰旁边的板，说漆还没干。"
+            },
+            {
+              "who": "",
+              "text": "他蹲着装一只尾灯，装到一半，外头又有人催。阿凯说“马上”，对方没走。",
+              "en": "他蹲着装一只尾灯，装到一半，外头又有人催。阿凯说“马上”，对方没走。"
+            }
+          ],
+          "choice": "等他交完车",
+          "choiceEn": "等他交完车"
+        },
+        {
+          "scene": "v-wait-shop",
+          "night": 3,
+          "title": "还差最后一点",
+          "en": "还差最后一点",
+          "lines": [
+            {
+              "who": "",
+              "text": "你靠在门边等。车主拿手机照灯，阿凯站在车尾，替他踩了一次刹车。对方又问了两件和尾灯没关系的毛病，阿凯都答了。",
+              "en": "你靠在门边等。车主拿手机照灯，阿凯站在车尾，替他踩了一次刹车。对方又问了两件和尾灯没关系的毛病，阿凯都答了。"
+            },
+            {
+              "who": "",
+              "text": "等车开走，他去拉卷帘门，拉到半路回头看你。",
+              "en": "等车开走，他去拉卷帘门，拉到半路回头看你。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“全放下来？”",
+              "en": "“全放下来？”"
+            },
+            {
+              "who": "你",
+              "text": "“留点风。”",
+              "en": "“留点风。”"
+            },
+            {
+              "who": "",
+              "text": "他把门又顶高了一截。",
+              "en": "他把门又顶高了一截。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-kai-question",
+          "night": 3,
+          "title": "到底为了什么",
+          "en": "到底为了什么",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯把手机放在膝盖上。屏幕还亮着，是你约他的消息。",
+              "en": "阿凯把手机放在膝盖上。屏幕还亮着，是你约他的消息。"
+            },
+            {
+              "who": "你",
+              "text": "“我不去，你得再想什么办法？”",
+              "en": "“我不去，你得再想什么办法？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“那天临时说错话了。”",
+              "en": "“那天临时说错话了。”"
+            },
+            {
+              "who": "你",
+              "text": "“昨天说错，今天还不打算说明白？”",
+              "en": "“昨天说错，今天还不打算说明白？”"
+            },
+            {
+              "who": "",
+              "text": "他看了一眼门口。你也可以在这时起身，他会叫住你，但不会拦门。",
+              "en": "他看了一眼门口。你也可以在这时起身，他会叫住你，但不会拦门。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“等等。我没说不能讲。韩烈答应我，叫个没去过的人坐下，给我抹三千旧账。你没坐，就没抹。”",
+              "en": "“等等。我没说不能讲。韩烈答应我，叫个没去过的人坐下，给我抹三千旧账。你没坐，就没抹。”"
+            }
+          ],
+          "choice": "听他继续说",
+          "choiceEn": "听他继续说"
+        },
+        {
+          "scene": "v-kai-common",
+          "night": 3,
+          "title": "到底为了什么",
+          "en": "到底为了什么",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“所以一定得是我？”",
+              "en": "“所以一定得是我？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“不用一定是你。”",
+              "en": "“不用一定是你。”"
+            },
+            {
+              "who": "",
+              "text": "这一句出来得太快。他紧接着说：“但我先想到的就是你。你刚跟我们玩过，我想着你不会直接不理我。”",
+              "en": "这一句出来得太快。他紧接着说：“但我先想到的就是你。你刚跟我们玩过，我想着你不会直接不理我。”"
+            },
+            {
+              "who": "",
+              "text": "外面有人经过，把半落的卷帘门碰得响了一下。阿凯问人找谁，对方说走错了。",
+              "en": "外面有人经过，把半落的卷帘门碰得响了一下。阿凯问人找谁，对方说走错了。"
+            },
+            {
+              "who": "",
+              "text": "人走后，你们没有立刻继续。阿凯还面对门口站着，过了一会儿才坐回来。",
+              "en": "人走后，你们没有立刻继续。阿凯还面对门口站着，过了一会儿才坐回来。"
+            }
+          ],
+          "choice": "问第一晚是不是也为了这个",
+          "choiceEn": "问第一晚是不是也为了这个"
+        },
+        {
+          "scene": "v-first-question",
+          "night": 3,
+          "title": "第一晚算不算",
+          "en": "第一晚算不算",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“那最早叫我上二楼，也是这个？”",
+              "en": "“那最早叫我上二楼，也是这个？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“不是。第一回真差个人。我发完你消息，才跟莫叔说的。”",
+              "en": "“不是。第一回真差个人。我发完你消息，才跟莫叔说的。”"
+            },
+            {
+              "who": "你",
+              "text": "“哪天谈的三千？”",
+              "en": "“哪天谈的三千？”"
+            },
+            {
+              "who": "",
+              "text": "他打开手机，先翻错一个群，又退出。约定是在第一夜之后、南桥邀约之前。",
+              "en": "他打开手机，先翻错一个群，又退出。约定是在第一夜之后、南桥邀约之前。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“这里。你看日期。”",
+              "en": "“这里。你看日期。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-kai-reason",
+          "night": 3,
+          "title": "第一晚算不算",
+          "en": "第一晚算不算",
+          "lines": [
+            {
+              "who": "阿凯",
+              "text": "“我欠他钱，拖了一阵子。那天他说不用我还新的，就这三千减下去。我想的是你也要玩，我也能少欠点，没谁吃亏。”",
+              "en": "“我欠他钱，拖了一阵子。那天他说不用我还新的，就这三千减下去。我想的是你也要玩，我也能少欠点，没谁吃亏。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“应该不会。”",
+              "en": "“应该不会。”"
+            },
+            {
+              "who": "",
+              "text": "他低头看了一眼手机，又补充：“不是应该。我没准备说。”",
+              "en": "他低头看了一眼手机，又补充：“不是应该。我没准备说。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“我怕你听了不来。就这么简单。我还给自己想了挺多好听的。”",
+              "en": "“我怕你听了不来。就这么简单。我还给自己想了挺多好听的。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-record-offer",
+          "night": 3,
+          "title": "原消息",
+          "en": "原消息",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯把手机放在手边，问你要不要看相关消息。",
+              "en": "阿凯把手机放在手边，问你要不要看相关消息。"
+            }
+          ],
+          "choice": "查看相关原消息",
+          "choiceEn": "查看相关原消息"
+        },
+        {
+          "scene": "v-kai-record",
+          "night": 3,
+          "title": "原消息",
+          "en": "原消息",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯把屏幕转过来。这回你不用猜他说的是哪个“旧账”。",
+              "en": "阿凯把屏幕转过来。这回你不用猜他说的是哪个“旧账”。"
+            },
+            {
+              "who": "",
+              "text": "邀约前，韩烈发的是：“带个没来过的，肯坐下来，那三千给你减。输赢不算你的。”",
+              "en": "邀约前，韩烈发的是：“带个没来过的，肯坐下来，那三千给你减。输赢不算你的。”"
+            },
+            {
+              "who": "",
+              "text": "阿凯问：“坐一会儿也算？”",
+              "en": "阿凯问：“坐一会儿也算？”"
+            },
+            {
+              "who": "",
+              "text": "韩烈回：“按这回说的算。”",
+              "en": "韩烈回：“按这回说的算。”"
+            },
+            {
+              "who": "",
+              "text": "记录末尾：“人没来，减免不做。”阿凯回复“好”。",
+              "en": "记录末尾：“人没来，减免不做。”阿凯回复“好”。"
+            },
+            {
+              "who": "",
+              "text": "阿凯要点转发，你让他先别动，问了日期和中间有没有删过别的消息。",
+              "en": "阿凯要点转发，你让他先别动，问了日期和中间有没有删过别的消息。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“我只能给你看我这边。韩烈那边，你得问他。”",
+              "en": "“我只能给你看我这边。韩烈那边，你得问他。”"
+            }
+          ],
+          "choice": "保留这段完整记录",
+          "choiceEn": "保留这段完整记录"
+        },
+        {
+          "scene": "v-garage-offer",
+          "night": 3,
+          "title": "不替你约",
+          "en": "不替你约",
+          "lines": [
+            {
+              "who": "阿凯",
+              "text": "“我那天还恼过你。觉得都说有空了，怎么又不来。”",
+              "en": "“我那天还恼过你。觉得都说有空了，怎么又不来。”"
+            },
+            {
+              "who": "你",
+              "text": "“所以给我发那条？”",
+              "en": "“所以给我发那条？”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“对。发完就知道不好看，想找句别的话盖过去。你一问，我又怂了。”",
+              "en": "“对。发完就知道不好看，想找句别的话盖过去。你一问，我又怂了。”"
+            },
+            {
+              "who": "",
+              "text": "交车的单子还没填完。阿凯把你旁边那副牌拿起来，想了想，又放回抽屉。",
+              "en": "交车的单子还没填完。阿凯把你旁边那副牌拿起来，想了想，又放回抽屉。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“你还想坐会儿吗？不是非要玩。要玩也就五十，四手。别把刚才那笔混进来。”",
+              "en": "“你还想坐会儿吗？不是非要玩。要玩也就五十，四手。别把刚才那笔混进来。”"
+            }
+          ],
+          "choice": "不打，等他交完车",
+          "choiceEn": "不打，等他交完车"
+        },
+        {
+          "scene": "v-kai-close",
+          "night": 3,
+          "title": "不替你约",
+          "en": "不替你约",
+          "lines": [
+            {
+              "who": "",
+              "text": "你离开前，他主动说：“莫叔知道那边叫新人有这回事。我没跟他说我能减多少。”",
+              "en": "你离开前，他主动说：“莫叔知道那边叫新人有这回事。我没跟他说我能减多少。”"
+            },
+            {
+              "who": "",
+              "text": "门要放下时，阿凯问你那晚有没有落下一把伞。你说没有。",
+              "en": "门要放下时，阿凯问你那晚有没有落下一把伞。你说没有。"
+            },
+            {
+              "who": "",
+              "text": "他看了看柜子边的伞，没有再借它把你叫回来。",
+              "en": "他看了看柜子边的伞，没有再借它把你叫回来。"
+            }
+          ],
+          "choice": "去问莫叔",
+          "choiceEn": "去问莫叔"
+        },
+        {
+          "scene": "v-mo-door",
+          "night": 4,
+          "title": "不先开牌",
+          "en": "不先开牌",
+          "lines": [
+            {
+              "who": "",
+              "text": "二楼门口贴着下周的开桌时间。你的名字没有写在上面，阿凯的名字也没有。莫叔正试图把那把坏椅子的靠背拧紧，拧了几下，螺丝空转。",
+              "en": "二楼门口贴着下周的开桌时间。你的名字没有写在上面，阿凯的名字也没有。莫叔正试图把那把坏椅子的靠背拧紧，拧了几下，螺丝空转。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“他跟你说了？”",
+              "en": "“他跟你说了？”"
+            },
+            {
+              "who": "",
+              "text": "这一次，你还没提阿凯。",
+              "en": "这一次，你还没提阿凯。"
+            }
+          ],
+          "choice": "请他先说自己知道什么",
+          "choiceEn": "请他先说自己知道什么"
+        },
+        {
+          "scene": "v-mo-open",
+          "night": 4,
+          "title": "不先开牌",
+          "en": "不先开牌",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“你觉得他跟我说了什么？”",
+              "en": "“你觉得他跟我说了什么？”"
+            },
+            {
+              "who": "",
+              "text": "莫叔停下手里的活。他没有回答，先把椅子放到了墙边。",
+              "en": "莫叔停下手里的活。他没有回答，先把椅子放到了墙边。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-mo-explain",
+          "night": 4,
+          "title": "月底还差八百",
+          "en": "月底还差八百",
+          "lines": [
+            {
+              "who": "莫叔",
+              "text": "“带新人能减账，我知道。但你去不去，我没替你应过。”",
+              "en": "“带新人能减账，我知道。但你去不去，我没替你应过。”"
+            },
+            {
+              "who": "你",
+              "text": "“你知道我可能去，也知道少了哪句话。你等我问到多细才算问？”",
+              "en": "“你知道我可能去，也知道少了哪句话。你等我问到多细才算问？”"
+            },
+            {
+              "who": "",
+              "text": "莫叔把手里的螺丝放进小盒，不再拧那把椅子。",
+              "en": "莫叔把手里的螺丝放进小盒，不再拧那把椅子。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“我不想跟韩烈弄僵。这屋每个月差八百，他给我补着。”",
+              "en": "“我不想跟韩烈弄僵。这屋每个月差八百，他给我补着。”"
+            },
+            {
+              "who": "",
+              "text": "他说得并不低，隔壁钟表铺关门的声音传进来，也没把这句盖住。",
+              "en": "他说得并不低，隔壁钟表铺关门的声音传进来，也没把这句盖住。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“刚开始是我跟他借，我说手头松一点再还。他说不用，一月就这些。后来他开那边的桌，叫我碰上愿意玩的帮忙说一声。我没真把谁拉过去，但也不拦。”",
+              "en": "“刚开始是我跟他借，我说手头松一点再还。他说不用，一月就这些。后来他开那边的桌，叫我碰上愿意玩的帮忙说一声。我没真把谁拉过去，但也不拦。”"
+            },
+            {
+              "who": "你",
+              "text": "“你觉得不拦就没你的事？”",
+              "en": "“你觉得不拦就没你的事？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“我前几天是这么想的。”",
+              "en": "“我前几天是这么想的。”"
+            },
+            {
+              "who": "",
+              "text": "他伸手去拿水壶，手没碰到又收回来。",
+              "en": "他伸手去拿水壶，手没碰到又收回来。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“现在说我一点没往自己这屋想，假的。”",
+              "en": "“现在说我一点没往自己这屋想，假的。”"
+            }
+          ],
+          "choice": "问八百用在哪里",
+          "choiceEn": "问八百用在哪里"
+        },
+        {
+          "scene": "v-mo-bill",
+          "night": 4,
+          "title": "这屋归谁",
+          "en": "这屋归谁",
+          "lines": [
+            {
+              "who": "",
+              "text": "你问那八百到底用在哪儿。莫叔拉开柜门，拿出缴费单和房租转账。",
+              "en": "你问那八百到底用在哪儿。莫叔拉开柜门，拿出缴费单和房租转账。"
+            },
+            {
+              "who": "",
+              "text": "不是一张神秘账本。几张单子边缘已经卷起来，有一张背面写着要买的灯管。你看得到日期和支出，但这些纸本身不能证明他说过什么。",
+              "en": "不是一张神秘账本。几张单子边缘已经卷起来，有一张背面写着要买的灯管。你看得到日期和支出，但这些纸本身不能证明他说过什么。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“钱我自己收，房租也是我交。别以为韩烈是这里老板。他不出，我还是得交。”",
+              "en": "“钱我自己收，房租也是我交。别以为韩烈是这里老板。他不出，我还是得交。”"
+            },
+            {
+              "who": "你",
+              "text": "“交不起呢？”",
+              "en": "“交不起呢？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“少开，或者搬。我一直没肯走到那步。”",
+              "en": "“少开，或者搬。我一直没肯走到那步。”"
+            },
+            {
+              "who": "",
+              "text": "门外有人问今晚开不开，是楼下做修锁生意的，替老周问的。莫叔回了一声开，对方走了。",
+              "en": "门外有人问今晚开不开，是楼下做修锁生意的，替老周问的。莫叔回了一声开，对方走了。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“我怕跟他们说散了。他们也不是非缺这地方，我知道。”",
+              "en": "“我怕跟他们说散了。他们也不是非缺这地方，我知道。”"
+            }
+          ],
+          "choice": "经同意保留相关两笔",
+          "choiceEn": "经同意保留相关两笔"
+        },
+        {
+          "scene": "v-mo-copy",
+          "night": 4,
+          "title": "这屋归谁",
+          "en": "这屋归谁",
+          "lines": [
+            {
+              "who": "",
+              "text": "你只保留韩烈给莫叔的两笔八百，以及对应日期，不把全部账单拍回去。",
+              "en": "你只保留韩烈给莫叔的两笔八百，以及对应日期，不把全部账单拍回去。"
+            },
+            {
+              "who": "",
+              "text": "莫叔说：“这里没拿你的输赢凑。”",
+              "en": "莫叔说：“这里没拿你的输赢凑。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-mo-company",
+          "night": 4,
+          "title": "椅子和人",
+          "en": "椅子和人",
+          "lines": [
+            {
+              "who": "",
+              "text": "老周带着橘子来，进门先看时间，又看看没有铺牌的桌子。",
+              "en": "老周带着橘子来，进门先看时间，又看看没有铺牌的桌子。"
+            },
+            {
+              "who": "老周",
+              "text": "“今天不开？”",
+              "en": "“今天不开？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“开。等会儿。”",
+              "en": "“开。等会儿。”"
+            },
+            {
+              "who": "",
+              "text": "老周点了点头，走到窗边，把外套搭在那把坏椅子上。你提醒他别靠，他试了一下，自己去墙边换了一把。",
+              "en": "老周点了点头，走到窗边，把外套搭在那把坏椅子上。你提醒他别靠，他试了一下，自己去墙边换了一把。"
+            }
+          ],
+          "choice": "今晚先到这里",
+          "choiceEn": "今晚先到这里"
+        },
+        {
+          "scene": "v-room-offer",
+          "night": 4,
+          "title": "椅子和人",
+          "en": "椅子和人",
+          "lines": [
+            {
+              "who": "",
+              "text": "韩烈也从楼下上来。莫叔伸手去拿牌，又看了看你，等你自己说。",
+              "en": "韩烈也从楼下上来。莫叔伸手去拿牌，又看了看你，等你自己说。"
+            }
+          ],
+          "choice": "不打，先走",
+          "choiceEn": "不打，先走"
+        },
+        {
+          "scene": "v-lin-message",
+          "night": 4,
+          "title": "要不要请她帮忙",
+          "en": "要不要请她帮忙",
+          "lines": [
+            {
+              "who": "",
+              "text": "林岚发来消息：“阿凯那事，你还在问吗？”",
+              "en": "林岚发来消息：“阿凯那事，你还在问吗？”"
+            }
+          ],
+          "choice": "请她一起核对有关原记录",
+          "choiceEn": "请她一起核对有关原记录"
+        },
+        {
+          "scene": "v-lin-help",
+          "night": 4,
+          "title": "要不要请她帮忙",
+          "en": "要不要请她帮忙",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“我手上有几份说法，想找人陪我看。能拿到的有关记录，你能都给我看吗？不行就先说。”",
+              "en": "“我手上有几份说法，想找人陪我看。能拿到的有关记录，你能都给我看吗？不行就先说。”"
+            },
+            {
+              "who": "林岚",
+              "text": "“我看看。能拿到的原记录都给你，不替谁解释。”",
+              "en": "“我看看。能拿到的原记录都给你，不替谁解释。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-witness-offer",
+          "night": 4,
+          "title": "要不要请她帮忙",
+          "en": "要不要请她帮忙",
+          "lines": [
+            {
+              "who": "",
+              "text": "周四见面前，你可以问一位普通熟人是否愿意在周六听自己见过的那一段。",
+              "en": "周四见面前，你可以问一位普通熟人是否愿意在周六听自己见过的那一段。"
+            }
+          ],
+          "choice": "不额外请人",
+          "choiceEn": "不额外请人"
+        },
+        {
+          "scene": "v-print",
+          "night": 5,
+          "title": "取片",
+          "en": "取片",
+          "lines": [
+            {
+              "who": "",
+              "text": "周四，林岚说她在取照片，问你愿不愿意到店外等她。她到了约定时间才出来，肩上背着相机包，手里另拎着一袋尺寸不一的相框。",
+              "en": "周四，林岚说她在取照片，问你愿不愿意到店外等她。她到了约定时间才出来，肩上背着相机包，手里另拎着一袋尺寸不一的相框。"
+            },
+            {
+              "who": "林岚",
+              "text": "“抱歉，刚才那家人挑框，挑到关门。我想再等五分钟能完，等了四个五分钟。”",
+              "en": "“抱歉，刚才那家人挑框，挑到关门。我想再等五分钟能完，等了四个五分钟。”"
+            },
+            {
+              "who": "",
+              "text": "你问她手上的要送去哪儿。",
+              "en": "你问她手上的要送去哪儿。"
+            },
+            {
+              "who": "林岚",
+              "text": "“不是送。样品让我借回去拍，明天还。你别帮我拿，袋底裂了。”",
+              "en": "“不是送。样品让我借回去拍，明天还。你别帮我拿，袋底裂了。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-lin-files",
+          "night": 5,
+          "title": "取片",
+          "en": "取片",
+          "lines": [
+            {
+              "who": "",
+              "text": "你们到旁边还开着的快餐店坐下。",
+              "en": "你们到旁边还开着的快餐店坐下。"
+            },
+            {
+              "who": "",
+              "text": "林岚把手机递过来，说：“阿凯那笔对过了。你去没去，减没减，都在这里。”",
+              "en": "林岚把手机递过来，说：“阿凯那笔对过了。你去没去，减没减，都在这里。”"
+            },
+            {
+              "who": "",
+              "text": "你往下翻到最后，没有看到旧牌室。",
+              "en": "你往下翻到最后，没有看到旧牌室。"
+            },
+            {
+              "who": "你",
+              "text": "“莫叔那边呢？”",
+              "en": "“莫叔那边呢？”"
+            },
+            {
+              "who": "林岚",
+              "text": "“你手上不是有了？”",
+              "en": "“你手上不是有了？”"
+            },
+            {
+              "who": "你",
+              "text": "“我们说的是一起核对。”",
+              "en": "“我们说的是一起核对。”"
+            }
+          ],
+          "choice": "问她留下了什么",
+          "choiceEn": "问她留下了什么"
+        },
+        {
+          "scene": "v-lin-missing",
+          "night": 5,
+          "title": "不是没找到",
+          "en": "不是没找到",
+          "lines": [
+            {
+              "who": "",
+              "text": "汤端上来，林岚往旁边挪了一点手机。你没有点开她还没拿出来的那份材料。",
+              "en": "汤端上来，林岚往旁边挪了一点手机。你没有点开她还没拿出来的那份材料。"
+            },
+            {
+              "who": "林岚",
+              "text": "“我听阿凯说了以后，找过莫叔。他把他和韩烈的往来给我看过。我知道八百。”",
+              "en": "“我听阿凯说了以后，找过莫叔。他把他和韩烈的往来给我看过。我知道八百。”"
+            },
+            {
+              "who": "你",
+              "text": "“什么时候知道的？”",
+              "en": "“什么时候知道的？”"
+            },
+            {
+              "who": "林岚",
+              "text": "“你去修车店之后。之前我不知道阿凯谈过三千。别把我说成那天站门口等着你来。”",
+              "en": "“你去修车店之后。之前我不知道阿凯谈过三千。别把我说成那天站门口等着你来。”"
+            },
+            {
+              "who": "",
+              "text": "她说完，重新看向你。",
+              "en": "她说完，重新看向你。"
+            },
+            {
+              "who": "林岚",
+              "text": "“我也没在第二天就找你。莫叔跟我说你会来问他。我想，等你自己去吧。”",
+              "en": "“我也没在第二天就找你。莫叔跟我说你会来问他。我想，等你自己去吧。”"
+            }
+          ],
+          "choice": "为什么要挑给我看",
+          "choiceEn": "为什么要挑给我看"
+        },
+        {
+          "scene": "v-lin-why",
+          "night": 5,
+          "title": "不是没找到",
+          "en": "不是没找到",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“那你现在把这一段拿走，是觉得我知道少一点比较好？”",
+              "en": "“那你现在把这一段拿走，是觉得我知道少一点比较好？”"
+            },
+            {
+              "who": "林岚",
+              "text": "“我觉得那屋已经够难了。阿凯那笔能讲清，其他的能不扯大就别扯大。”",
+              "en": "“我觉得那屋已经够难了。阿凯那笔能讲清，其他的能不扯大就别扯大。”"
+            },
+            {
+              "who": "你",
+              "text": "“你先替我划好了，哪件算扯大。”",
+              "en": "“你先替我划好了，哪件算扯大。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-lin-chair",
+          "night": 5,
+          "title": "她坐过的那把椅子",
+          "en": "她坐过的那把椅子",
+          "lines": [
+            {
+              "who": "",
+              "text": "林岚说，刚来这座城的时候，她接到的活少，每到周末就想往外走，又不知道去哪儿。莫叔那儿不用预约，去了总有一把椅子。",
+              "en": "林岚说，刚来这座城的时候，她接到的活少，每到周末就想往外走，又不知道去哪儿。莫叔那儿不用预约，去了总有一把椅子。"
+            },
+            {
+              "who": "林岚",
+              "text": "“我最早也不打。就坐边上修片。莫叔嫌我把桌子占了，说你往里挪，挪完又问我要不要吃他带的饭。”",
+              "en": "“我最早也不打。就坐边上修片。莫叔嫌我把桌子占了，说你往里挪，挪完又问我要不要吃他带的饭。”"
+            },
+            {
+              "who": "",
+              "text": "你没接话。她用勺子试了一下汤，已经不烫了。",
+              "en": "你没接话。她用勺子试了一下汤，已经不烫了。"
+            },
+            {
+              "who": "林岚",
+              "text": "“他那屋要是没了，我不是只少一张打牌的桌子。你让我选，我会偏他。我之前没想承认得这么难听。”",
+              "en": "“他那屋要是没了，我不是只少一张打牌的桌子。你让我选，我会偏他。我之前没想承认得这么难听。”"
+            }
+          ],
+          "choice": "“我还以为这次有人站我旁边。”",
+          "choiceEn": "“我还以为这次有人站我旁边。”"
+        },
+        {
+          "scene": "v-lin-hurt",
+          "night": 5,
+          "title": "她坐过的那把椅子",
+          "en": "她坐过的那把椅子",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“偏他你可以先说。我还以为这次有人站我旁边。”",
+              "en": "“偏他你可以先说。我还以为这次有人站我旁边。”"
+            },
+            {
+              "who": "",
+              "text": "林岚没马上辩解。服务员过来收旁边的盘子，她把自己的碗往里挪了挪。",
+              "en": "林岚没马上辩解。服务员过来收旁边的盘子，她把自己的碗往里挪了挪。"
+            },
+            {
+              "who": "林岚",
+              "text": "“这句话是我答应过头了。我当时觉得能两头都顾上。”",
+              "en": "“这句话是我答应过头了。我当时觉得能两头都顾上。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-lin-original-offer",
+          "night": 5,
+          "title": "给哪一份",
+          "en": "给哪一份",
+          "lines": [
+            {
+              "who": "林岚",
+              "text": "“原话里有他信我才说的东西。我发出去，他会知道是我。”",
+              "en": "“原话里有他信我才说的东西。我发出去，他会知道是我。”"
+            }
+          ],
+          "choice": "请她先和莫叔确认，只转交相关前后文",
+          "choiceEn": "请她先和莫叔确认，只转交相关前后文"
+        },
+        {
+          "scene": "v-lin-authorize",
+          "night": 5,
+          "title": "给哪一份",
+          "en": "给哪一份",
+          "lines": [
+            {
+              "who": "",
+              "text": "林岚给莫叔打电话，没有先让你出去。",
+              "en": "林岚给莫叔打电话，没有先让你出去。"
+            },
+            {
+              "who": "林岚",
+              "text": "“我答应过给有关原记录，又挑了一份。现在想把剩下相关的给他看。”",
+              "en": "“我答应过给有关原记录，又挑了一份。现在想把剩下相关的给他看。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔在另一头沉默一阵，说可以。林岚打开相关前后文。",
+              "en": "莫叔在另一头沉默一阵，说可以。林岚打开相关前后文。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-original",
+          "night": 5,
+          "title": "给哪一份",
+          "en": "给哪一份",
+          "lines": [
+            {
+              "who": "",
+              "text": "消息里，莫叔没有说不认识阿凯的安排。他说自己知道这种招人办法，又说“别因为我这点事，把这屋弄得人人都坐不下”。",
+              "en": "消息里，莫叔没有说不认识阿凯的安排。他说自己知道这种招人办法，又说“别因为我这点事，把这屋弄得人人都坐不下”。"
+            },
+            {
+              "who": "",
+              "text": "更前面还有一段，是南桥邀约前的周五。",
+              "en": "更前面还有一段，是南桥邀约前的周五。"
+            },
+            {
+              "who": "",
+              "text": "韩烈问：“阿凯说人还在问。他是不是说得太急了？”",
+              "en": "韩烈问：“阿凯说人还在问。他是不是说得太急了？”"
+            },
+            {
+              "who": "",
+              "text": "莫叔回：“我让他别催。问到这桌靠不靠谱，就说我来过，我认识的。那孩子刚来，别把人吓跑。”",
+              "en": "莫叔回：“我让他别催。问到这桌靠不靠谱，就说我来过，我认识的。那孩子刚来，别把人吓跑。”"
+            },
+            {
+              "who": "",
+              "text": "韩烈说：“带成了我给他减那笔。你收的八百还是照旧。”",
+              "en": "韩烈说：“带成了我给他减那笔。你收的八百还是照旧。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔回：“你俩的数你俩算。我的收到了。”",
+              "en": "莫叔回：“你俩的数你俩算。我的收到了。”"
+            },
+            {
+              "who": "",
+              "text": "林岚下面的回复是：“那你得自己跟他说清。我不会劝他当没事。”",
+              "en": "林岚下面的回复是：“那你得自己跟他说清。我不会劝他当没事。”"
+            },
+            {
+              "who": "",
+              "text": "你看完把手机还回去。",
+              "en": "你看完把手机还回去。"
+            },
+            {
+              "who": "你",
+              "text": "“你写了不会劝我。今天没说劝，就少给一份。”",
+              "en": "“你写了不会劝我。今天没说劝，就少给一份。”"
+            },
+            {
+              "who": "林岚",
+              "text": "“是。”",
+              "en": "“是。”"
+            }
+          ],
+          "choice": "保留经同意转交的相关原文",
+          "choiceEn": "保留经同意转交的相关原文"
+        },
+        {
+          "scene": "v-verify-offer",
+          "night": 5,
+          "title": "她只看见这些",
+          "en": "她只看见这些",
+          "lines": [
+            {
+              "who": "",
+              "text": "你已看见莫叔曾替那桌作保的相关记录。可以再问他，也可以先不追。",
+              "en": "你已看见莫叔曾替那桌作保的相关记录。可以再问他，也可以先不追。"
+            }
+          ],
+          "choice": "先不去",
+          "choiceEn": "先不去"
+        },
+        {
+          "scene": "v-su-offer",
+          "night": 5,
+          "title": "她只看见这些",
+          "en": "她只看见这些",
+          "lines": [
+            {
+              "who": "",
+              "text": "苏蔓那晚也在。你可以请阿凯提供她的联系方式，先问她是否方便答一个具体问题，也可以不再请人介入。",
+              "en": "苏蔓那晚也在。你可以请阿凯提供她的联系方式，先问她是否方便答一个具体问题，也可以不再请人介入。"
+            }
+          ],
+          "choice": "不问，去旧牌室取东西",
+          "choiceEn": "不问，去旧牌室取东西"
+        },
+        {
+          "scene": "v-cheng-table",
+          "night": 5,
+          "title": "少两个人",
+          "en": "少两个人",
+          "lines": [
+            {
+              "who": "",
+              "text": "回旧牌室取东西时，程墨已经洗好牌。莫叔还没回来，屋里只有他和林岚。",
+              "en": "回旧牌室取东西时，程墨已经洗好牌。莫叔还没回来，屋里只有他和林岚。"
+            },
+            {
+              "who": "程墨",
+              "text": "“我只待四手，明天早班。你们要说事也行，先告诉我牌要不要拆。”",
+              "en": "“我只待四手，明天早班。你们要说事也行，先告诉我牌要不要拆。”"
+            }
+          ],
+          "choice": "今晚先走",
+          "choiceEn": "今晚先走"
+        },
+        {
+          "scene": "v-cheng-finish",
+          "night": 5,
+          "title": "少两个人",
+          "en": "少两个人",
+          "lines": [
+            {
+              "who": "",
+              "text": "你下了几级楼梯，听见程墨问林岚明天能不能替他拍店里的新柜子。他说上回自己拍的，每一张都斜。",
+              "en": "你下了几级楼梯，听见程墨问林岚明天能不能替他拍店里的新柜子。他说上回自己拍的，每一张都斜。"
+            },
+            {
+              "who": "",
+              "text": "林岚问：“那柜子是正的吗？”",
+              "en": "林岚问：“那柜子是正的吗？”"
+            },
+            {
+              "who": "",
+              "text": "程墨笑了一声，说这也不能全怪柜子。她也笑了。",
+              "en": "程墨笑了一声，说这也不能全怪柜子。她也笑了。"
+            },
+            {
+              "who": "",
+              "text": "楼梯灯亮起来，你继续往下走。楼上的谈话没有停下来等你。",
+              "en": "楼梯灯亮起来，你继续往下走。楼上的谈话没有停下来等你。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-invite-meeting",
+          "night": 5,
+          "title": "约谁来",
+          "en": "约谁来",
+          "lines": [
+            {
+              "who": "",
+              "text": "周六还开桌。你可以在开桌前约人谈，也可以只约阿凯，或者不再回去。",
+              "en": "周六还开桌。你可以在开桌前约人谈，也可以只约阿凯，或者不再回去。"
+            }
+          ],
+          "choice": "约阿凯、莫叔和韩烈，先不打牌",
+          "choiceEn": "约阿凯、莫叔和韩烈，先不打牌"
+        },
+        {
+          "scene": "v-meeting-invite",
+          "night": 5,
+          "title": "约谁来",
+          "en": "约谁来",
+          "lines": [
+            {
+              "who": "",
+              "text": "你分别发出邀请，说明先不打牌。莫叔提前开门，韩烈晚半小时到，阿凯答应了。",
+              "en": "你分别发出邀请，说明先不打牌。莫叔提前开门，韩烈晚半小时到，阿凯答应了。"
+            }
+          ],
+          "choice": "也请林岚到场，以当事人身份",
+          "choiceEn": "也请林岚到场，以当事人身份"
+        },
+        {
+          "scene": "v-meeting",
+          "night": 6,
+          "title": "门口的纸",
+          "en": "门口的纸",
+          "lines": [
+            {
+              "who": "",
+              "text": "莫叔把下周的开桌纸贴在墙上，胶带只粘了一半。你来时他正在找剪刀，找了一圈才发现压在纸底下。",
+              "en": "莫叔把下周的开桌纸贴在墙上，胶带只粘了一半。你来时他正在找剪刀，找了一圈才发现压在纸底下。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“今天就先不改了。等说完。”",
+              "en": "“今天就先不改了。等说完。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔把牌盒留在柜子里。",
+              "en": "莫叔把牌盒留在柜子里。"
+            },
+            {
+              "who": "",
+              "text": "阿凯来得很早。他带着垫圈，先走向坏椅子，走到一半问莫叔：“这会儿修合适吗？”",
+              "en": "阿凯来得很早。他带着垫圈，先走向坏椅子，走到一半问莫叔：“这会儿修合适吗？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“放那儿吧。”",
+              "en": "“放那儿吧。”"
+            },
+            {
+              "who": "",
+              "text": "阿凯把纸袋放下，没有再动椅子。",
+              "en": "阿凯把纸袋放下，没有再动椅子。"
+            },
+            {
+              "who": "",
+              "text": "林岚自己搬一把椅子坐在窗边，手机放在包里。",
+              "en": "林岚自己搬一把椅子坐在窗边，手机放在包里。"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-meeting-kai",
+          "night": 6,
+          "title": "先说哪一笔",
+          "en": "先说哪一笔",
+          "lines": [
+            {
+              "who": "你",
+              "text": "“先说周六。阿凯，你叫我去以前就谈好了三千。你没告诉我，是怕我不去。”",
+              "en": "“先说周六。阿凯，你叫我去以前就谈好了三千。你没告诉我，是怕我不去。”"
+            },
+            {
+              "who": "阿凯",
+              "text": "“对。”",
+              "en": "“对。”"
+            },
+            {
+              "who": "",
+              "text": "韩烈核对：未入座，这次没有减账。",
+              "en": "韩烈核对：未入座，这次没有减账。"
+            },
+            {
+              "who": "韩烈",
+              "text": "“我答应的。阿凯没说，我也没在你决定前确认过。桌子我张罗，不能只让他一个人解释。”",
+              "en": "“我答应的。阿凯没说，我也没在你决定前确认过。桌子我张罗，不能只让他一个人解释。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔要说“当时谁也没想到会闹成这样”，阿凯先把话接了过去。",
+              "en": "莫叔要说“当时谁也没想到会闹成这样”，阿凯先把话接了过去。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“我想过。他知道可能不来，我就是没讲。别替我说没想到。”",
+              "en": "“我想过。他知道可能不来，我就是没讲。别替我说没想到。”"
+            },
+            {
+              "who": "",
+              "text": "莫叔把话停住。",
+              "en": "莫叔把话停住。"
+            }
+          ],
+          "choice": "第一夜留给自己判断",
+          "choiceEn": "第一夜留给自己判断"
+        },
+        {
+          "scene": "v-meeting-mo",
+          "night": 6,
+          "title": "先说哪一笔",
+          "en": "先说哪一笔",
+          "lines": [
+            {
+              "who": "",
+              "text": "轮到八百，莫叔没有先摆房租单。",
+              "en": "轮到八百，莫叔没有先摆房租单。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“钱我收了。我知道叫新人有好处，也知道你可能不知道。我那时想保住这屋，不想跟他翻脸，话就没说透。”",
+              "en": "“钱我收了。我知道叫新人有好处，也知道你可能不知道。我那时想保住这屋，不想跟他翻脸，话就没说透。”"
+            },
+            {
+              "who": "",
+              "text": "你让他把“只是不拦”补全。莫叔先看韩烈，再看你。",
+              "en": "你让他把“只是不拦”补全。莫叔先看韩烈，再看你。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“我跟他说，问起来可以提我，桌是我认识的。阿凯叫到人有好处，我也知道。你问为什么不管，我那会儿就想，屋还开着，你们照常来，别的过两天再说。”",
+              "en": "“我跟他说，问起来可以提我，桌是我认识的。阿凯叫到人有好处，我也知道。你问为什么不管，我那会儿就想，屋还开着，你们照常来，别的过两天再说。”"
+            },
+            {
+              "who": "",
+              "text": "她自己接着说：“我答应能拿到的原记录都给，后来想把莫叔那部分留掉。不是找不到。我偏他。”",
+              "en": "她自己接着说：“我答应能拿到的原记录都给，后来想把莫叔那部分留掉。不是找不到。我偏他。”"
+            }
+          ],
+          "choice": "让他们说清往后的补贴",
+          "choiceEn": "让他们说清往后的补贴"
+        },
+        {
+          "scene": "v-subsidy",
+          "night": 6,
+          "title": "韩烈收回那八百",
+          "en": "韩烈收回那八百",
+          "lines": [
+            {
+              "who": "",
+              "text": "韩烈等莫叔说完，问：“那下个月，你还要我补吗？”",
+              "en": "韩烈等莫叔说完，问：“那下个月，你还要我补吗？”"
+            },
+            {
+              "who": "",
+              "text": "莫叔说：“你自己问我。”",
+              "en": "莫叔说：“你自己问我。”"
+            },
+            {
+              "who": "韩烈",
+              "text": "“我就在问你。”",
+              "en": "“我就在问你。”"
+            },
+            {
+              "who": "",
+              "text": "屋里没有人接话。",
+              "en": "屋里没有人接话。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“不要了。”",
+              "en": "“不要了。”"
+            },
+            {
+              "who": "",
+              "text": "韩烈点头。",
+              "en": "韩烈点头。"
+            },
+            {
+              "who": "韩烈",
+              "text": "“那从下个月停。之前给过的不改口要回来，今天也不从谁的钱里扣。我不想以后每开一桌，都得来这里把旧账讲一遍。”",
+              "en": "“那从下个月停。之前给过的不改口要回来，今天也不从谁的钱里扣。我不想以后每开一桌，都得来这里把旧账讲一遍。”"
+            }
+          ],
+          "choice": "让莫叔说下一步",
+          "choiceEn": "让莫叔说下一步"
+        },
+        {
+          "scene": "v-subsidy-plan",
+          "night": 6,
+          "title": "韩烈收回那八百",
+          "en": "韩烈收回那八百",
+          "lines": [
+            {
+              "who": "",
+              "text": "莫叔没说自己一定能撑住。他把墙上那张开桌纸取下来，先划掉下周三。",
+              "en": "莫叔没说自己一定能撑住。他把墙上那张开桌纸取下来，先划掉下周三。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“先少开一天。别今天就替我凑八百，我还没算。”",
+              "en": "“先少开一天。别今天就替我凑八百，我还没算。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-group-end",
+          "night": 6,
+          "title": "韩烈收回那八百",
+          "en": "韩烈收回那八百",
+          "lines": [
+            {
+              "who": "",
+              "text": "事情说到了这里。没有人要求你替房租补那八百。",
+              "en": "事情说到了这里。没有人要求你替房租补那八百。"
+            }
+          ],
+          "choice": "暂时不再参加旧牌室",
+          "choiceEn": "暂时不再参加旧牌室"
+        },
+        {
+          "scene": "v-end-account",
+          "night": 6,
+          "title": "说清之后",
+          "en": "说清之后",
+          "lines": [
+            {
+              "who": "",
+              "text": "人走的时候没有排成一队向你道歉。韩烈先下楼赶回餐馆。",
+              "en": "人走的时候没有排成一队向你道歉。韩烈先下楼赶回餐馆。"
+            },
+            {
+              "who": "",
+              "text": "莫叔把撤下的开桌纸折起来。下个月八百停了，房租不会因为他承认得完整就少一块。",
+              "en": "莫叔把撤下的开桌纸折起来。下个月八百停了，房租不会因为他承认得完整就少一块。"
+            },
+            {
+              "who": "",
+              "text": "林岚陪你走到楼梯口，问以后还介不介意她发消息。",
+              "en": "林岚陪你走到楼梯口，问以后还介不介意她发消息。"
+            },
+            {
+              "who": "",
+              "text": "他确认以后不替你应下任何桌，也不拿“大家等你”把问句变成决定。",
+              "en": "他确认以后不替你应下任何桌，也不拿“大家等你”把问句变成决定。"
+            },
+            {
+              "who": "",
+              "text": "你下到一楼，莫叔在楼上叫你一声，问有没有东西落下。",
+              "en": "你下到一楼，莫叔在楼上叫你一声，问有没有东西落下。"
+            },
+            {
+              "who": "",
+              "text": "你确认了口袋，说没有。",
+              "en": "你确认了口袋，说没有。"
+            },
+            {
+              "who": "",
+              "text": "两周后，旧牌室又开了一晚。你从别人发来的消息里知道，没有被偷偷写进缺席名单，也没有被专门请回来见证他们变好。",
+              "en": "两周后，旧牌室又开了一晚。你从别人发来的消息里知道，没有被偷偷写进缺席名单，也没有被专门请回来见证他们变好。"
+            },
+            {
+              "who": "",
+              "text": "那天有人照常赢，有人照常输。你没去。",
+              "en": "那天有人照常赢，有人照常输。你没去。"
+            }
+          ],
+          "choice": "保存结尾",
+          "choiceEn": "Save ending"
+        }
+      ],
+      "chapters": [
+        {
+          "night": 1,
+          "title": "二楼，门开着",
+          "en": "The door is open",
+          "status": "visited"
+        },
+        {
+          "night": 2,
+          "title": "赴约之后",
+          "en": "After the invitation",
+          "status": "visited"
+        },
+        {
+          "night": 3,
+          "title": "卷帘门下面",
+          "en": "Under the shutter",
+          "status": "visited"
+        },
+        {
+          "night": 4,
+          "title": "谁付的电费",
+          "en": "Who pays for the lights",
+          "status": "visited"
+        },
+        {
+          "night": 5,
+          "title": "少掉的那一页",
+          "en": "The missing page",
+          "status": "visited"
+        },
+        {
+          "night": 6,
+          "title": "最后怎么坐",
+          "en": "Where we sit now",
+          "status": "current"
+        }
+      ],
+      "relationships": [
+        {
+          "name": "阿凯",
+          "text": "引荐未生效 · 催促与隐瞒已说明",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "莫叔",
+          "text": "核对到他曾为南桥那桌作保",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "林岚",
+          "text": "交出相关原始往来",
+          "en": "See the conversation record"
+        }
+      ],
+      "table": null,
+      "atTableStart": false,
+      "results": []
+    }
+  },
+  "practiceLoss": {
+    "checkpoint": {
+      "format": 1,
+      "engine": "3657e3c88812392f599156703b3399bfef741d7338da84171bbab590e312de22",
+      "setup": {
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": 0,
+        "socialEnabled": true,
+        "runSeed": "c6ff1e77-7605-4d7b-8a51-a7b07501fb80",
+        "difficulty": "standard",
+        "storyEdition": 2
+      },
+      "journal": [
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 0
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 1
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 2
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 3
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 4
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 5
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 6
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 7
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 8,
+            "choice": "v-sit"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 9
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 10,
+            "choice": "v-mo"
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 11
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 12
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 13
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "next",
+            "revision": 14
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "choose",
+            "revision": 15,
+            "choice": "v-mo"
+          }
+        },
+        {
+          "type": "command",
+          "command": {
+            "type": "act",
+            "decisionKey": "hand/1/seat/0/decision/0",
+            "expectedPacketIndex": 0,
+            "intent": {
+              "type": "fold"
+            }
+          }
+        },
+        {
+          "type": "story",
+          "input": {
+            "operation": "leave-table",
+            "revision": 16
+          }
+        }
+      ],
+      "digest": "0143e7f4accf96ddeb417f6cb8d9edc1774c906ae5450bf51105dba0b50c4e6f",
+      "summary": {
+        "id": "08fb9ff7-2844-4197-ba08-cfc61e2fe51c",
+        "savedAt": "2026-11-06T14:33:02.771Z",
+        "hand": 1,
+        "heroStack": 99,
+        "players": 2,
+        "mode": "classic",
+        "experience": "second-night",
+        "lesson": null,
+        "storyNight": 1,
+        "wallet": 0,
+        "ended": false
+      }
+    },
+    "campaign": {
+      "edition": 2,
+      "phase": "settled",
+      "scene": "v-mo",
+      "revision": 17,
+      "night": 1,
+      "title": "先打两手",
+      "titleEn": "先打两手",
+      "line": null,
+      "cursor": 4,
+      "lineCount": 5,
+      "location": "old",
+      "wallet": 0,
+      "task": "收好这桌的筹码",
+      "taskEn": "Take your chips off the table",
+      "goal": "认识这一桌人，想停就停",
+      "goalEn": "Meet the people and decide whether to play",
+      "choices": [
+        {
+          "id": "collect",
+          "text": "收好，接着说",
+          "en": "Put it away and carry on",
+          "enabled": true,
+          "reason": "",
+          "reasonEn": ""
+        }
+      ],
+      "ledger": [],
+      "facts": [],
+      "history": [
+        {
+          "scene": "v-door",
+          "night": 1,
+          "title": "楼梯口",
+          "en": "Upstairs",
+          "lines": [
+            {
+              "who": "",
+              "text": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。",
+              "en": "阿凯发来一段语音，前半句被电钻声盖住。你只听清了“二楼”和“门开着”。"
+            },
+            {
+              "who": "",
+              "text": "接着又来一条文字。",
+              "en": "接着又来一条文字。"
+            },
+            {
+              "who": "阿凯",
+              "text": "“从修锁的旁边上去，别上隔壁。隔壁真有人打麻将，去了不一定放你走。”",
+              "en": "“从修锁的旁边上去，别上隔壁。隔壁真有人打麻将，去了不一定放你走。”"
+            },
+            {
+              "who": "",
+              "text": "楼梯窄，灯比你晚亮一层。上到二楼，门里有人喊：“推，没锁。”",
+              "en": "楼梯窄，灯比你晚亮一层。上到二楼，门里有人喊：“推，没锁。”"
+            },
+            {
+              "who": "",
+              "text": "屋里只有一个男人。他正在把椅子往外搬，一条椅腿碰着门槛，怎么也出不来。你让开，他反倒把椅子放下了。",
+              "en": "屋里只有一个男人。他正在把椅子往外搬，一条椅腿碰着门槛，怎么也出不来。你让开，他反倒把椅子放下了。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“阿凯叫来的？”",
+              "en": "“阿凯叫来的？”"
+            },
+            {
+              "who": "",
+              "text": "你点头。",
+              "en": "你点头。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“那不搬了。坐这个，别坐窗边那把，靠背是松的。”",
+              "en": "“那不搬了。坐这个，别坐窗边那把，靠背是松的。”"
+            },
+            {
+              "who": "",
+              "text": "屋里不像营业的地方。柜子上有几只停了的钟，一件深蓝外套搭在窗边，桌上放着两袋已经拆开的饼干。唯一整齐的是中间那张桌，绿绒面擦过，筹码按颜色排了几摞。",
+              "en": "屋里不像营业的地方。柜子上有几只停了的钟，一件深蓝外套搭在窗边，桌上放着两袋已经拆开的饼干。唯一整齐的是中间那张桌，绿绒面擦过，筹码按颜色排了几摞。"
+            }
+          ],
+          "choice": "坐下，看看屋子",
+          "choiceEn": "坐下，看看屋子"
+        },
+        {
+          "scene": "v-sit",
+          "night": 1,
+          "title": "楼梯口",
+          "en": "楼梯口",
+          "lines": [
+            {
+              "who": "",
+              "text": "你把外套搭在椅背上。莫叔顺手把饼干推过来，又停了一下。",
+              "en": "你把外套搭在椅背上。莫叔顺手把饼干推过来，又停了一下。"
+            },
+            {
+              "who": "莫叔",
+              "text": "“这袋是咸的。甜的那袋叫阿凯吃光了，空袋还给我放回来。”",
+              "en": "“这袋是咸的。甜的那袋叫阿凯吃光了，空袋还给我放回来。”"
+            }
+          ],
+          "choice": "继续",
+          "choiceEn": "继续"
+        },
+        {
+          "scene": "v-mo",
+          "night": 1,
+          "title": "先打两手",
+          "en": "先打两手",
+          "lines": [
+            {
+              "who": "莫叔",
+              "text": "“今晚先拿记分的玩，筹码不兑钱。你得先把怎么停弄明白，不能光学怎么加。”",
+              "en": "“今晚先拿记分的玩，筹码不兑钱。你得先把怎么停弄明白，不能光学怎么加。”"
+            },
+            {
+              "who": "",
+              "text": "他给自己和你各数了一百筹码。",
+              "en": "他给自己和你各数了一百筹码。"
+            },
+            {
+              "who": "你",
+              "text": "“输了还得重来？”",
+              "en": "“输了还得重来？”"
+            },
+            {
+              "who": "莫叔",
+              "text": "“输完了就看。我又没说随便添。”",
+              "en": "“输完了就看。我又没说随便添。”"
+            },
+            {
+              "who": "",
+              "text": "你们打的第一手很慢。莫叔等你确认按钮，再把动作做完。他不替你看手牌；你要问规则，就先把问题说出来。",
+              "en": "你们打的第一手很慢。莫叔等你确认按钮，再把动作做完。他不替你看手牌；你要问规则，就先把问题说出来。"
+            }
+          ],
+          "choice": "拿记分筹码，和莫叔打两手",
+          "choiceEn": "拿记分筹码，和莫叔打两手"
+        }
+      ],
+      "chapters": [
+        {
+          "night": 1,
+          "title": "二楼，门开着",
+          "en": "The door is open",
+          "status": "current"
+        },
+        {
+          "night": 2,
+          "title": "赴约之后",
+          "en": "After the invitation",
+          "status": "locked"
+        },
+        {
+          "night": 3,
+          "title": "卷帘门下面",
+          "en": "Under the shutter",
+          "status": "locked"
+        },
+        {
+          "night": 4,
+          "title": "谁付的电费",
+          "en": "Who pays for the lights",
+          "status": "locked"
+        },
+        {
+          "night": 5,
+          "title": "少掉的那一页",
+          "en": "The missing page",
+          "status": "locked"
+        },
+        {
+          "night": 6,
+          "title": "最后怎么坐",
+          "en": "Where we sit now",
+          "status": "locked"
+        }
+      ],
+      "relationships": [
+        {
+          "name": "阿凯",
+          "text": "刚认识，还没谈过那笔账",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "莫叔",
+          "text": "尚未核对其他往来",
+          "en": "See the conversation record"
+        },
+        {
+          "name": "林岚",
+          "text": "尚未请她协助",
+          "en": "See the conversation record"
+        }
+      ],
+      "table": {
+        "id": "v-mo",
+        "buyIn": 100,
+        "smallBlind": 1,
+        "bigBlind": 2,
+        "hands": 4,
+        "npcs": [
+          "calling-station"
+        ],
+        "location": "old",
+        "returnTo": "v-mo-result",
+        "practice": true
+      },
+      "atTableStart": false,
+      "results": [
+        {
+          "id": "v-mo",
+          "night": 1,
+          "hands": 1,
+          "closing": 99,
+          "net": -1,
+          "reason": "left"
+        }
+      ]
+    }
+  }
+}

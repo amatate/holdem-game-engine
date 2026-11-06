@@ -369,6 +369,11 @@ app.addEventListener('click', (event) => {
     case 'story-start': void submitStory('start'); break;
     case 'story-next': void submitStory('next'); break;
     case 'story-choice': void submitStory('choose',button.dataset.choice); break;
+    case 'story-retry-cancel': {
+      const panel=button.closest('details');
+      if(panel){panel.open=false;panel.querySelector('summary')?.focus();}
+      break;
+    }
     case 'story-leave': void submitStory('leave-table'); break;
     case 'journey-start':
       if(state.table?.secondNight){choosingTable=false;draw();}

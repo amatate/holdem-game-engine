@@ -51,7 +51,7 @@ export function validCheckpoint(value: unknown): value is Checkpoint {
     && Number.isFinite(Date.parse(summary.savedAt)) && Number.isSafeInteger(summary.hand) && summary.hand > 0
     && Number.isSafeInteger(summary.heroStack) && summary.heroStack >= 0 && typeof summary.ended === 'boolean'
     && (summary.wallet===undefined || Number.isSafeInteger(summary.wallet)&&summary.wallet>=0)
-    && (summary.storyNight===undefined || Number.isInteger(summary.storyNight)&&summary.storyNight>=1&&summary.storyNight<=6)
+    && (summary.storyNight===undefined || Number.isInteger(summary.storyNight)&&summary.storyNight>=1&&summary.storyNight<=12)
     && summary.players === setup.players && summary.mode === setup.mode && summary.experience === setup.experience
     && summary.lesson === (setup.experience === 'tutorial' ? setup.lesson : null);
 }
